@@ -609,19 +609,41 @@ class WingStressAnalyzer:
 
     # ── Strut forces ─────────────────────────────────────────────────────────
 
+    def _strut_effective_buckling_length(self, total_length: float) -> float:
+        """Return unsupported strut length for Euler buckling.
+
+        A jury strut braces the lift strut laterally at ``jury_bl``. It should
+        not change the axial load or wing reactions; it only reduces the
+        unsupported column length to the longer of the two strut segments.
+        """
+
+        if not self.jury:
+            return total_length
+
+        run = self.strut_bl - self.strut_fuse_bl
+        jury_run = self.jury_bl - self.strut_fuse_bl
+        if run <= 1e-9 or jury_run <= 0.0 or jury_run >= run:
+            return total_length
+
+        fraction = jury_run / run
+        lower = total_length * fraction
+        upper = total_length * (1.0 - fraction)
+        return max(lower, upper)
+
     def _strut_forces(self, M_total):
         """M_total = moment array BEFORE strut subtraction."""
         Fv = M_total[0] / max(self.strut_bl, 1)
         rise = self.strut_vert
         run  = max(self.strut_bl - self.strut_fuse_bl, 1.0)  # net horizontal distance
         L    = math.sqrt(rise**2 + run**2)
+        L_eff = self._strut_effective_buckling_length(L)
         ang  = math.atan2(rise, run)
         Fa   = Fv / max(math.sin(ang), 1e-6)
         Ps   = Fa * math.cos(ang)
         od   = self.strut_od; wa = self.strut_wall; id_ = od - 2*wa
         I_st = math.pi/64 * (od**4 - id_**4)
         E_st = STRUT_MATERIALS[self.strut_mat]["E"]
-        Pe   = math.pi**2 * E_st * I_st / L**2
+        Pe   = math.pi**2 * E_st * I_st / L_eff**2
         return Fv, Fa, Ps, Pe, L
 
     # ── P-delta ──────────────────────────────────────────────────────────────
@@ -1017,12 +1039,14 @@ class WingStressAnalyzer:
         od=self.strut_od; wa=self.strut_wall; id_=od-2*wa
         A_st = math.pi/4*(od**2 - id_**2)
         L_st = math.sqrt(max(self.strut_bl - self.strut_fuse_bl, 1.0)**2 + self.strut_vert**2)
+        L_eff = self._strut_effective_buckling_length(L_st)
         sig_ax = self.pos["F_axial"]/max(A_st,1e-9)
         self.strut_summary = {
             "mat":self.strut_mat, "E":sm["E"], "Ftu":sm["Ftu"],
             "od":od,"wall":wa,"area":A_st,
             "Fv":self.pos["Fv"],"F_axial":self.pos["F_axial"],
             "P_euler":self.pos["P_euler"],
+            "length":L_st, "effective_length":L_eff,
             "sigma_axial":sig_ax,
             "MS_axial":sm["Ftu"]/max(abs(sig_ax),1e-6)-1,
             "SF_euler":self.pos["P_euler"]/max(abs(self.pos["F_axial"]),1e-6),
@@ -1106,6 +1130,7 @@ class WingStressAnalyzer:
             L += [f"\n── STRUT {'─'*44}"]
             L += [f"  {s['mat']}"]
             L += [f"  Tube: {s['od']}\" × {s['wall']}\"   A={s['area']:.4f} in²"]
+            L += [f"  Length={s['length']:.1f}\"   Euler length={s['effective_length']:.1f}\""]
             L += [f"  Fv (vertical)={s['Fv']:,.0f} lb   Fa (axial)={s['F_axial']:,.0f} lb   Pe (Euler)={s['P_euler']:,.0f} lb"]
             L += [f"  SF (safety factor) Euler buckling :{mf(s['SF_euler']-1)}"]
             L += [f"  MS (margin of safety) axial       :{mf(s['MS_axial'])}"]

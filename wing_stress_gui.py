@@ -930,6 +930,9 @@ class WingStressGUI:
         section_label(f,"Jury Strut",row=r); r+=1
         self._lchk(f,"Enable jury strut","jury_strut",False,row=r); r+=1
         self._le(f,"Jury spar BL (in):","jury_spar_bl",60.0,row=r); r+=1
+        for nm in ("jury_strut", "jury_spar_bl"):
+            if nm in self._vars:
+                self._vars[nm].trace_add("write", lambda *_: self._update_strut_info())
 
         self._refresh_config()
         self._update_strut_info()
@@ -1139,9 +1142,17 @@ class WingStressGUI:
             I    = math.pi/64*(od**4-id_**4)
             mat  = self._vars["strut_mat"].get()
             E    = STRUT_MATERIALS[mat]["E"]
-            Pe   = math.pi**2*E*I/L**2
+            L_eff = L
+            if bool(self._vars.get("jury_strut", type("V",(),{"get":lambda s:False})()).get()):
+                jury_bl = float(self._vars.get("jury_spar_bl", type("V",(),{"get":lambda s:"0"})()).get())
+                run = bl - fuse_bl
+                jury_run = jury_bl - fuse_bl
+                if run > 1e-9 and 0.0 < jury_run < run:
+                    frac = jury_run / run
+                    L_eff = max(L * frac, L * (1.0 - frac))
+            Pe   = math.pi**2*E*I/L_eff**2
             self._strut_info.set(
-                f"L={L:.1f}\"  I={I:.4f} in⁴  Pe={Pe:,.0f} lb")
+                f"L={L:.1f}\"  L_eff={L_eff:.1f}\"  I={I:.4f} in⁴  Pe={Pe:,.0f} lb")
         except: pass
 
     def _update_q(self):
