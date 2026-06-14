@@ -17,6 +17,11 @@ http://127.0.0.1:8000
 The web server uses the existing AeroBeam analyzer and a browser-based UI for
 quick inputs, advanced JSON inputs, summary output, and plots.
 
+The web UI can save and load input files:
+
+- **Download Inputs** saves the current setup as `aerobeam-inputs.aerobeam`.
+- **Upload Inputs** loads `.aerobeam` or `.json` files and reruns the analysis.
+
 Optional beta password protection:
 
 ```bash

@@ -181,7 +181,8 @@ button {
   cursor: pointer;
 }
 
-button:hover {
+button:hover,
+.file-button:hover {
   border-color: var(--gold);
   transform: translateY(-1px);
 }
@@ -190,6 +191,23 @@ button.primary {
   background: linear-gradient(180deg, var(--blue), var(--blue-dark));
   border-color: var(--blue);
   color: #ffffff;
+}
+
+.file-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel-2);
+  color: var(--text);
+  padding: 0.65rem 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.file-button input {
+  display: none;
 }
 
 .workspace {

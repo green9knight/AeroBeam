@@ -83,6 +83,16 @@ function syncInputsFromForm() {
   document.getElementById("jsonEditor").value = JSON.stringify(state.inputs, null, 2);
 }
 
+function normalizeLoadedInputs(payload) {
+  if (payload && typeof payload === "object" && payload.inputs && typeof payload.inputs === "object") {
+    return payload.inputs;
+  }
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    throw new Error("Input file must contain a JSON object.");
+  }
+  return payload;
+}
+
 function loadJsonEditor() {
   const text = document.getElementById("jsonEditor").value;
   state.inputs = JSON.parse(text);
@@ -426,6 +436,24 @@ async function downloadReport() {
   }
 }
 
+async function uploadInputs(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const loaded = normalizeLoadedInputs(JSON.parse(text));
+    state.inputs = { ...state.defaults, ...loaded };
+    syncFormFromInputs();
+    setStatus(`Loaded ${file.name}`, "ok");
+    await runAnalysis();
+  } catch (error) {
+    document.getElementById("summary").textContent = error.stack || String(error);
+    setStatus("Input upload failed", "error");
+  } finally {
+    event.target.value = "";
+  }
+}
+
 async function init() {
   const response = await fetch("/api/defaults");
   const payload = await response.json();
@@ -450,6 +478,7 @@ async function init() {
   }
   document.getElementById("runBtn").addEventListener("click", runAnalysis);
   document.getElementById("reportBtn").addEventListener("click", downloadReport);
+  document.getElementById("uploadInput").addEventListener("change", uploadInputs);
   document.getElementById("resetBtn").addEventListener("click", () => {
     state.inputs = JSON.parse(JSON.stringify(state.defaults));
     syncFormFromInputs();
