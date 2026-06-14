@@ -146,6 +146,17 @@ def apply_theme(root):
     root.option_add("*Text.insertBackground",    C_TEXT)
     root.option_add("*Text.selectBackground",    C_ACCENT)
 
+def maximize_window(root):
+    """Maximize the main window where the active Tk platform supports it."""
+    try:
+        if sys.platform == "win32":
+            root.state("zoomed")
+        else:
+            root.attributes("-zoomed", True)
+    except tk.TclError:
+        # Keep the explicit geometry when the window manager lacks maximize.
+        pass
+
 def section_label(parent, text, row=0):
     ttk.Label(parent, text=f"  {text.upper()}",
               style="Section.TLabel").grid(
@@ -341,7 +352,7 @@ class WingStressGUI:
         self.root.title(APP_TITLE)
         self.root.geometry("1440x960")
         self.root.minsize(1200, 820)
-        self.root.after(50, lambda: self.root.state("zoomed"))
+        self.root.after(50, lambda: maximize_window(self.root))
         apply_theme(self.root)
 
         # Icon
