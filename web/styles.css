@@ -1,0 +1,267 @@
+:root {
+  --bg: #41413f;
+  --panel: #555555;
+  --panel-2: #4c535f;
+  --border: #6e7f87;
+  --text: #f2ede1;
+  --muted: #b9bcc2;
+  --blue: #085097;
+  --blue-dark: #024084;
+  --gold: #d2b75f;
+  --gold-light: #e5c87a;
+  --green: #6e9b5a;
+  --red: #c0392b;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top left, rgba(210, 183, 95, 0.16), transparent 34rem),
+    linear-gradient(135deg, #333333 0%, var(--bg) 48%, #4c535f 100%);
+  color: var(--text);
+  font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+  background: rgba(51, 51, 51, 0.92);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.22);
+}
+
+.brand {
+  color: var(--gold);
+  font-size: 1.8rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.brand span {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.subtitle,
+.status {
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.status.ok {
+  color: var(--green);
+}
+
+.status.error {
+  color: var(--red);
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(22rem, 31rem) minmax(32rem, 1fr);
+  gap: 1rem;
+  padding: 1rem;
+}
+
+.panel,
+.card {
+  background: rgba(85, 85, 85, 0.88);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.18);
+}
+
+.inputs {
+  align-self: start;
+  max-height: calc(100vh - 6.5rem);
+  overflow: auto;
+  padding: 1rem;
+}
+
+.panel-title {
+  margin-bottom: 0.85rem;
+  color: var(--gold);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.65rem;
+  margin-bottom: 0.9rem;
+}
+
+label {
+  display: grid;
+  gap: 0.25rem;
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+input,
+select,
+textarea {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-2);
+  color: var(--text);
+  padding: 0.48rem 0.55rem;
+  font: inherit;
+  outline: none;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 2px rgba(210, 183, 95, 0.18);
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin: 0.7rem 0 0.9rem;
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.check input {
+  width: auto;
+}
+
+details {
+  margin: 0.75rem 0;
+}
+
+summary {
+  color: var(--gold-light);
+  cursor: pointer;
+}
+
+textarea {
+  min-height: 15rem;
+  margin-top: 0.5rem;
+  font-family: "Cascadia Mono", "Consolas", monospace;
+  font-size: 0.78rem;
+}
+
+.actions {
+  display: flex;
+  gap: 0.6rem;
+  margin-top: 1rem;
+}
+
+button {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel-2);
+  color: var(--text);
+  padding: 0.65rem 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+button:hover {
+  border-color: var(--gold);
+  transform: translateY(-1px);
+}
+
+button.primary {
+  background: linear-gradient(180deg, var(--blue), var(--blue-dark));
+  border-color: var(--blue);
+  color: #ffffff;
+}
+
+.workspace {
+  min-width: 0;
+}
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.8rem;
+  margin-bottom: 1rem;
+}
+
+.card {
+  padding: 0.85rem 1rem;
+}
+
+.card span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.card strong {
+  display: block;
+  margin-top: 0.3rem;
+  color: var(--gold-light);
+  font-size: 1.25rem;
+}
+
+.plot-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+canvas {
+  width: 100%;
+  height: 18.25rem;
+  background: rgba(76, 83, 95, 0.82);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+
+.summary-panel {
+  margin-top: 1rem;
+  padding: 1rem;
+}
+
+pre {
+  margin: 0;
+  max-height: 30rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  color: var(--text);
+  font-family: "Cascadia Mono", "Consolas", monospace;
+  font-size: 0.84rem;
+  line-height: 1.4;
+}
+
+@media (max-width: 1050px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+
+  .inputs {
+    max-height: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .grid,
+  .cards,
+  .plot-grid {
+    grid-template-columns: 1fr;
+  }
+}

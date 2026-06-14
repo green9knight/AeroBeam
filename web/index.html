@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AeroBeam Web</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <div>
+        <div class="brand">AeroBeam <span>Web</span></div>
+        <div class="subtitle">Wing stress, torsion, buckling, and spar sizing checks</div>
+      </div>
+      <div id="status" class="status">Loading defaults...</div>
+    </header>
+
+    <main class="layout">
+      <aside class="panel inputs">
+        <div class="panel-title">Quick Setup</div>
+
+        <section class="grid">
+          <label>Span (in)<input data-key="b" type="number" step="0.1" /></label>
+          <label>Root chord (in)<input data-key="root_chord" type="number" step="0.1" /></label>
+          <label>Tip chord (in)<input data-key="tip_chord" type="number" step="0.1" /></label>
+          <label>Taper start BL (in)<input data-key="taper_start_bl" type="number" step="0.1" /></label>
+          <label>Front spar %<input data-key="front_spar_percent" type="number" step="0.01" /></label>
+          <label>Rear spar %<input data-key="rear_spar_percent" type="number" step="0.01" /></label>
+          <label>Load share<input data-key="front_spar_load_share" type="number" step="0.01" /></label>
+          <label>Rib spacing (in)<input data-key="rib_spacing" type="number" step="0.1" /></label>
+        </section>
+
+        <section class="grid">
+          <label>Configuration<select data-key="config"></select></label>
+          <label>Structure<select data-key="wing_structure_type"></select></label>
+          <label>Front spar<select data-key="front_spar_type"></select></label>
+          <label>Rear spar<select data-key="rear_spar_type"></select></label>
+          <label>Front material<select data-key="front_spar_mat"></select></label>
+          <label>Rear material<select data-key="rear_spar_mat"></select></label>
+        </section>
+
+        <section class="grid">
+          <label>Ultimate +g<input data-key="n" type="number" step="0.1" /></label>
+          <label>Negative g<input data-key="n_neg" type="number" step="0.1" /></label>
+          <label>Design lift (lb)<input data-key="ng_lift" type="number" step="1" /></label>
+          <label>Vd (mph)<input data-key="Vd_mph" type="number" step="1" /></label>
+          <label>Altitude (ft)<input data-key="altitude_ft" type="number" step="100" /></label>
+          <label>Cm<input data-key="Cm_ac" type="number" step="0.001" /></label>
+        </section>
+
+        <section>
+          <div class="row">
+            <label class="check"><input data-key="dcell_enabled" type="checkbox" /> D-cell</label>
+            <label class="check"><input data-key="geodetic_enabled" type="checkbox" /> Geodetic</label>
+            <label class="check"><input data-key="distribute_wing_weight" type="checkbox" /> Weight relief</label>
+          </div>
+        </section>
+
+        <details>
+          <summary>Advanced JSON inputs</summary>
+          <textarea id="jsonEditor" spellcheck="false"></textarea>
+        </details>
+
+        <div class="actions">
+          <button id="runBtn" class="primary">Run Analysis</button>
+          <button id="resetBtn">Reset</button>
+          <button id="downloadBtn">Download Inputs</button>
+        </div>
+      </aside>
+
+      <section class="workspace">
+        <div class="cards">
+          <div class="card"><span>Front stress</span><strong id="frontStress">-</strong></div>
+          <div class="card"><span>Rear stress</span><strong id="rearStress">-</strong></div>
+          <div class="card"><span>Spar weight</span><strong id="sparWeight">-</strong></div>
+          <div class="card"><span>Twist root</span><strong id="twistRoot">-</strong></div>
+        </div>
+
+        <div class="plot-grid">
+          <canvas id="plotLift"></canvas>
+          <canvas id="plotShear"></canvas>
+          <canvas id="plotMoment"></canvas>
+          <canvas id="plotDeflection"></canvas>
+        </div>
+
+        <section class="panel summary-panel">
+          <div class="panel-title">Analysis Summary</div>
+          <pre id="summary">Click Run Analysis to calculate.</pre>
+        </section>
+      </section>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>
