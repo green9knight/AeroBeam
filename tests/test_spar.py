@@ -38,7 +38,8 @@ class SizeBoxSparTest(unittest.TestCase):
 
         self.assertGreaterEqual(result.bending_margin, 0.0)
         self.assertGreaterEqual(result.shear_margin, 0.0)
-        self.assertAlmostEqual(result.geometry.wall_thickness_m % 0.0002, 0.0, places=12)
+        increment_count = result.geometry.wall_thickness_m / 0.0002
+        self.assertAlmostEqual(increment_count, round(increment_count), places=12)
 
     def test_rejects_insufficient_geometry(self) -> None:
         weak_material = Material(

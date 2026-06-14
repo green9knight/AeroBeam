@@ -1,3 +1,4 @@
+import io
 import json
 import tempfile
 import unittest
@@ -51,8 +52,9 @@ class CliTest(unittest.TestCase):
             invalid_input.pop("material")
             input_path.write_text(json.dumps(invalid_input), encoding="utf-8")
 
-            with self.assertRaises(SystemExit) as caught:
-                main([str(input_path)])
+            with patch("sys.stderr", new_callable=io.StringIO):
+                with self.assertRaises(SystemExit) as caught:
+                    main([str(input_path)])
 
         self.assertEqual(caught.exception.code, 2)
 

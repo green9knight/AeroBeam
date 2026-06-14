@@ -22,13 +22,13 @@ and test evidence.
 Run the example from the repository root:
 
 ```bash
-python -m aerobeam examples/trainer_wing.json
+python3 -m aerobeam examples/trainer_wing.json
 ```
 
 JSON output is also available:
 
 ```bash
-python -m aerobeam examples/trainer_wing.json --format json
+python3 -m aerobeam examples/trainer_wing.json --format json
 ```
 
 ## Input format
@@ -80,5 +80,5 @@ print(result.controlling_margin)
 Run the test suite with the standard library test runner:
 
 ```bash
-python -m unittest
+python3 -m unittest discover -s tests
 ```
