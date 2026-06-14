@@ -400,18 +400,92 @@ class WingStressAnalyzer:
 
     # ── Torsion ──────────────────────────────────────────────────────────────
 
-    def _torsion(self, GJ, q1f, q2f, w_total):
-        q_psi = dynamic_pressure_psi(self.Vd_mph, self.alt_ft)
-        c = self.chord_x
-        T_aero = np.abs(self.Cm_ac)*q_psi*c**2
+    def _torsion_transfer_stiffness(self) -> dict:
+        """Return rib/geodetic/skin torsion-transfer stiffness terms.
 
-        if self.config=="single_strut" and self.num_spars==2:
-            e_rs     = (self.rear_pct-self.front_pct)*c
+        This model is used by both the case solver and the reported torsion
+        results. Keeping it in one place avoids the recurring bug where rear
+        spar coupling was based on stale or approximate stiffness values.
+        """
+
+        chord_box = (self.rear_pct - self.front_pct) * self.root_chord
+        spar_gap = max(chord_box, 1.0)
+
+        rib_mat = MATERIAL_DB.get(self.rib_mat, MATERIAL_DB["Birch Plywood"])
+        G_rib = rib_mat["G"]
+        Fsu_rib = rib_mat["Fsu"]
+        Fb_rib = rib_mat.get("Fb", Fsu_rib * 1.5)
+        h_r = self.rib_h_web
+        t_r = self.rib_t_web
+        b_c = self.rib_b_cap
+        t_c = self.rib_t_cap
+
+        # Rib as a simple built-up beam spanning between spars.
+        I_rib_web = t_r * h_r**3 / 12.0
+        I_rib_cap = 2.0 * (b_c * t_c**3 / 12.0 + b_c * t_c * (h_r / 2.0 + t_c / 2.0) ** 2)
+        I_rib = I_rib_web + I_rib_cap
+        y_rib = h_r / 2.0 + t_c
+        A_rib_web = h_r * t_r
+
+        # Per-unit-span shear stiffness contribution from ribs.
+        k_rib = G_rib * A_rib_web / spar_gap / max(self.rib_spacing, 1e-9)
+
+        if self.geodetic is not None:
+            G_geo = MATERIAL_DB[self.geodetic.mat_name]["G"]
+            t_eff_geo = self.geodetic.t_eff(1.0)
+            k_geo = G_geo * t_eff_geo / spar_gap
+        else:
+            k_geo = 0.0
+
+        if self.wing_struct == "aluminum_skin" and self.top_skin is not None:
+            G_skin = MATERIAL_DB[self.top_skin.mat_name]["G"]
+            k_skin = G_skin * self.top_skin.thickness / spar_gap
+        else:
+            k_skin = 0.0
+
+        k_total = k_rib + k_geo + k_skin
+        denom = max(k_total, 1e-12)
+
+        return {
+            "chord_box": chord_box,
+            "spar_gap": spar_gap,
+            "G_rib": G_rib,
+            "Fsu_rib": Fsu_rib,
+            "Fb_rib": Fb_rib,
+            "I_rib": I_rib,
+            "y_rib": y_rib,
+            "A_rib_web": A_rib_web,
+            "k_rib": k_rib,
+            "k_geo": k_geo,
+            "k_skin": k_skin,
+            "k_total": k_total,
+            "f_rib": k_rib / denom,
+            "f_geo": k_geo / denom,
+            "f_skin": k_skin / denom,
+        }
+
+    def _distributed_torsion(self, w_total, q_psi: float, *, sign: float = 1.0) -> tuple:
+        """Return aerodynamic, structural, and total distributed torque arrays.
+
+        ``w_total`` may be signed. ``sign`` controls the aerodynamic torque
+        direction for load cases; the report path uses the default positive
+        convention.
+        """
+
+        c = self.chord_x
+        T_aero = np.abs(self.Cm_ac) * q_psi * c**2 * sign
+
+        if self.config == "single_strut" and self.num_spars == 2:
+            e_rs = (self.rear_pct - self.front_pct) * c
             T_struct = self.rsf * w_total * e_rs
         else:
             T_struct = np.zeros(self.N)
 
-        T_tot = T_aero + T_struct
+        return T_aero, T_struct, T_aero + T_struct
+
+    def _torsion(self, GJ, q1f, q2f, w_total):
+        q_psi = dynamic_pressure_psi(self.Vd_mph, self.alt_ft)
+        T_aero, T_struct, T_tot = self._distributed_torsion(w_total, q_psi)
 
         # Running torque (cumulative from tip)
         T_run = np.zeros(self.N)
@@ -439,51 +513,20 @@ class WingStressAnalyzer:
                 if te>0: tau_g[i] = q2f[i]*T/te
 
         # ── Torsion transfer stiffness — load sharing between ribs, geodetic, skin ──
-        # Each mechanism carries a fraction of T proportional to its shear stiffness.
-        # Rib: k_rib = E_rib * I_rib / rib_spacing  (rib as beam across chord)
-        # Geodetic: k_geo = G_geo * t_eff * rib_spacing / chord_box
-        # D-cell/skin: k_skin contributes to GJ but not directly to rib/geodetic split
-        chord_box = (self.rear_pct - self.front_pct) * self.root_chord
-        spar_gap  = max(chord_box, 1.0)
-
-        # Rib section properties (simple I-beam approximation)
-        E_rib = MATERIAL_DB.get(self.rib_mat, MATERIAL_DB["Birch Plywood"])["E"]
-        G_rib = MATERIAL_DB.get(self.rib_mat, MATERIAL_DB["Birch Plywood"])["G"]
-        Fsu_rib = MATERIAL_DB.get(self.rib_mat, MATERIAL_DB["Birch Plywood"])["Fsu"]
-        Fb_rib  = MATERIAL_DB.get(self.rib_mat, MATERIAL_DB["Birch Plywood"]).get("Fb", Fsu_rib*1.5)
-        h_r = self.rib_h_web; t_r = self.rib_t_web
-        b_c = self.rib_b_cap; t_c = self.rib_t_cap
-        # Rib I (bending about chord axis, rib loaded spanwise by torsion couple):
-        I_rib_web = t_r * h_r**3 / 12
-        I_rib_cap = 2 * (b_c * t_c**3/12 + b_c*t_c*(h_r/2 + t_c/2)**2)
-        I_rib = I_rib_web + I_rib_cap
-        y_rib = h_r/2 + t_c   # distance from NA to extreme fibre
-        A_rib_web = h_r * t_r
-
-        # Rib shear stiffness per unit span: k_rib = G_rib * A_rib_web / spar_gap
-        # (rib acts as a shear beam across spar_gap; stiffness = G*A/L)
-        k_rib = G_rib * A_rib_web / spar_gap / self.rib_spacing
-
-        # Geodetic shear stiffness per unit span
-        if self.geodetic is not None:
-            G_geo = MATERIAL_DB[self.geodetic.mat_name]["G"]
-            t_eff_geo = self.geodetic.t_eff(1.0)
-            k_geo = G_geo * t_eff_geo * self.rib_spacing / spar_gap / self.rib_spacing
-        else:
-            k_geo = 0.0
-
-        # Skin shear stiffness per unit span (fabric = ~0, aluminum skin = significant)
-        if self.wing_struct == "aluminum_skin" and self.top_skin is not None:
-            G_skin = MATERIAL_DB[self.top_skin.mat_name]["G"]
-            t_skin = self.top_skin.thickness
-            k_skin = G_skin * t_skin / spar_gap
-        else:
-            k_skin = 0.0  # fabric carries negligible torsion shear
-
-        k_total = k_rib + k_geo + k_skin
-        f_rib  = k_rib  / max(k_total, 1e-12)   # fraction of torsion carried by ribs
-        f_geo  = k_geo  / max(k_total, 1e-12)
-        f_skin = k_skin / max(k_total, 1e-12)
+        transfer = self._torsion_transfer_stiffness()
+        spar_gap = transfer["spar_gap"]
+        Fsu_rib = transfer["Fsu_rib"]
+        Fb_rib = transfer["Fb_rib"]
+        I_rib = transfer["I_rib"]
+        y_rib = transfer["y_rib"]
+        A_rib_web = transfer["A_rib_web"]
+        k_rib = transfer["k_rib"]
+        k_geo = transfer["k_geo"]
+        k_skin = transfer["k_skin"]
+        k_total = transfer["k_total"]
+        f_rib = transfer["f_rib"]
+        f_geo = transfer["f_geo"]
+        f_skin = transfer["f_skin"]
 
         # Rib stress at root (governing station — highest T_run)
         # Each rib carries: F_rib = T_run[0] * f_rib / rib_spacing [lb per rib]
@@ -644,26 +687,23 @@ class WingStressAnalyzer:
         chord_box    = spar_spacing
 
         # Torsion-based rear spar distributed load (correct for cantilever/single_strut)
-        # V_rear(x) = T_total(x) / spar_spacing  [lb/in]
-        # T_total from _one_case context is not available here; approximate from
-        # known inputs: T ≈ |Cm| * q * c² + T_struct
-        q_dyn    = 0.5 * 0.0023769 * (self.Vd_mph * 5280/3600)**2 / 144
-        T_aero_x = abs(self.Cm_ac) * q_dyn * self.chord_x**2  # lb·in/in per station
-        w_rear   = T_aero_x / spar_spacing * sign   # signed distributed load [lb/in]
+        # V_rear(x) = T_total(x) / spar_spacing [lb/in]. Use the same signed
+        # torsion model as the report path so altitude, single-strut structural
+        # torsion, and airfoil moment stay consistent.
+        q_dyn = dynamic_pressure_psi(self.Vd_mph, self.alt_ft)
+        _, _, T_total_case = self._distributed_torsion(w, q_dyn, sign=sign)
+        w_rear = T_total_case / spar_spacing
 
         # Geodetic coupling factor κ
         EI_r_mean = float(np.mean(self._EI_r[self._EI_r > 0]))
         EI_f_mean = float(np.mean(self._EI_f[self._EI_f > 0]))
         k_rear    = 48.0 * EI_r_mean / max(self.b_half**3, 1.0)
         # Combined transfer stiffness: ribs + geodetic + skin
-        k_geo = getattr(self, "_torsion_stiffness", 0.0)
-        if k_geo == 0.0:
-            if self.geodetic is not None:
-                G_geo = MATERIAL_DB[self.geodetic.mat_name]["G"]
-                k_geo = G_geo * self.geodetic.t_eff(1.0) * (self.rib_spacing / max(chord_box, 1.0))
-            elif self.wing_struct in ("fabric_tube", "fabric_buildup"):
-                k_geo = 0.30 * 120000 * 0.01 * (self.rib_spacing / max(chord_box, 1.0))
-        kappa = (k_geo * self.b_half) / (k_geo * self.b_half + k_rear) if k_geo > 0 else 0.0
+        transfer = getattr(self, "_torsion_transfer", None)
+        if transfer is None:
+            transfer = self._torsion_transfer_stiffness()
+        k_transfer = transfer["k_total"]
+        kappa = (k_transfer * self.b_half) / (k_transfer * self.b_half + k_rear) if k_transfer > 0 else 0.0
         kappa = float(np.clip(kappa, 0.0, 1.0))
         self._geodetic_kappa = kappa
 
@@ -961,13 +1001,14 @@ class WingStressAnalyzer:
     def analyze(self):
         self._spar_arrays()
         self.GJ, self.q1_frac, self.q2_frac = self._gj_arrays()
+        self._torsion_transfer = self._torsion_transfer_stiffness()
+        self._torsion_stiffness = self._torsion_transfer["k_total"]
 
         self.pos = self._one_case(self.ng_lift, +1)
         ng_neg   = abs(self.n_neg)/self.n*self.ng_lift
         self.neg = self._one_case(ng_neg, -1)
 
         self.torsion = self._torsion(self.GJ, self.q1_frac, self.q2_frac, self.pos["w"])
-        self._torsion_stiffness = self.torsion.get("k_total", 0.0) if self.torsion else 0.0
 
         self.divergence = self._divergence(float(self.GJ[0]))
 
