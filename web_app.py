@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import mimetypes
+import os
 import traceback
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -33,8 +34,9 @@ from wing_stress_analyzer import DEFAULT_INPUTS, WingStressAnalyzer
 
 ROOT = Path(__file__).resolve().parent
 WEB_ROOT = ROOT / "web"
-HOST = "127.0.0.1"
-PORT = 8000
+HOST = os.environ.get("HOST", "127.0.0.1")
+PORT = int(os.environ.get("PORT", "8000"))
+BETA_PASSWORD = os.environ.get("AEROBEAM_BETA_PASSWORD", "")
 
 
 def _jsonable(value: Any) -> Any:
@@ -122,6 +124,9 @@ class AeroBeamHandler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
+        if parsed.path == "/healthz":
+            self._send_json({"ok": True, "service": "aerobeam-web"})
+            return
         if parsed.path == "/api/defaults":
             self._send_json(
                 {
@@ -144,6 +149,8 @@ class AeroBeamHandler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         if parsed.path != "/api/analyze":
             self._send_json({"ok": False, "error": "unknown endpoint"}, status=404)
+            return
+        if not self._authorized():
             return
 
         try:
@@ -171,6 +178,15 @@ class AeroBeamHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _authorized(self) -> bool:
+        if not BETA_PASSWORD:
+            return True
+        supplied = self.headers.get("X-AeroBeam-Password", "")
+        if supplied == BETA_PASSWORD:
+            return True
+        self._send_json({"ok": False, "error": "beta password required"}, status=401)
+        return False
+
     def _send_static(self, request_path: str) -> None:
         rel = request_path.lstrip("/")
         target = (WEB_ROOT / rel).resolve()
@@ -193,6 +209,8 @@ class AeroBeamHandler(BaseHTTPRequestHandler):
 def main() -> int:
     server = ThreadingHTTPServer((HOST, PORT), AeroBeamHandler)
     print(f"AeroBeam web UI running at http://{HOST}:{PORT}")
+    if BETA_PASSWORD:
+        print("Beta password protection enabled.")
     print("Press Ctrl+C to stop.")
     try:
         server.serve_forever()

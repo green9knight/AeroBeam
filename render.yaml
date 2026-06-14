@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: aerobeam-beta
+    runtime: python
+    plan: free
+    buildCommand: python -m pip install -r requirements.txt
+    startCommand: python web_app.py
+    healthCheckPath: /healthz
+    envVars:
+      - key: HOST
+        value: 0.0.0.0
+      - key: AEROBEAM_BETA_PASSWORD
+        sync: false

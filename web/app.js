@@ -35,6 +35,13 @@ function setStatus(message, kind = "") {
   el.className = `status ${kind}`;
 }
 
+function authHeaders(extra = {}) {
+  const password = document.getElementById("betaPassword")?.value || "";
+  return password
+    ? { ...extra, "X-AeroBeam-Password": password }
+    : extra;
+}
+
 function fillSelect(selector, values, current) {
   const el = document.querySelector(selector);
   el.innerHTML = "";
@@ -210,7 +217,7 @@ async function runAnalysis() {
     setStatus("Running analysis...");
     const response = await fetch("/api/analyze", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: authHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({ inputs: state.inputs }),
     });
     const payload = await response.json();

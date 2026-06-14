@@ -101,6 +101,10 @@ body {
   margin-bottom: 0.9rem;
 }
 
+.beta-row {
+  margin-bottom: 0.9rem;
+}
+
 label {
   display: grid;
   gap: 0.25rem;
