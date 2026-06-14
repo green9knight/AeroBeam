@@ -69,6 +69,7 @@
           <button id="runBtn" class="primary">Run Analysis</button>
           <button id="resetBtn">Reset</button>
           <button id="downloadBtn">Download Inputs</button>
+          <button id="reportBtn">PDF Report</button>
         </div>
       </aside>
 
@@ -79,6 +80,11 @@
           <div class="card"><span>Spar weight</span><strong id="sparWeight">-</strong></div>
           <div class="card"><span>Twist root</span><strong id="twistRoot">-</strong></div>
         </div>
+
+        <section class="panel geometry-panel">
+          <div class="panel-title">Wing Geometry</div>
+          <canvas id="plotGeometry"></canvas>
+        </section>
 
         <div class="plot-grid">
           <canvas id="plotLift"></canvas>

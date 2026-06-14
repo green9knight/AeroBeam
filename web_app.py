@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import mimetypes
 import os
+import tempfile
 import traceback
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -84,6 +85,24 @@ def _series(analyzer: WingStressAnalyzer) -> dict[str, Any]:
                 "T_running": analyzer.torsion["T_running"] if analyzer.torsion else [],
                 "phi_deg": np.degrees(analyzer.torsion["phi"]) if analyzer.torsion else [],
             },
+            "geometry": {
+                "b_half": analyzer.b_half,
+                "root_bl": analyzer.r,
+                "x": x,
+                "chord": analyzer.chord_x,
+                "front_spar": analyzer.front_pct * analyzer.chord_x,
+                "rear_spar": analyzer.rear_pct * analyzer.chord_x,
+                "front_spar_percent": analyzer.front_pct,
+                "rear_spar_percent": analyzer.rear_pct,
+                "strut_bl": analyzer.strut_bl,
+                "strut_fuse_bl": analyzer.strut_fuse_bl,
+                "strut_vert": analyzer.strut_vert,
+                "jury_enabled": analyzer.jury,
+                "jury_bl": analyzer.jury_bl,
+                "config": analyzer.config,
+                "dcell_enabled": analyzer.dcell_enabled,
+                "taper_start_bl": analyzer.taper_start_bl,
+            },
         }
     )
 
@@ -119,6 +138,19 @@ def analyze_payload(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def report_payload(payload: dict[str, Any]) -> bytes:
+    inputs = dict(DEFAULT_INPUTS)
+    inputs.update(payload.get("inputs", payload))
+
+    analyzer = WingStressAnalyzer(inputs)
+    analyzer.analyze()
+
+    with tempfile.TemporaryDirectory() as directory:
+        path = Path(directory) / "aerobeam-report.pdf"
+        analyzer.export_pdf(path)
+        return path.read_bytes()
+
+
 class AeroBeamHandler(BaseHTTPRequestHandler):
     server_version = "AeroBeamWeb/0.1"
 
@@ -147,7 +179,7 @@ class AeroBeamHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         parsed = urlparse(self.path)
-        if parsed.path != "/api/analyze":
+        if parsed.path not in {"/api/analyze", "/api/report"}:
             self._send_json({"ok": False, "error": "unknown endpoint"}, status=404)
             return
         if not self._authorized():
@@ -156,7 +188,10 @@ class AeroBeamHandler(BaseHTTPRequestHandler):
         try:
             length = int(self.headers.get("Content-Length", "0"))
             payload = json.loads(self.rfile.read(length) or b"{}")
-            self._send_json(analyze_payload(payload))
+            if parsed.path == "/api/report":
+                self._send_pdf(report_payload(payload), "aerobeam-report.pdf")
+            else:
+                self._send_json(analyze_payload(payload))
         except Exception as exc:  # pragma: no cover - returned to browser
             self._send_json(
                 {
@@ -174,6 +209,14 @@ class AeroBeamHandler(BaseHTTPRequestHandler):
         body = json.dumps(_jsonable(payload), indent=2).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _send_pdf(self, body: bytes, filename: str) -> None:
+        self.send_response(200)
+        self.send_header("Content-Type", "application/pdf")
+        self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)

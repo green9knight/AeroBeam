@@ -189,6 +189,7 @@ function renderPlots(payload) {
   window.lastPayload = payload;
   const s = payload.series;
   const x = s.x;
+  drawGeometry(s.geometry);
   drawPlot("plotLift", "Lift Distribution", x, [
     { label: "+g", values: s.positive.w, color: "#085097" },
     { label: "-g", values: s.negative.w, color: "#d2b75f", dash: [6, 4] },
@@ -207,6 +208,170 @@ function renderPlots(payload) {
     { label: "front -g", values: s.negative.z_front, color: "#d2b75f", dash: [6, 4] },
     { label: "rear -g", values: s.negative.z_rear, color: "#e5c87a", dash: [4, 4] },
   ]);
+}
+
+function drawGeometry(geometry) {
+  const canvas = document.getElementById("plotGeometry");
+  const rect = canvas.getBoundingClientRect();
+  const ratio = window.devicePixelRatio || 1;
+  canvas.width = Math.max(900, rect.width * ratio);
+  canvas.height = Math.max(430, rect.height * ratio);
+  const ctx = canvas.getContext("2d");
+  ctx.scale(ratio, ratio);
+  const w = canvas.width / ratio;
+  const h = canvas.height / ratio;
+
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = "#4c535f";
+  ctx.fillRect(0, 0, w, h);
+  ctx.fillStyle = "#d2b75f";
+  ctx.font = "bold 15px Segoe UI, sans-serif";
+  ctx.fillText("Plan View", 18, 24);
+  ctx.fillText("Front Elevation", 18, h / 2 + 24);
+
+  const x = geometry.x || [];
+  const chord = geometry.chord || [];
+  const front = geometry.front_spar || [];
+  const rear = geometry.rear_spar || [];
+  if (!x.length) return;
+
+  const margin = { left: 56, right: 24, top: 42, bottom: 26 };
+  const plan = {
+    x: margin.left,
+    y: margin.top,
+    w: w - margin.left - margin.right,
+    h: h / 2 - margin.top - 22,
+  };
+  const elev = {
+    x: margin.left,
+    y: h / 2 + margin.top,
+    w: w - margin.left - margin.right,
+    h: h / 2 - margin.top - margin.bottom,
+  };
+
+  const xMax = geometry.b_half || Math.max(...x);
+  const cMax = Math.max(...chord, 1);
+  const xToPlan = (value) => plan.x + (value / xMax) * plan.w;
+  const yToPlan = (value) => plan.y + (value / cMax) * plan.h;
+
+  ctx.strokeStyle = "#6e7f87";
+  ctx.strokeRect(plan.x, plan.y, plan.w, plan.h);
+  ctx.strokeRect(elev.x, elev.y, elev.w, elev.h);
+
+  // Planform polygon: leading edge is y=0, trailing edge is chord(x).
+  ctx.beginPath();
+  ctx.moveTo(xToPlan(x[0]), yToPlan(0));
+  for (let i = 1; i < x.length; i++) ctx.lineTo(xToPlan(x[i]), yToPlan(0));
+  for (let i = x.length - 1; i >= 0; i--) ctx.lineTo(xToPlan(x[i]), yToPlan(chord[i]));
+  ctx.closePath();
+  ctx.fillStyle = "rgba(242, 237, 225, 0.10)";
+  ctx.fill();
+  ctx.strokeStyle = "#f2ede1";
+  ctx.stroke();
+
+  if (geometry.dcell_enabled) {
+    ctx.beginPath();
+    ctx.moveTo(xToPlan(x[0]), yToPlan(0));
+    for (let i = 1; i < x.length; i++) ctx.lineTo(xToPlan(x[i]), yToPlan(0));
+    for (let i = x.length - 1; i >= 0; i--) ctx.lineTo(xToPlan(x[i]), yToPlan(front[i]));
+    ctx.closePath();
+    ctx.fillStyle = "rgba(8, 80, 151, 0.25)";
+    ctx.fill();
+  }
+
+  function drawPlanLine(values, color, label, yLabel) {
+    ctx.beginPath();
+    values.forEach((value, i) => {
+      const px = xToPlan(x[i]);
+      const py = yToPlan(value);
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    });
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = color;
+    ctx.fillText(label, plan.x + 8, yToPlan(yLabel) - 5);
+  }
+  drawPlanLine(front, "#085097", `Front ${Math.round(geometry.front_spar_percent * 100)}%`, front[0]);
+  drawPlanLine(rear, "#d2b75f", `Rear ${Math.round(geometry.rear_spar_percent * 100)}%`, rear[0]);
+
+  function drawVerticalBL(bl, color, label) {
+    if (!Number.isFinite(bl) || bl < 0 || bl > xMax) return;
+    const px = xToPlan(bl);
+    ctx.beginPath();
+    ctx.setLineDash([6, 4]);
+    ctx.moveTo(px, plan.y);
+    ctx.lineTo(px, plan.y + plan.h);
+    ctx.strokeStyle = color;
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = color;
+    ctx.fillText(label, px + 4, plan.y + 14);
+  }
+  drawVerticalBL(geometry.strut_bl, "#d2b75f", `Strut BL ${fmt(geometry.strut_bl, 0)}`);
+  if (geometry.jury_enabled) drawVerticalBL(geometry.jury_bl, "#e5c87a", `Jury BL ${fmt(geometry.jury_bl, 0)}`);
+  if (geometry.taper_start_bl > 0) drawVerticalBL(geometry.taper_start_bl, "#6e9b5a", `Taper BL ${fmt(geometry.taper_start_bl, 0)}`);
+
+  // Front elevation.
+  const rootBl = geometry.root_bl || 0;
+  const elevX = (value) => elev.x + (value / xMax) * elev.w;
+  const yRange = Math.max(Math.abs(geometry.strut_vert || 0), 20);
+  const elevY = (value) => elev.y + elev.h / 2 - (value / (yRange * 1.2)) * elev.h;
+
+  ctx.strokeStyle = "#333333";
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(elevX(rootBl), elev.y);
+  ctx.lineTo(elevX(rootBl), elev.y + elev.h);
+  ctx.stroke();
+  ctx.fillStyle = "#b9bcc2";
+  ctx.fillText(`FUSE / BL ${fmt(rootBl, 0)}`, elevX(rootBl) + 6, elev.y + 16);
+
+  ctx.strokeStyle = "#085097";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(elevX(rootBl), elevY(0));
+  ctx.lineTo(elevX(xMax), elevY(0));
+  ctx.stroke();
+  ctx.fillStyle = "#085097";
+  ctx.fillText("Front spar", elevX(rootBl) + 8, elevY(0) - 8);
+
+  ctx.strokeStyle = "#d2b75f";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(elevX(rootBl), elevY(-2));
+  ctx.lineTo(elevX(xMax), elevY(-2));
+  ctx.stroke();
+  ctx.fillStyle = "#d2b75f";
+  ctx.fillText(geometry.config === "single_strut" ? "Rear spar (cantilever)" : "Rear spar", elevX(rootBl) + 8, elevY(-2) + 18);
+
+  if (geometry.config !== "cantilever") {
+    const sx = geometry.strut_bl;
+    const sxFuse = geometry.strut_fuse_bl;
+    const syFuse = -Math.abs(geometry.strut_vert || 0);
+    ctx.strokeStyle = "#e5c87a";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(elevX(sxFuse), elevY(syFuse));
+    ctx.lineTo(elevX(sx), elevY(0));
+    ctx.stroke();
+    ctx.fillStyle = "#e5c87a";
+    ctx.fillText("Strut", elevX((sx + sxFuse) / 2) + 6, elevY(syFuse / 2));
+
+    if (geometry.jury_enabled && geometry.jury_bl > sxFuse && geometry.jury_bl < sx) {
+      const frac = (geometry.jury_bl - sxFuse) / (sx - sxFuse);
+      const jy = syFuse + frac * (0 - syFuse);
+      ctx.strokeStyle = "#f2ede1";
+      ctx.setLineDash([5, 4]);
+      ctx.beginPath();
+      ctx.moveTo(elevX(geometry.jury_bl), elevY(0));
+      ctx.lineTo(elevX(geometry.jury_bl), elevY(jy));
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillText("Jury", elevX(geometry.jury_bl) + 5, elevY(jy) - 4);
+    }
+  }
 }
 
 async function runAnalysis() {
@@ -233,6 +398,34 @@ async function runAnalysis() {
   }
 }
 
+async function downloadReport() {
+  try {
+    syncInputsFromForm();
+    loadJsonEditor();
+    setStatus("Generating PDF report...");
+    const response = await fetch("/api/report", {
+      method: "POST",
+      headers: authHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({ inputs: state.inputs }),
+    });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      throw new Error(payload.error || `Report failed with HTTP ${response.status}`);
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "aerobeam-report.pdf";
+    link.click();
+    URL.revokeObjectURL(url);
+    setStatus("PDF report ready", "ok");
+  } catch (error) {
+    document.getElementById("summary").textContent = error.stack || String(error);
+    setStatus("PDF report failed", "error");
+  }
+}
+
 async function init() {
   const response = await fetch("/api/defaults");
   const payload = await response.json();
@@ -256,6 +449,7 @@ async function init() {
     if (el) el.addEventListener("change", syncInputsFromForm);
   }
   document.getElementById("runBtn").addEventListener("click", runAnalysis);
+  document.getElementById("reportBtn").addEventListener("click", downloadReport);
   document.getElementById("resetBtn").addEventListener("click", () => {
     state.inputs = JSON.parse(JSON.stringify(state.defaults));
     syncFormFromInputs();

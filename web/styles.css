@@ -228,12 +228,21 @@ button.primary {
   gap: 1rem;
 }
 
+.geometry-panel {
+  margin-bottom: 1rem;
+  padding: 1rem;
+}
+
 canvas {
   width: 100%;
   height: 18.25rem;
   background: rgba(76, 83, 95, 0.82);
   border: 1px solid var(--border);
   border-radius: 14px;
+}
+
+#plotGeometry {
+  height: 26rem;
 }
 
 .summary-panel {
