@@ -874,7 +874,7 @@ class WingStressGUI:
         self._le(f,"Rib web thickness (in):","rib_t_web",0.125,row=r); r+=1
         self._le(f,"Rib cap width (in):","rib_b_cap",0.75,row=r); r+=1
         self._le(f,"Rib cap thickness (in):","rib_t_cap",0.125,row=r); r+=1
-        self._lc(f,"Rib material:","rib_mat",wood_mat_names(),"Birch Plywood",row=r); r+=1
+        self._lc(f,"Rib material:","rib_mat",all_mat_names(),"Birch Plywood",row=r); r+=1
         self._rib_info = tk.StringVar(value="")
         ttk.Label(f,textvariable=self._rib_info,foreground=C_TEXT_DIM,
                   font=("Courier",8)).grid(row=r,column=0,columnspan=4,sticky="w",padx=4); r+=1

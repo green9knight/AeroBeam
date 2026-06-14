@@ -413,8 +413,8 @@ class WingStressAnalyzer:
 
         rib_mat = MATERIAL_DB.get(self.rib_mat, MATERIAL_DB["Birch Plywood"])
         G_rib = rib_mat["G"]
-        Fsu_rib = rib_mat["Fsu"]
-        Fb_rib = rib_mat.get("Fb", Fsu_rib * 1.5)
+        Fsu_rib = rib_mat["Fsu"] * (self.wood_kd if rib_mat["is_wood"] else 1.0)
+        Fb_rib = allowable_bending(self.rib_mat, self.wood_kd)
         h_r = self.rib_h_web
         t_r = self.rib_t_web
         b_c = self.rib_b_cap
@@ -537,8 +537,8 @@ class WingStressAnalyzer:
         M_rib = F_rib_each * spar_gap / 4.0
         tau_rib = F_rib_each / max(A_rib_web, 1e-9)
         sig_rib = M_rib * y_rib / max(I_rib, 1e-12)
-        MS_rib_shear = (Fsu_rib * self.wood_kd) / max(tau_rib, 1e-9) - 1.0
-        MS_rib_bend  = (Fb_rib  * self.wood_kd) / max(sig_rib, 1e-9) - 1.0
+        MS_rib_shear = Fsu_rib / max(tau_rib, 1e-9) - 1.0
+        MS_rib_bend  = Fb_rib / max(sig_rib, 1e-9) - 1.0
 
         # ── Cruise speed torsion check and CP positions ──────────────────────
         q_vc  = dynamic_pressure_psi(self.Vc_mph, self.alt_ft)
