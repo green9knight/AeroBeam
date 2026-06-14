@@ -1,0 +1,16 @@
+{
+  "aircraft": {
+    "mass_kg": 12.5,
+    "span_m": 2.4,
+    "limit_load_factor": 4.4,
+    "safety_factor": 1.5,
+    "load_distribution": "elliptical"
+  },
+  "spar": {
+    "width_m": 0.04,
+    "height_m": 0.12,
+    "min_wall_thickness_m": 0.0008,
+    "manufacturing_increment_m": 0.0002
+  },
+  "material": "6061-T6"
+}
