@@ -360,6 +360,68 @@ class WingStressAnalyzer:
         alpha = -z0[si] / z1[si]
         return th0 + alpha*th1, z0 + alpha*z1
 
+    def _elastic_coupled_rear_response(self, w_rear, z_front, k_connection):
+        """Solve rear spar as a beam elastically connected to front spar.
+
+        The front spar response is already solved with the appropriate root and
+        strut supports. The rear spar is a root-fixed beam carrying the torsion
+        couple load and connected to the front spar by distributed springs.
+        This replaces the older scalar kappa blend with an actual elastic
+        compatibility solve for the rear spar.
+        """
+
+        n = self.N
+        ndof = 2 * n
+        K = np.zeros((ndof, ndof))
+        F = np.zeros(ndof)
+        element_data = []
+
+        for i in range(n - 1):
+            L = self.x[i + 1] - self.x[i]
+            EI = 0.5 * (self._EI_r[i] + self._EI_r[i + 1])
+            k = EI / L**3 * np.array([
+                [12, 6 * L, -12, 6 * L],
+                [6 * L, 4 * L**2, -6 * L, 2 * L**2],
+                [-12, -6 * L, 12, -6 * L],
+                [6 * L, 2 * L**2, -6 * L, 4 * L**2],
+            ])
+            q = 0.5 * (w_rear[i] + w_rear[i + 1])
+            f = q * L / 2.0 * np.array([1, L / 6.0, 1, -L / 6.0])
+            dofs = [2 * i, 2 * i + 1, 2 * (i + 1), 2 * (i + 1) + 1]
+            for a in range(4):
+                F[dofs[a]] += f[a]
+                for b in range(4):
+                    K[dofs[a], dofs[b]] += k[a, b]
+            element_data.append((dofs, k, f))
+
+        # Distributed elastic connection: force = k * (z_front - z_rear).
+        for i in range(n):
+            tributary = self.dx if 0 < i < n - 1 else self.dx / 2.0
+            k_node = max(k_connection, 0.0) * tributary
+            dof = 2 * i
+            K[dof, dof] += k_node
+            F[dof] += k_node * z_front[i]
+
+        # Rear spar root fitting: fixed vertical displacement and rotation.
+        constrained = [0, 1]
+        free = [idx for idx in range(ndof) if idx not in constrained]
+        U = np.zeros(ndof)
+        U[free] = np.linalg.solve(K[np.ix_(free, free)], F[free])
+
+        z = U[0::2]
+        th = U[1::2]
+        M = np.zeros(n)
+        counts = np.zeros(n)
+        for i, (dofs, k, f) in enumerate(element_data):
+            end_forces = k @ U[dofs] - f
+            # Internal element end moments are the rotational DOF forces.
+            M[i] += end_forces[1]
+            M[i + 1] += -end_forces[3]
+            counts[i] += 1
+            counts[i + 1] += 1
+        M = np.divide(M, np.maximum(counts, 1.0))
+        return th, z, M
+
     def _strut_idx(self):
         return int(np.argmin(np.abs(self.x - self.strut_bl)))
 
@@ -796,45 +858,33 @@ class WingStressAnalyzer:
         _, _, T_total_case = self._distributed_torsion(w, q_dyn, sign=sign)
         w_rear = T_total_case / spar_spacing
 
-        # Geodetic coupling factor κ
-        EI_r_mean = float(np.mean(self._EI_r[self._EI_r > 0]))
-        EI_f_mean = float(np.mean(self._EI_f[self._EI_f > 0]))
-        k_rear    = 48.0 * EI_r_mean / max(self.b_half**3, 1.0)
-        # Combined transfer stiffness: ribs + geodetic + skin
+        # Combined transfer stiffness from geodetic/skin elastic connection.
         transfer = getattr(self, "_torsion_transfer", None)
         if transfer is None:
             transfer = self._torsion_transfer_stiffness()
         k_transfer = transfer["k_total"]
-        kappa = (k_transfer * self.b_half) / (k_transfer * self.b_half + k_rear) if k_transfer > 0 else 0.0
-        kappa = float(np.clip(kappa, 0.0, 1.0))
-        self._geodetic_kappa = kappa
 
         if self.config == "strut_braced" and self.num_spars == 2:
             # Both spars strutted: parallel beam model is correct
             Mr = M * self.rsf
             th_r, z_r = self._deflect_strut(Mr, self._EI_r, si)
+            self._geodetic_kappa = 0.0
 
         elif self.config in ("cantilever", "single_strut") and self.num_spars == 2:
-            # Rear spar carries torsion couple as a cantilever
-            # Plus partial bending via geodetic coupling (κ fraction of front spar shape)
-            V_r, Mr = self._shear_moment(np.abs(w_rear))
-            Mr = Mr * sign
-            th_r_tor, z_r_tor = self._deflect_cantilever(Mr, self._EI_r)
-
-            # Geodetic blending: κ=1 → tracks front, κ=0 → torsion-only cantilever
-            scale       = (EI_f_mean * self.rsf) / max(EI_r_mean * self.lsf, 1e-9)
-            z_r_coupled = z_f * scale
-            th_r_coupled= th_f * scale
-            z_r  = kappa * z_r_coupled + (1.0 - kappa) * z_r_tor
-            th_r = kappa * th_r_coupled + (1.0 - kappa) * th_r_tor
-            # Blend moment for stress: coupled moment = EI_r/EI_f * Mf, torsion moment = Mr
-            Mr_coupled = (self._EI_r / np.maximum(self._EI_f, 1e-9)) * Mf
-            Mr = kappa * Mr_coupled + (1.0 - kappa) * Mr
+            th_r, z_r, Mr = self._elastic_coupled_rear_response(w_rear, z_f, k_transfer)
+            _, z_r_free, _ = self._elastic_coupled_rear_response(w_rear, z_f, 0.0)
+            free_delta = float(np.max(np.abs(z_r_free - z_f)))
+            coupled_delta = float(np.max(np.abs(z_r - z_f)))
+            if free_delta > 1e-9:
+                self._geodetic_kappa = float(np.clip(1.0 - coupled_delta / free_delta, 0.0, 1.0))
+            else:
+                self._geodetic_kappa = 1.0 if coupled_delta < 1e-9 else 0.0
 
         else:
             # Single spar or fallback
             Mr = M_cant * self.rsf
             th_r, z_r = self._deflect_cantilever(Mr, self._EI_r)
+            self._geodetic_kappa = 0.0
 
         sig_f = Mf / np.maximum(self._Itr_f, 1e-10) * self._ym_f
         sig_r = Mr / np.maximum(self._Itr_r, 1e-10) * self._ym_r

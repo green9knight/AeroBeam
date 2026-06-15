@@ -134,6 +134,27 @@ class TwoSparCouplingTest(unittest.TestCase):
         self.assertGreater(high._geodetic_kappa, low._geodetic_kappa)
         self.assertLessEqual(high._geodetic_kappa, 1.0)
 
+    def test_aerobeam_rear_response_uses_elastic_coupling_solver(self):
+        base = {
+            **DEFAULT_INPUTS,
+            "b": 200.0,
+            "num_points": 61,
+            "config": "cantilever",
+            "front_spar_load_share": 0.7,
+            "wing_structure_type": "fabric_buildup",
+            "dcell_enabled": True,
+            "geodetic_enabled": True,
+            "Vd_mph": 0.0,
+            "Cm_ac": 0.0,
+        }
+        weak = WingStressAnalyzer({**base, "geodetic_reduction_factor": 0.0})
+        strong = WingStressAnalyzer({**base, "geodetic_reduction_factor": 1.0})
+        weak.analyze()
+        strong.analyze()
+
+        self.assertGreater(weak.pos["z_delta_max"], strong.pos["z_delta_max"])
+        self.assertGreater(strong._geodetic_kappa, weak._geodetic_kappa)
+
 
 if __name__ == "__main__":
     unittest.main()

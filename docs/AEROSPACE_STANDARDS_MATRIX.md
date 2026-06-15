@@ -63,7 +63,7 @@ report as one of:
 | Two-cell torsion | Bredt-Batho multi-cell | two-cell hand example | PRELIMINARY | Add `q1/q2/GJ` benchmark. |
 | Geodetic/drag-truss strip demand and stiffness | ANC-18 two-spar/drag-truss framework; strip axial stiffness `k_s = 2 A E sin(theta) cos(theta) / s * f_red`; equivalent shear thickness used for demand reporting | ANC-18 hand examples or independent truss/shear-panel model | EXPERIMENTAL/PRELIMINARY | Reports strip force/stress demand and reduced elastic coupling estimate only; joints, glue, compression stability, and detail design remain separate. |
 | Rib torsion demand | required rib bay torque and front/rear attach reactions | independent rib design / frame model | DISPLAY/PRELIMINARY | AeroBeam reports demand only; it does not size ribs. |
-| Rear spar coupling factor | stiffness-blend approximation | independent two-spar + elastic-connection model | EXPERIMENTAL with trend scaffold | Two-spar spring FE scaffold verifies limiting behavior/trend; production model still needs quantitative calibration. |
+| Rear spar coupling / rear spar response | two-spar elastic spring solve using geodetic/skin distributed connection stiffness | independent two-spar + elastic-connection model | EXPERIMENTAL with trend scaffold | Scalar blend removed; elastic solve has limiting-behavior tests but still needs quantitative calibration. |
 | Aluminum skin buckling/effective width | flat plate buckling plus von Karman/Winter effective-width screening | Bruhn/Niu/Megson/NACA examples | PRELIMINARY | Reports effective width/load estimate only; stringer/rivet/post-buckled panel sizing remains separate. |
 | Web shear buckling | plate buckling coefficient | Bruhn/NACA example | PRELIMINARY | Add benchmark and stiffener boundary statement. |
 | Web bending buckling | plate compression buckling | Bruhn/NACA example | PRELIMINARY | Add benchmark. |
@@ -118,15 +118,17 @@ formula implementations:
 - Load-bearing jury reactions for one uniform-load, constant-grid independent
   Euler-Bernoulli beam FE case.
 - Independent two-spar spring FE scaffold verifies zero-coupling and
-  high-coupling limiting behavior and AeroBeam `kappa` monotonicity.
+  high-coupling limiting behavior. Production rear spar response now uses an
+  elastic spring solve; AeroBeam `kappa` is a diagnostic relative-deflection
+  reduction.
 - P-delta scalar amplification formula.
 - Divergence screening formula arithmetic.
 
 The following remain explicitly unvalidated/high risk:
 
 - load-bearing jury support reactions beyond the initial uniform-load FE benchmark;
-- rear spar coupling factor needs quantitative calibration against independent
-  two-spar elastic-connection models;
+- rear spar coupling/rear spar response needs quantitative calibration against
+  independent two-spar elastic-connection models;
 - rib structural sizing is not performed; AeroBeam only reports required rib
   reactions;
 - geodetic equivalent shear stiffness and full ANC-18 drag-truss sizing;

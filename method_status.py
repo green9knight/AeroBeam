@@ -36,7 +36,7 @@ METHOD_STATUS = {
     "torsion": {
         "status": "EXPERIMENTAL",
         "label": "D-cell/geodetic/rib/skin torsion sharing",
-        "note": "Bredt-Batho portions are standard; geodetic/rear-spar coupling is unvalidated. Rib outputs are required reactions only, not rib sizing.",
+        "note": "Bredt-Batho portions are standard; rear-spar coupling now uses an elastic spring solve but still needs calibration. Rib outputs are required reactions only, not rib sizing.",
     },
     "buckling": {
         "status": "PRELIMINARY",

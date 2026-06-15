@@ -49,7 +49,7 @@ at least one independent structural method.
 | Two-cell D-cell + geodetic / skin torsion | `two_cell_bredt`, `_gj_arrays` | two-cell Bredt-Batho with differing shear moduli | B/C | Method is standard for closed thin-wall cells. Geodetic equivalent skin thickness is an AeroBeam approximation and needs benchmark. |
 | Geodetic / drag-truss strip demand | `GeodeticPanel`, `_torsion` | reports shear flow, strip force, and axial stress demand using an ANC-18-style two-spar drag-truss framing plus equivalent shear thickness | C/D | Demand output only. Full ANC-18 sizing of joints, glue, compression strips, and details is not implemented. |
 | Rib torsion demand | `_torsion` | reports required rib bay torque and front/rear attach reactions | C | Demand output only. AeroBeam no longer sizes rib geometry/materials. |
-| Rear spar load path for cantilever/single-strut | `_one_case` | torsion-couple load plus coupling blend using `kappa` | C/D | High-risk approximation. Captures intuition but is not yet validated. Must be benchmarked before using for sizing rear spar. |
+| Rear spar load path for cantilever/single-strut | `_one_case`, `_elastic_coupled_rear_response` | rear spar beam with torsion-couple load elastically connected to front spar by distributed geodetic/skin springs | C | Scalar `kappa` blend removed; still needs quantitative calibration before using for final rear spar sizing. |
 | Aluminum skin wing box | `SkinPanel`, `WingBox`, `_gj_arrays` | simplified skin panels and two-cell torsion | C | Partial model. Does not include stringers, fasteners, shear flow/rivet loads, effective width iteration, or post-buckled diagonal tension. |
 | Skin compression buckling | `skin_compression_buckling` | flat plate buckling | B/C | Standard basis, but boundary conditions and post-buckled load redistribution are simplified. Report treats as warning for semi-monocoque. |
 | Web shear/bending buckling | `web_buckling`, `web_bending_buckling` | plate buckling coefficient estimates | B/C | Standard-style preliminary checks. Needs verification against Bruhn/NACA examples and correct stiffener boundary assumptions. |
@@ -64,9 +64,10 @@ These are the places where AeroBeam currently risks sounding more authoritative
 than the model supports:
 
 1. **Rear spar coupling through geodetic/skin**
-   - Current `kappa` model is an AeroBeam approximation.
-   - Needs independent derivation and benchmark against a 2-spar beam/frame or
-     truss model.
+   - Rear response now uses an elastic spring solve instead of a scalar blend.
+   - Reported `kappa` is diagnostic relative-deflection reduction, not the
+     governing solver.
+   - Needs quantitative calibration against 2-spar beam/frame or truss models.
 
 2. **Load-bearing jury strut reactions**
    - The compatibility solve is plausible but new.
