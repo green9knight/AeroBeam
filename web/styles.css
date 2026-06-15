@@ -105,6 +105,43 @@ body {
   line-height: 1.35;
 }
 
+.method-status-details {
+  margin: 0 0 0.9rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid rgba(185, 188, 194, 0.45);
+  border-radius: 10px;
+  background: rgba(76, 83, 95, 0.55);
+}
+
+.method-status-list {
+  margin-top: 0.6rem;
+  display: grid;
+  gap: 0.45rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.status-pill {
+  display: inline-block;
+  min-width: 7.2rem;
+  margin-right: 0.35rem;
+  padding: 0.1rem 0.35rem;
+  border-radius: 999px;
+  text-align: center;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.status-pill.PRELIMINARY {
+  color: #241b00;
+  background: var(--gold-light);
+}
+
+.status-pill.EXPERIMENTAL {
+  color: #ffffff;
+  background: var(--red);
+}
+
 .grid {
   display: grid;
   grid-template-columns: 1fr 1fr;

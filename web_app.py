@@ -25,6 +25,7 @@ os.environ.setdefault("MPLBACKEND", "Agg")
 import numpy as np
 
 from airfoil_database import AIRFOIL_DB
+from method_status import METHOD_STATUS
 from spar_sections import (
     MATERIAL_DB,
     ANGLE_DESCRIPTIONS,
@@ -181,6 +182,7 @@ class AeroBeamHandler(BaseHTTPRequestHandler):
                     "airfoils": sorted(AIRFOIL_DB.keys()),
                     "materialData": MATERIAL_DB,
                     "strutMaterialData": STRUT_MATERIALS,
+                    "methodStatus": METHOD_STATUS,
                 }
             )
             return

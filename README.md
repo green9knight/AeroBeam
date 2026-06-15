@@ -10,6 +10,7 @@ qualified aircraft structures engineer.
 Before relying on a result, read:
 
 - `docs/STRUCTURAL_METHODS_AUDIT.md`
+- `docs/AEROSPACE_STANDARDS_MATRIX.md`
 - `docs/VALIDATION_PLAN.md`
 
 ## Run the web front end

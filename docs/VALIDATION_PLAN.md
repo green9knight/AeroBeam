@@ -83,6 +83,15 @@ Add tests that:
 - compare selected outputs to expected tolerances,
 - fail loudly if a future code change changes validated behavior.
 
+Initial harness:
+
+- `tests/test_benchmarks.py`
+- `benchmarks/cases/01_uniform_cantilever.aerobeam`
+- `benchmarks/expected/01_uniform_cantilever.json`
+
+This first case covers only root shear/moment for a uniform cantilever beam.
+It is a harness seed, not sufficient validation.
+
 ## Phase 5 - UI/report safety language
 
 Add a permanent report section:

@@ -19,6 +19,7 @@ from spar_sections import (
     web_buckling, web_bending_buckling, skin_compression_buckling, cap_column_buckling,
 )
 from airfoil_database import AIRFOIL_DB, get_airfoil
+from method_status import method_status_lines
 
 
 # ─── PLOT COLOUR PALETTE ─────────────────────────────────────────────────────
@@ -1201,9 +1202,7 @@ class WingStressAnalyzer:
 
         L = []
         L += ["═"*54,"  AeroBeam v1.2  ─  Results","═"*54]
-        L += ["  METHOD STATUS: BETA / PRELIMINARY"]
-        L += ["  Standard: beam loads, section EI, basic bending stress"]
-        L += ["  Experimental: coupled rear-spar/geodetic/rib torsion, divergence, load-bearing jury"]
+        L += method_status_lines()
         L += [f"\nAirfoil    : {self.airfoil}  Cm (pitching moment coeff)={self.Cm_ac:+.4f}"]
         L += [f"Config     : {self.config}   Structure: {self.wing_struct}"]
         L += [f"n (load factor, ultimate): +{self.n:.1f}g / {self.n_neg:.1f}g"]

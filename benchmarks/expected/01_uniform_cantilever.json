@@ -1,0 +1,20 @@
+{
+  "description": "Uniform cantilever beam, semi-span 100 in, total semi-span lift 1000 lb.",
+  "checks": {
+    "V_root": {
+      "value": 1000.0,
+      "rtol": 0.002,
+      "basis": "Uniform load root shear V = L"
+    },
+    "M_root": {
+      "value": 50000.0,
+      "rtol": 0.005,
+      "basis": "Uniform load root moment M = L * b_half / 2"
+    },
+    "M_front_root": {
+      "value": 50000.0,
+      "rtol": 0.005,
+      "basis": "Single front spar carries full moment"
+    }
+  }
+}

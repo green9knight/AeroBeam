@@ -288,6 +288,21 @@ function setStatus(message, kind = "") {
   el.className = `status ${kind}`;
 }
 
+function renderMethodStatus(statusMap) {
+  const target = document.getElementById("methodStatusList");
+  if (!target) return;
+  target.innerHTML = "";
+  for (const item of Object.values(statusMap || {})) {
+    const row = document.createElement("div");
+    const pill = document.createElement("span");
+    pill.className = `status-pill ${item.status}`;
+    pill.textContent = item.status;
+    row.appendChild(pill);
+    row.append(`${item.label}: ${item.note}`);
+    target.appendChild(row);
+  }
+}
+
 function markInputsChanged() {
   if (!state.isRunning) {
     setStatus("Inputs changed — click Run Analysis");
@@ -979,6 +994,7 @@ async function init() {
     materials: payload.materials || [],
     strutMaterials: payload.strutMaterials || [],
   };
+  renderMethodStatus(payload.methodStatus || {});
   ensureSchemaDefaults();
   const savedPassword = sessionStorage.getItem("aerobeamBetaPassword") || "";
   if (savedPassword) document.getElementById("betaPassword").value = savedPassword;
