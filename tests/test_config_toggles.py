@@ -52,6 +52,8 @@ class ConfigToggleTest(unittest.TestCase):
         pdelta = analyze_with(secondary_bending=True)
 
         self.assertGreater(pdelta.sigma_max_front, base.sigma_max_front)
+        self.assertEqual(base.pos["pdelta_amp"], 1.0)
+        self.assertGreater(pdelta.pos["pdelta_amp"], 1.0)
 
     def test_jury_changes_euler_capacity_when_enabled(self):
         base = analyze_with(jury_strut=False, jury_spar_bl=60.0)

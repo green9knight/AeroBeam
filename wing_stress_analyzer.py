@@ -669,10 +669,10 @@ class WingStressAnalyzer:
         si   = self._strut_idx()
         EI_a = float(np.mean(EI[:si+1]))
         Pe   = math.pi**2*EI_a/max(self.strut_bl**2,1)
-        if P_comp<=0 or Pe<=0: return M, False
-        if P_comp/Pe>=1.0:     return M*10, True
+        if P_comp<=0 or Pe<=0: return M, False, 1.0
+        if P_comp/Pe>=1.0:     return M*10, True, 10.0
         amp = 1.0/(1.0-P_comp/Pe)
-        return M*amp, amp>2.0
+        return M*amp, amp>2.0, amp
 
     # ── One load case ────────────────────────────────────────────────────────
 
@@ -703,8 +703,9 @@ class WingStressAnalyzer:
 
         # P-delta
         pw = False
+        pdelta_amp = 1.0
         if self.secondary and Ps>0:
-            M, pw = self._pdelta(M, Ps, self._EI_f)
+            M, pw, pdelta_amp = self._pdelta(M, Ps, self._EI_f)
 
         # Deflection — front spar (uses strut-corrected M)
         Mf = M*self.lsf
@@ -789,7 +790,7 @@ class WingStressAnalyzer:
             "z_delta_max":float(np.max(np.abs(z_r - z_f))),
             "Fv":Fv,"F_axial":Fa,"P_spar":Ps,"P_euler":Pe,
             "V_root":float(V[0]),"M_root":float(M[0]),
-            "pdelta_warn":pw,
+            "pdelta_warn":pw, "pdelta_amp":pdelta_amp,
         }
 
     # ── MS helpers ───────────────────────────────────────────────────────────
@@ -1137,6 +1138,8 @@ class WingStressAnalyzer:
         L += [f"\n── BENDING (+g) {'─'*37}"]
         L += [f"  Root V (shear force)  : {p['V_root']:>10,.1f} lb"]
         L += [f"  Root M (bending moment): {p['M_root']:>10,.1f} lb·in"]
+        if self.secondary:
+            L += [f"  P-delta amplification : {p.get('pdelta_amp', 1.0):>10.3f}×  (affects moment/stress, not lift/shear)"]
         L += [f"  Front z_max (tip deflection): {p['z_max_front']:>10.3f} in  (+up)"]
         L += [f"  Rear  z_max (tip deflection): {p['z_max_rear']:>10.3f} in  (+up)"]
         L += [f"  Rear-front Δz max (relative flex): {p['z_delta_max']:>8.3f} in"]
@@ -1156,6 +1159,8 @@ class WingStressAnalyzer:
             L += [f"  SF (safety factor) Euler buckling :{mf(s['SF_euler']-1)}"]
             L += [f"  MS (margin of safety) axial       :{mf(s['MS_axial'])}"]
             L += [f"  Strut wt (½)  : {s['weight_half']:.2f} lb"]
+            if self.jury:
+                L += ["  Jury strut affects Euler length/Pe only; wing lift/shear loads stay unchanged."]
             if p.get("pdelta_warn"): L += ["  ⚠ P-delta amplification > 2×"]
 
 
