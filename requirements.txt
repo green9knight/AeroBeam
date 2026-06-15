@@ -1,0 +1,7 @@
+# AeroBeam runtime dependencies (development)
+# Tkinter is required but ships as a system package (Debian/Ubuntu: python3-tk),
+# not via pip.
+numpy
+matplotlib
+openpyxl
+xlsxwriter
