@@ -102,11 +102,15 @@ Current coverage:
 - round tube area/I/EI;
 - plain rectangular section `bh^3/12`;
 - symmetric same-material I-beam neutral axis and inertia.
+- asymmetric transformed-section I-beam neutral axis and inertia;
+- box spar neutral axis, area, and inertia;
+- aluminum C-spar neutral axis and inertia including the web-edge idealization;
 - pin-ended Euler strut buckling;
 - flat skin compression buckling;
 - web shear buckling;
 - cap column buckling;
 - single-cell D-cell Bredt-Batho `GJ`.
+- two-cell Bredt-Batho equilibrium and equal-twist compatibility residuals.
 
 This is a harness seed, not sufficient validation.
 

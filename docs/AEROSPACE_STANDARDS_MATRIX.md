@@ -94,11 +94,16 @@ formula implementations:
 - Round tube area, inertia, and EI.
 - Plain rectangular section area, neutral axis, and inertia.
 - Symmetric same-material I-beam neutral axis and inertia.
+- Asymmetric transformed-section I-beam neutral axis and inertia.
+- Box spar neutral axis, area, and inertia.
+- Aluminum C-spar neutral axis and inertia for the documented web-edge
+  idealization.
 - Pin-ended main strut Euler buckling.
 - Flat skin compression buckling formula.
 - Web shear buckling formula and shear coefficient.
 - Cap column Euler formula.
 - Single-cell D-cell Bredt-Batho `GJ`.
+- Two-cell Bredt-Batho equilibrium and equal-twist compatibility residuals.
 
 The following remain explicitly unvalidated/high risk:
 

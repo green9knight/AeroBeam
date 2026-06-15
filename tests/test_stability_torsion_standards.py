@@ -8,6 +8,7 @@ from spar_sections import (
     cap_column_buckling,
     skin_compression_buckling,
     web_buckling,
+    two_cell_bredt,
 )
 from wing_stress_analyzer import DEFAULT_INPUTS, WingStressAnalyzer
 
@@ -78,6 +79,28 @@ class StabilityTorsionStandardsTest(unittest.TestCase):
         ds_over_t = 2.0 * 16.0 / 0.125 + h_spar / 0.125
         expected = 4.0 * MATERIAL_DB["Birch Plywood"]["G"] * area**2 / ds_over_t
         self.assertAlmostEqual(dcell.GJ(h_spar), expected)
+
+    def test_two_cell_bredt_satisfies_equilibrium_and_compatibility(self):
+        A1 = 35.0
+        A2 = 120.0
+        ds1 = 250.0
+        ds2 = 410.0
+        shared = 60.0
+        G1 = 80_000.0
+        G2 = 145_000.0
+        torque = 25_000.0
+
+        q1, q2, gj = two_cell_bredt(A1, A2, ds1, ds2, shared, G1, G2, torque)
+        d11 = ds1 + shared
+        d22 = ds2 + shared
+        d12 = shared
+        phi_1 = (q1 * d11 - q2 * d12) / (2.0 * A1 * G1)
+        phi_2 = (q2 * d22 - q1 * d12) / (2.0 * A2 * G2)
+        torque_check = 2.0 * q1 * A1 + 2.0 * q2 * A2
+
+        self.assertAlmostEqual(torque_check, torque)
+        self.assertAlmostEqual(phi_1, phi_2)
+        self.assertAlmostEqual(gj, torque / phi_1)
 
 
 if __name__ == "__main__":
