@@ -19,6 +19,9 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
+# Web/PDF rendering must be headless on Render and thread-safe in the HTTP server.
+os.environ.setdefault("MPLBACKEND", "Agg")
+
 import numpy as np
 
 from airfoil_database import AIRFOIL_DB
