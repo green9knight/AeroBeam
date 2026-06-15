@@ -620,7 +620,7 @@ class WingStressAnalyzer:
 
         # ANC-18-style drag-truss demand for a geodetic/diagonal strip panel:
         # report required shear flow and strip axial force. This is a demand
-        # output only; joints, glue, compression stability, and detail design
+        # output only; bond/joint/attachment details and local member stability
         # remain outside this global wing solver.
         geodetic_q = 0.0
         geodetic_strip_force = 0.0
@@ -1421,10 +1421,10 @@ class WingStressAnalyzer:
                 red=float(self.inp.get("geodetic_reduction_factor", 0.75))
                 Fb_s=MATERIAL_DB[self.geodetic.mat_name]["Fb"]
                 L += [f"  Geodetic τ eff: {tg:>9,.0f} psi"]
-                L += [f"  Geodetic stiffness reduction f_red={red:.2f} (joint/compression/detail allowance)"]
+                L += [f"  Geodetic stiffness reduction f_red={red:.2f} (connection/detail allowance)"]
                 L += [f"  ANC-18 drag-truss demand: q={q_geo:>7.1f} lb/in  strip F={strip_f:>7.1f} lb"]
                 L += [f"  Strip axial σ demand: {sig_s:>9,.0f} psi   MS vs Fb only:{mf(Fb_s/max(sig_s,1)-1)}"]
-                L += ["  Check joints, glue, compression strips, and details separately per ANC-18."]
+                L += ["  Geodetic mesh demand only; bond/joint/attachment sizing is outside AeroBeam."]
 
         L += [f"\n── DIVERGENCE {'─'*39}"]
         if d["divergent"] and d["V_div"]<float("inf"):

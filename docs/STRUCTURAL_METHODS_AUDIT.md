@@ -48,7 +48,7 @@ at least one independent structural method.
 | D-cell bending contribution | `DCellSkin` / usage | simplified rectangular enclosed-area and skin elements | C | Geometry is simplified. Needs comparison to actual airfoil/D-cell geometry. |
 | Single-cell D-cell torsion | `DCellSkin.GJ` | Bredt-Batho closed thin-wall estimate | B | Bredt-Batho is standard; geometry and material shear modulus assumptions need validation. |
 | Two-cell D-cell + geodetic / skin torsion | `two_cell_bredt`, `_gj_arrays` | two-cell Bredt-Batho with differing shear moduli | B/C | Method is standard for closed thin-wall cells. Geodetic equivalent skin thickness is an AeroBeam approximation and needs benchmark. |
-| Geodetic / drag-truss strip demand | `GeodeticPanel`, `_torsion` | reports shear flow, strip force, and axial stress demand using an ANC-18-style two-spar drag-truss framing plus equivalent shear thickness | C/D | Demand output only. Full ANC-18 sizing of joints, glue, compression strips, and details is not implemented. |
+| Geodetic / drag-truss strip demand | `GeodeticPanel`, `_torsion` | reports shear flow, strip force, and axial stress demand using an ANC-18-style two-spar drag-truss framing plus equivalent shear thickness | C/D | Demand output only. Bond/joint/attachment sizing and local member stability are outside AeroBeam. |
 | Rib torsion demand | `_torsion` | reports required rib bay torque and front/rear attach reactions | C | Demand output only. AeroBeam no longer sizes rib geometry/materials. |
 | Rear spar load path for cantilever/single-strut | `_one_case`, `_elastic_coupled_rear_response` | rear spar beam with torsion-couple load elastically connected to front spar by distributed geodetic/skin springs | C | Scalar `kappa` blend removed; still needs quantitative calibration before using for final rear spar sizing. |
 | Aluminum skin wing box | `SkinPanel`, `WingBox`, `_gj_arrays` | simplified skin panels and two-cell torsion | C | Partial model. Does not include stringers, fasteners, shear flow/rivet loads, effective width iteration, or post-buckled diagonal tension. |
@@ -77,8 +77,9 @@ than the model supports:
 
 3. **Geodetic / drag-truss strip demand**
    - ANC-18 is now the governing reference for wood two-spar/drag-truss framing.
-   - AeroBeam reports strip force/stress demand but does not complete ANC-18
-     joint, glue, compression-member, or detail checks.
+   - AeroBeam reports strip force/stress demand only.
+   - Bond/joint/attachment sizing and local member stability are outside the
+     program scope.
    - The equivalent shear stiffness still needs derivation and benchmark
      examples before it can be used as a validated stiffness model.
 

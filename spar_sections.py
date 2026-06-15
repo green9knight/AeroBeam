@@ -703,7 +703,7 @@ class GeodeticPanel:
             k_s = 2 * A * E * sin(theta) * cos(theta) / s * f_red
 
         where ``s`` is strip spacing along the span. ``f_red`` accounts for
-        compression diagonal effectiveness, joint/glue compliance, crossings,
+        compression diagonal effectiveness, connection compliance, crossings,
         gusset flexibility, and construction details.
         """
         θ = math.radians(self.angle_deg)
