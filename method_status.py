@@ -36,7 +36,7 @@ METHOD_STATUS = {
     "torsion": {
         "status": "EXPERIMENTAL",
         "label": "D-cell/geodetic/rib/skin torsion sharing",
-        "note": "Bredt-Batho portions are standard; geodetic/rib/rear-spar coupling is AeroBeam-specific and unvalidated.",
+        "note": "Bredt-Batho portions are standard; geodetic/rear-spar coupling is unvalidated. Rib outputs are required reactions only, not rib sizing.",
     },
     "buckling": {
         "status": "PRELIMINARY",

@@ -48,7 +48,7 @@ one independent structural method.
 | Single-cell D-cell torsion | `DCellSkin.GJ` | Bredt-Batho closed thin-wall estimate | B | Bredt-Batho is standard; geometry and material shear modulus assumptions need validation. |
 | Two-cell D-cell + geodetic / skin torsion | `two_cell_bredt`, `_gj_arrays` | two-cell Bredt-Batho with differing shear moduli | B/C | Method is standard for closed thin-wall cells. Geodetic equivalent skin thickness is an AeroBeam approximation and needs benchmark. |
 | Geodetic equivalent shear panel | `GeodeticPanel.t_eff` | converts diagonal strips to equivalent shear thickness | C/D | Critical approximation. Needs derivation and comparison to truss/shear-panel calculations before relying on stress/twist results. |
-| Rib torsion transfer | `_torsion_transfer_stiffness`, `_torsion` | ribs as shear beams sharing torsion with geodetic/skin by stiffness fractions | C/D | High-risk approximation. Needs independent frame/truss validation. Should be clearly labelled experimental. |
+| Rib torsion demand | `_torsion` | reports required rib bay torque and front/rear attach reactions | C | Demand output only. AeroBeam no longer sizes rib geometry/materials. |
 | Rear spar load path for cantilever/single-strut | `_one_case` | torsion-couple load plus coupling blend using `kappa` | C/D | High-risk approximation. Captures intuition but is not yet validated. Must be benchmarked before using for sizing rear spar. |
 | Aluminum skin wing box | `SkinPanel`, `WingBox`, `_gj_arrays` | simplified skin panels and two-cell torsion | C | Partial model. Does not include stringers, fasteners, shear flow/rivet loads, effective width iteration, or post-buckled diagonal tension. |
 | Skin compression buckling | `skin_compression_buckling` | flat plate buckling | B/C | Standard basis, but boundary conditions and post-buckled load redistribution are simplified. Report treats as warning for semi-monocoque. |
@@ -63,7 +63,7 @@ one independent structural method.
 These are the places where AeroBeam currently risks sounding more authoritative
 than the model supports:
 
-1. **Rear spar coupling through ribs/geodetic/skin**
+1. **Rear spar coupling through geodetic/skin**
    - Current `kappa` model is an AeroBeam approximation.
    - Needs independent derivation and benchmark against a 2-spar beam/frame or
      truss model.
@@ -77,10 +77,10 @@ than the model supports:
    - The diagonal-strip-to-equivalent-thickness conversion needs derivation and
      benchmark examples.
 
-4. **Rib torsion transfer**
-   - Current ribs-as-shear-beams stiffness share is a rough model.
-   - Needs validation against a structural idealization that includes rib
-     bending, cap/web shear, and attachment stiffness.
+4. **Rib torsion demand**
+   - AeroBeam reports rib bay torque and attach reaction demand only.
+   - Rib sizing, rib buckling, attachments, and local details remain separate
+     design tasks outside the current solver.
 
 5. **Aluminum skin post-buckling**
    - Current skin buckling warning does not size post-buckled skin/stringer
@@ -98,12 +98,12 @@ Until validation is complete, the report should distinguish:
 - **Standard beam results**: lift, shear, moment, basic deflection, simple
   section stress.
 - **Preliminary buckling warnings**: web, cap, skin, tube local instability.
-- **Experimental coupling/torsion results**: geodetic/rib/rear-spar coupling,
-  single-strut torsion transfer, divergence estimate.
+- **Experimental coupling/torsion results**: geodetic/rear-spar coupling,
+  single-strut torsion transfer, rib demand, divergence estimate.
 
 Suggested report language:
 
-> Coupled rear-spar/geodetic/rib torsion results are preliminary AeroBeam
+> Coupled rear-spar/geodetic torsion and rib reaction-demand results are preliminary AeroBeam
 > approximations. Use them for design comparison only until validated against
 > an independent structural model.
 
@@ -122,7 +122,7 @@ Create saved `.aerobeam` files and expected numerical outputs for each:
 8. D-cell single-cell Bredt torsion, hand-calculated.
 9. Two-cell Bredt example with known `q1`, `q2`, and GJ.
 10. Geodetic panel equivalent stiffness, independent truss/shear-panel model.
-11. Rib torsion transfer, independent beam/frame model.
+11. Rib bay torque/reaction demand, independent beam/frame model.
 12. Aluminum skin panel buckling, textbook/NACA example.
 13. Web shear buckling with stiffener spacing, Bruhn/NACA example.
 14. Cap column buckling with known boundary assumptions.
@@ -132,7 +132,8 @@ Create saved `.aerobeam` files and expected numerical outputs for each:
 
 1. Add visible **Experimental** tags in summary/PDF for:
    - rear spar coupling factor,
-   - geodetic/rib torsion sharing,
+   - geodetic torsion sharing,
+   - rib reaction demand,
    - divergence speed,
    - load-bearing jury support until benchmarked.
 
@@ -160,6 +161,6 @@ Create saved `.aerobeam` files and expected numerical outputs for each:
 AeroBeam is suitable for beta exploration and comparison of concepts. It is not
 yet suitable for production structural sizing without the benchmark program
 above. The basic beam/section math is the strongest part. The coupled torsion,
-geodetic/rib/rear-spar load-path, load-bearing jury, post-buckling, and
+geodetic/rear-spar load-path, rib reaction demand, load-bearing jury, post-buckling, and
 divergence models require formal validation before release claims should be
 made.

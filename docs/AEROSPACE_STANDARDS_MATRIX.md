@@ -62,7 +62,7 @@ report as one of:
 | D-cell torsion | Bredt-Batho single cell | Closed-cell torsion hand example | PRELIMINARY | Add GJ/shear-flow benchmark. |
 | Two-cell torsion | Bredt-Batho multi-cell | two-cell hand example | PRELIMINARY | Add `q1/q2/GJ` benchmark. |
 | Geodetic equivalent panel | equivalent shear thickness approximation | truss/shear-panel independent model | EXPERIMENTAL | Keep labelled experimental until benchmarked. |
-| Rib torsion transfer | ribs as distributed shear beams | frame/beam model | EXPERIMENTAL | Keep labelled experimental until benchmarked. |
+| Rib torsion demand | required rib bay torque and front/rear attach reactions | independent rib design / frame model | DISPLAY/PRELIMINARY | AeroBeam reports demand only; it does not size ribs. |
 | Rear spar coupling factor | stiffness-blend approximation | independent two-spar + torsion model | EXPERIMENTAL | Keep labelled experimental until benchmarked. |
 | Aluminum skin buckling | flat plate buckling | NACA/Bruhn example | PRELIMINARY | Define boundary conditions and post-buckling meaning. |
 | Web shear buckling | plate buckling coefficient | Bruhn/NACA example | PRELIMINARY | Add benchmark and stiffener boundary statement. |
@@ -124,7 +124,9 @@ The following remain explicitly unvalidated/high risk:
 - load-bearing jury support reactions beyond the initial uniform-load FE benchmark;
 - rear spar coupling factor and rear spar load path in cantilever/single-strut
   configurations;
-- rib/geodetic/skin torsion sharing;
+- rib structural sizing is not performed; AeroBeam only reports required rib
+  reactions;
+- geodetic/skin torsion sharing;
 - geodetic equivalent shear panel thickness;
 - divergence speed estimate;
 - post-buckled aluminum skin behavior.

@@ -429,24 +429,11 @@ class WingStressAnalyzer:
         chord_box = (self.rear_pct - self.front_pct) * self.root_chord
         spar_gap = max(chord_box, 1.0)
 
-        rib_mat = MATERIAL_DB.get(self.rib_mat, MATERIAL_DB["Birch Plywood"])
-        G_rib = rib_mat["G"]
-        Fsu_rib = rib_mat["Fsu"] * (self.wood_kd if rib_mat["is_wood"] else 1.0)
-        Fb_rib = allowable_bending(self.rib_mat, self.wood_kd)
-        h_r = self.rib_h_web
-        t_r = self.rib_t_web
-        b_c = self.rib_b_cap
-        t_c = self.rib_t_cap
-
-        # Rib as a simple built-up beam spanning between spars.
-        I_rib_web = t_r * h_r**3 / 12.0
-        I_rib_cap = 2.0 * (b_c * t_c**3 / 12.0 + b_c * t_c * (h_r / 2.0 + t_c / 2.0) ** 2)
-        I_rib = I_rib_web + I_rib_cap
-        y_rib = h_r / 2.0 + t_c
-        A_rib_web = h_r * t_r
-
-        # Per-unit-span shear stiffness contribution from ribs.
-        k_rib = G_rib * A_rib_web / spar_gap / max(self.rib_spacing, 1e-9)
+        # Ribs are no longer treated as a defined structural member in the
+        # global torsion/coupling model. AeroBeam reports required rib bay
+        # reactions separately so designers can size ribs with their own
+        # construction details and standards.
+        k_rib = 0.0
 
         if self.geodetic is not None:
             G_geo = MATERIAL_DB[self.geodetic.mat_name]["G"]
@@ -467,12 +454,6 @@ class WingStressAnalyzer:
         return {
             "chord_box": chord_box,
             "spar_gap": spar_gap,
-            "G_rib": G_rib,
-            "Fsu_rib": Fsu_rib,
-            "Fb_rib": Fb_rib,
-            "I_rib": I_rib,
-            "y_rib": y_rib,
-            "A_rib_web": A_rib_web,
             "k_rib": k_rib,
             "k_geo": k_geo,
             "k_skin": k_skin,
@@ -533,11 +514,6 @@ class WingStressAnalyzer:
         # ── Torsion transfer stiffness — load sharing between ribs, geodetic, skin ──
         transfer = self._torsion_transfer_stiffness()
         spar_gap = transfer["spar_gap"]
-        Fsu_rib = transfer["Fsu_rib"]
-        Fb_rib = transfer["Fb_rib"]
-        I_rib = transfer["I_rib"]
-        y_rib = transfer["y_rib"]
-        A_rib_web = transfer["A_rib_web"]
         k_rib = transfer["k_rib"]
         k_geo = transfer["k_geo"]
         k_skin = transfer["k_skin"]
@@ -546,17 +522,13 @@ class WingStressAnalyzer:
         f_geo = transfer["f_geo"]
         f_skin = transfer["f_skin"]
 
-        # Rib stress at root (governing station — highest T_run)
-        # Each rib carries: F_rib = T_run[0] * f_rib / rib_spacing [lb per rib]
-        # Applied as point loads at spar attach points; rib as simply-supported beam
-        F_rib_each = T_run[0] * f_rib / self.rib_spacing   # [lb per rib]
-        # Rib as simply-supported beam, point load at each end (couple):
-        # M_rib_max = F_rib * spar_gap / 4  (midspan for centre-loaded, or at load point)
-        M_rib = F_rib_each * spar_gap / 4.0
-        tau_rib = F_rib_each / max(A_rib_web, 1e-9)
-        sig_rib = M_rib * y_rib / max(I_rib, 1e-12)
-        MS_rib_shear = Fsu_rib / max(tau_rib, 1e-9) - 1.0
-        MS_rib_bend  = Fb_rib / max(sig_rib, 1e-9) - 1.0
+        # Required rib reactions if ribs are used as the transfer path. This is
+        # a demand output, not a rib sizing check.
+        local_torque = np.abs(T_tot) * self.rib_spacing
+        max_idx = int(np.argmax(local_torque))
+        rib_bay_torque = float(local_torque[max_idx])
+        rib_reaction = rib_bay_torque / max(spar_gap, 1e-9)
+        rib_reaction_station = float(self.x[max_idx])
 
         # ── Cruise speed torsion check and CP positions ──────────────────────
         q_vc  = dynamic_pressure_psi(self.Vc_mph, self.alt_ft)
@@ -601,9 +573,9 @@ class WingStressAnalyzer:
                 "cp_neg":cp_neg, "cp_dive":cp_dive,
                 "f_rib":f_rib,"f_geo":f_geo,"f_skin":f_skin,
                 "k_rib":k_rib,"k_geo":k_geo,"k_total":k_total,
-                "F_rib_each":F_rib_each,"tau_rib":tau_rib,"sig_rib":sig_rib,
-                "MS_rib_shear":MS_rib_shear,"MS_rib_bend":MS_rib_bend,
-                "I_rib":I_rib,"A_rib_web":A_rib_web}
+                "rib_bay_torque":rib_bay_torque,
+                "rib_reaction_required":rib_reaction,
+                "rib_reaction_station":rib_reaction_station}
 
     # ── Divergence ───────────────────────────────────────────────────────────
 
@@ -1300,11 +1272,9 @@ class WingStressAnalyzer:
             if t and "f_rib" in t:
                 fr = t["f_rib"]; fg = t.get("f_geo",0); fs = t.get("f_skin",0)
                 L += [f"  Torsion share: ribs={fr*100:.0f}%  geodetic={fg*100:.0f}%  skin={fs*100:.0f}%"]
-                tau_r = t["tau_rib"]; sig_r = t["sig_rib"]
-                ms_rs = t["MS_rib_shear"]; ms_rb = t["MS_rib_bend"]
-                L += [f"  Rib root load  : {t['F_rib_each']:>8.1f} lb/rib"]
-                L += [f"  Rib web shear  : {tau_r:>8.0f} psi   MS:{mf(ms_rs)}"]
-                L += [f"  Rib cap bending: {sig_r:>8.0f} psi   MS:{mf(ms_rb)}"]
+                L += [f"  Required rib bay torque : {t['rib_bay_torque']:>8.0f} lb-in at x={t['rib_reaction_station']:.1f}\""]
+                L += [f"  Required rib attach reaction: ±{t['rib_reaction_required']:>7.1f} lb per rib bay"]
+                L += ["  Rib sizing is not performed; design ribs/attachments for this reaction."]
             if self.geodetic:
                 tg=abs(float(t["tau_geo"][0]))
                 Fs2=MATERIAL_DB[self.geodetic.mat_name]["Fsu"]

@@ -63,7 +63,8 @@ Each expected file should contain only defensible values and tolerances:
 12. D-cell single-cell Bredt.
 13. Two-cell Bredt with known hand solution.
 14. Geodetic equivalent panel against an independent truss/shear panel model.
-15. Rib torsion transfer against a frame/beam model.
+15. Rib bay torque/reaction demand against a frame/beam model; rib structural
+    sizing remains a separate design task.
 
 ### Stability and margins
 
@@ -136,7 +137,7 @@ Add a permanent report section:
 Method status:
   Standard: lift integration, section EI, basic bending stress
   Preliminary: buckling warnings, P-delta
-  Experimental: coupled rear-spar/geodetic/rib torsion, divergence
+  Experimental: coupled rear-spar/geodetic torsion, rib reaction demand, divergence
 ```
 
 ## Exit criteria for production release

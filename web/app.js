@@ -139,14 +139,9 @@ const inputSections = [
         ],
       },
       {
-        title: "Rib Structure",
-        fields: [
-          ["rib_mat", "Rib material", "select", "materials"],
-          ["rib_h_web", "Rib web height (in)", "number", "0.001"],
-          ["rib_t_web", "Rib web thickness (in)", "number", "0.001"],
-          ["rib_b_cap", "Rib cap width (in)", "number", "0.001"],
-          ["rib_t_cap", "Rib cap thickness (in)", "number", "0.001"],
-        ],
+        title: "Rib Reaction Requirements",
+        help: "AeroBeam reports required rib bay torque and front/rear attach reactions. Rib geometry/material sizing is left to a separate rib design check.",
+        fields: [],
       },
     ],
   },
@@ -579,6 +574,12 @@ function renderInputTabs() {
       title.className = "input-section-title";
       title.textContent = group.title;
       panel.appendChild(title);
+      if (group.help) {
+        const help = document.createElement("div");
+        help.className = "field-help";
+        help.textContent = group.help;
+        panel.appendChild(help);
+      }
       const grid = document.createElement("section");
       grid.className = "grid";
       for (const field of group.fields) grid.appendChild(createField(field));
