@@ -36,10 +36,19 @@ function setStatus(message, kind = "") {
 }
 
 function authHeaders(extra = {}) {
-  const password = document.getElementById("betaPassword")?.value || "";
+  const password = (document.getElementById("betaPassword")?.value || "").trim();
   return password
     ? { ...extra, "X-AeroBeam-Password": password }
     : extra;
+}
+
+function betaPassword() {
+  return (document.getElementById("betaPassword")?.value || "").trim();
+}
+
+function rememberBetaPassword() {
+  const password = betaPassword();
+  if (password) sessionStorage.setItem("aerobeamBetaPassword", password);
 }
 
 function fillSelect(selector, values, current) {
@@ -389,11 +398,12 @@ async function runAnalysis() {
     syncInputsFromForm();
     // Let advanced JSON override quick fields when the editor is open/edited.
     loadJsonEditor();
+    rememberBetaPassword();
     setStatus("Running analysis...");
     const response = await fetch("/api/analyze", {
       method: "POST",
       headers: authHeaders({ "Content-Type": "application/json" }),
-      body: JSON.stringify({ inputs: state.inputs }),
+      body: JSON.stringify({ inputs: state.inputs, betaPassword: betaPassword() }),
     });
     const payload = await response.json();
     if (!payload.ok) throw new Error(`${payload.error}\n${payload.traceback || ""}`);
@@ -412,11 +422,12 @@ async function downloadReport() {
   try {
     syncInputsFromForm();
     loadJsonEditor();
+    rememberBetaPassword();
     setStatus("Generating PDF report...");
     const response = await fetch("/api/report", {
       method: "POST",
       headers: authHeaders({ "Content-Type": "application/json" }),
-      body: JSON.stringify({ inputs: state.inputs }),
+      body: JSON.stringify({ inputs: state.inputs, betaPassword: betaPassword() }),
     });
     if (!response.ok) {
       const payload = await response.json().catch(() => ({}));
@@ -459,6 +470,8 @@ async function init() {
   const payload = await response.json();
   state.defaults = payload.defaults;
   state.inputs = JSON.parse(JSON.stringify(payload.defaults));
+  const savedPassword = sessionStorage.getItem("aerobeamBetaPassword") || "";
+  if (savedPassword) document.getElementById("betaPassword").value = savedPassword;
 
   fillSelect('[data-key="config"]', ["strut_braced", "cantilever", "single_strut"], state.inputs.config);
   fillSelect(

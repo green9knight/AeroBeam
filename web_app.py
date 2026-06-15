@@ -37,7 +37,7 @@ ROOT = Path(__file__).resolve().parent
 WEB_ROOT = ROOT / "web"
 HOST = os.environ.get("HOST", "127.0.0.1")
 PORT = int(os.environ.get("PORT", "8000"))
-BETA_PASSWORD = os.environ.get("AEROBEAM_BETA_PASSWORD", "")
+BETA_PASSWORD = os.environ.get("AEROBEAM_BETA_PASSWORD", "").strip()
 
 
 def _jsonable(value: Any) -> Any:
@@ -182,12 +182,12 @@ class AeroBeamHandler(BaseHTTPRequestHandler):
         if parsed.path not in {"/api/analyze", "/api/report"}:
             self._send_json({"ok": False, "error": "unknown endpoint"}, status=404)
             return
-        if not self._authorized():
-            return
 
         try:
             length = int(self.headers.get("Content-Length", "0"))
             payload = json.loads(self.rfile.read(length) or b"{}")
+            if not self._authorized(payload):
+                return
             if parsed.path == "/api/report":
                 self._send_pdf(report_payload(payload), "aerobeam-report.pdf")
             else:
@@ -221,13 +221,19 @@ class AeroBeamHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def _authorized(self) -> bool:
+    def _authorized(self, payload: dict[str, Any] | None = None) -> bool:
         if not BETA_PASSWORD:
             return True
-        supplied = self.headers.get("X-AeroBeam-Password", "")
+        payload = payload or {}
+        supplied = (
+            self.headers.get("X-AeroBeam-Password")
+            or payload.get("betaPassword")
+            or payload.get("password")
+            or ""
+        ).strip()
         if supplied == BETA_PASSWORD:
             return True
-        self._send_json({"ok": False, "error": "beta password required"}, status=401)
+        self._send_json({"ok": False, "error": "invalid or missing beta password"}, status=401)
         return False
 
     def _send_static(self, request_path: str) -> None:
