@@ -91,6 +91,7 @@ const inputSections = [
           ["secondary_bending", "P-delta amplification", "checkbox"],
           ["jury_strut", "Enable jury strut", "checkbox"],
           ["jury_spar_bl", "Jury spar BL (in)", "number", "0.1"],
+          ["jury_coupling_stiffness", "Jury front/rear coupling stiffness (lb/in)", "number", "1"],
         ],
       },
     ],

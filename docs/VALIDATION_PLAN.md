@@ -49,23 +49,25 @@ Each expected file should contain only defensible values and tolerances:
    aeronautical structures examples.
 4. Strut-braced single support, compare to independent beam/frame calculations.
 5. Strut-braced plus jury support, compare to an independent beam model.
+6. Jury front/rear soft coupling, compare to an independent frame/beam model
+   with a discrete elastic link between spars.
 
 ### Sections
 
-6. Round tube area/I/weight.
-7. Plain rectangular wood spar.
-8. Symmetric I-beam.
-9. Asymmetric I-beam.
-10. Box spar.
-11. Aluminum C-spar.
+7. Round tube area/I/weight.
+8. Plain rectangular wood spar.
+9. Symmetric I-beam.
+10. Asymmetric I-beam.
+11. Box spar.
+12. Aluminum C-spar.
 
 ### Torsion
 
-12. D-cell single-cell Bredt.
-13. Two-cell Bredt with known hand solution.
-14. Geodetic/drag-truss strip demand against ANC-18 examples or an independent
+13. D-cell single-cell Bredt.
+14. Two-cell Bredt with known hand solution.
+15. Geodetic/drag-truss strip demand against ANC-18 examples or an independent
     truss/shear panel model.
-15. Rib bay torque/reaction demand against a frame/beam model; rib structural
+16. Rib bay torque/reaction demand against a frame/beam model; rib structural
     sizing remains a separate design task.
 
 ### Stability and margins

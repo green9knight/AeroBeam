@@ -155,6 +155,30 @@ class TwoSparCouplingTest(unittest.TestCase):
         self.assertGreater(weak.pos["z_delta_max"], strong.pos["z_delta_max"])
         self.assertGreater(strong._geodetic_kappa, weak._geodetic_kappa)
 
+    def test_jury_point_coupling_reduces_relative_deflection(self):
+        base = {
+            **DEFAULT_INPUTS,
+            "b": 200.0,
+            "num_points": 61,
+            "config": "cantilever",
+            "front_spar_load_share": 0.7,
+            "wing_structure_type": "fabric_buildup",
+            "dcell_enabled": False,
+            "geodetic_enabled": False,
+            "Vd_mph": 0.0,
+            "Cm_ac": 0.0,
+            "jury_strut": True,
+            "jury_spar_bl": 50.0,
+        }
+        loose = WingStressAnalyzer({**base, "jury_coupling_stiffness": 0.0})
+        tied = WingStressAnalyzer({**base, "jury_coupling_stiffness": 100_000.0})
+        loose.analyze()
+        tied.analyze()
+
+        self.assertGreater(loose.pos["z_delta_max"], tied.pos["z_delta_max"])
+        idx = int(np.argmin(np.abs(tied.x - 50.0)))
+        self.assertLess(abs(tied.pos["z_delta"][idx]), abs(loose.pos["z_delta"][idx]))
+
 
 if __name__ == "__main__":
     unittest.main()

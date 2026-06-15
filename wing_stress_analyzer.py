@@ -98,7 +98,7 @@ DEFAULT_INPUTS: Dict[str, Any] = {
     "strut_mat": "4130 Chromoly (normalized)",
     "strut_tube_od": 3.0, "strut_tube_wall": 0.065,
     "secondary_bending": False,
-    "jury_strut": False, "jury_spar_bl": 60.0,
+    "jury_strut": False, "jury_spar_bl": 60.0, "jury_coupling_stiffness": 0.0,
     "airfoil": "NACA 4412", "Cm_ac": -0.099,  "Cm_flap": 0.0,  # delta Cm with full flaps
     "Cl_alpha": 6.30, "x_ac_c": 0.246,
     "Vd_mph": 100.0, "altitude_ft": 2000.0, "Vc_mph": 80.0, "Va_mph": 60.0,
@@ -251,6 +251,7 @@ class WingStressAnalyzer:
         self.secondary   = parse_bool(i.get("secondary_bending", False))
         self.jury        = parse_bool(i.get("jury_strut", False))
         self.jury_bl     = float(i.get("jury_spar_bl", 60.0))
+        self.jury_coupling_stiffness = float(i.get("jury_coupling_stiffness", 0.0))
         self.curvature_sign = float(i.get("curvature_sign", 1.0))
         self.wood_kd     = float(i.get("wood_knockdown", 0.75))
         self.rib_h_web = float(i.get("rib_h_web", 3.0))
@@ -360,7 +361,8 @@ class WingStressAnalyzer:
         alpha = -z0[si] / z1[si]
         return th0 + alpha*th1, z0 + alpha*z1
 
-    def _elastic_coupled_rear_response(self, w_rear, z_front, k_connection):
+    def _elastic_coupled_rear_response(self, w_rear, z_front, k_connection,
+                                       point_couplings: Optional[list] = None):
         """Solve rear spar as a beam elastically connected to front spar.
 
         The front spar response is already solved with the appropriate root and
@@ -401,6 +403,16 @@ class WingStressAnalyzer:
             dof = 2 * i
             K[dof, dof] += k_node
             F[dof] += k_node * z_front[i]
+
+        # Optional discrete soft connections such as jury struts tying front
+        # and rear spars together at the jury station.
+        for station, stiffness in point_couplings or []:
+            if stiffness <= 0:
+                continue
+            idx = int(np.argmin(np.abs(self.x - station)))
+            dof = 2 * idx
+            K[dof, dof] += stiffness
+            F[dof] += stiffness * z_front[idx]
 
         # Rear spar root fitting: fixed vertical displacement and rotation.
         constrained = [0, 1]
@@ -871,8 +883,11 @@ class WingStressAnalyzer:
             self._geodetic_kappa = 0.0
 
         elif self.config in ("cantilever", "single_strut") and self.num_spars == 2:
-            th_r, z_r, Mr = self._elastic_coupled_rear_response(w_rear, z_f, k_transfer)
-            _, z_r_free, _ = self._elastic_coupled_rear_response(w_rear, z_f, 0.0)
+            point_couplings = []
+            if self.jury and self.jury_coupling_stiffness > 0.0:
+                point_couplings.append((self.jury_bl, self.jury_coupling_stiffness))
+            th_r, z_r, Mr = self._elastic_coupled_rear_response(w_rear, z_f, k_transfer, point_couplings)
+            _, z_r_free, _ = self._elastic_coupled_rear_response(w_rear, z_f, 0.0, [])
             free_delta = float(np.max(np.abs(z_r_free - z_f)))
             coupled_delta = float(np.max(np.abs(z_r - z_f)))
             if free_delta > 1e-9:
@@ -1341,6 +1356,8 @@ class WingStressAnalyzer:
             if hasattr(self, "_geodetic_kappa"):
                 kap = self._geodetic_kappa
                 L += [f"  Geodetic coupling k : {kap:.4f}  (1.0=fully coupled, 0=cantilever)"]
+                if self.jury and self.jury_coupling_stiffness > 0:
+                    L += [f"  Jury front/rear soft coupling: k={self.jury_coupling_stiffness:,.0f} lb/in at BL {self.jury_bl:.1f}\""]
                 if kap < 0.5:
                     L += ["  ⚠ Weak coupling — rear spar closer to free cantilever"]
                 elif kap > 0.95:
