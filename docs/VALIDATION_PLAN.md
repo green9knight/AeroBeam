@@ -88,6 +88,7 @@ Initial harness:
 - `tests/test_benchmarks.py`
 - `tests/test_section_standards.py`
 - `tests/test_stability_torsion_standards.py`
+- `tests/test_loads_aero_standards.py`
 - `benchmarks/cases/01_uniform_cantilever.aerobeam`
 - `benchmarks/cases/02_elliptical_cantilever.aerobeam`
 - `benchmarks/expected/01_uniform_cantilever.json`
@@ -111,6 +112,12 @@ Current coverage:
 - cap column buckling;
 - single-cell D-cell Bredt-Batho `GJ`.
 - two-cell Bredt-Batho equilibrium and equal-twist compatibility residuals.
+- dynamic pressure `q = 1/2 rho V^2`;
+- lift distributions integrate to requested total lift;
+- chord-based lift follows chord ratio;
+- strut axial load trigonometry;
+- P-delta scalar amplification formula;
+- divergence screening formula arithmetic.
 
 This is a harness seed, not sufficient validation.
 

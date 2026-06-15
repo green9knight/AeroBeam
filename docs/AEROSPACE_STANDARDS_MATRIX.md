@@ -91,6 +91,10 @@ formula implementations:
 
 - Uniform cantilever shear, root moment, and tip deflection.
 - Elliptical cantilever root shear and root moment.
+- Dynamic pressure `q = 1/2 rho V^2`.
+- Uniform, elliptical, chord-based, and Schrenk lift distributions integrate
+  to requested total lift.
+- Chord-based lift follows the chord ratio.
 - Round tube area, inertia, and EI.
 - Plain rectangular section area, neutral axis, and inertia.
 - Symmetric same-material I-beam neutral axis and inertia.
@@ -104,6 +108,9 @@ formula implementations:
 - Cap column Euler formula.
 - Single-cell D-cell Bredt-Batho `GJ`.
 - Two-cell Bredt-Batho equilibrium and equal-twist compatibility residuals.
+- Strut axial load trigonometry.
+- P-delta scalar amplification formula.
+- Divergence screening formula arithmetic.
 
 The following remain explicitly unvalidated/high risk:
 
