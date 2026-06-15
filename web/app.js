@@ -256,7 +256,7 @@ function isRelevantSparKey(key) {
 
 function isRelevantStructureKey(key) {
   const structure = state.inputs.wing_structure_type || state.defaults.wing_structure_type || "fabric_tube";
-  const geodeticEnabled = Boolean(state.inputs.geodetic_enabled);
+  const geodeticEnabled = parseBool(state.inputs.geodetic_enabled);
   const geodeticDetails = new Set([
     "geodetic_mat",
     "geodetic_w",
@@ -297,6 +297,16 @@ function betaPassword() {
   return (document.getElementById("betaPassword")?.value || "").trim();
 }
 
+function parseBool(value) {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value !== 0;
+  if (value === null || value === undefined) return false;
+  const text = String(value).trim().toLowerCase();
+  if (["1", "true", "yes", "y", "on"].includes(text)) return true;
+  if (["0", "false", "no", "n", "off", ""].includes(text)) return false;
+  return Boolean(value);
+}
+
 function rememberBetaPassword() {
   const password = betaPassword();
   if (password) sessionStorage.setItem("aerobeamBetaPassword", password);
@@ -307,7 +317,8 @@ function syncFormFromInputs() {
     const el = document.querySelector(`[data-key="${key}"]`);
     if (!el) continue;
     if (el.type === "checkbox") {
-      el.checked = Boolean(state.inputs[key]);
+      el.checked = parseBool(state.inputs[key]);
+      state.inputs[key] = el.checked;
     } else {
       el.value = state.inputs[key] ?? "";
     }
@@ -430,7 +441,7 @@ function createField(field) {
   if (prefix) input.dataset.sparPrefix = prefix;
   if (type === "checkbox") {
     wrapper.classList.add("check");
-    input.checked = Boolean(state.inputs[key]);
+    input.checked = parseBool(state.inputs[key]);
     wrapper.textContent = "";
     wrapper.appendChild(input);
     wrapper.append(` ${label}`);
@@ -460,7 +471,7 @@ function updateSparFieldVisibility(prefix, { prune = false } = {}) {
       const field = inputSections.flatMap((section) => section.groups).flatMap((group) => group.fields).find((item) => item[0] === key);
       state.inputs[key] = fieldDefault(key, field?.[2] || "text");
       if (input) {
-        if (input.type === "checkbox") input.checked = Boolean(state.inputs[key]);
+        if (input.type === "checkbox") input.checked = parseBool(state.inputs[key]);
         else input.value = state.inputs[key] ?? "";
       }
     } else if (!visible && prune) {

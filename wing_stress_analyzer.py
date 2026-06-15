@@ -127,6 +127,23 @@ def dynamic_pressure_psi(V_mph: float, alt_ft: float) -> float:
     return 0.5 * rho * V_fps**2 / 144.0
 
 
+def parse_bool(value: Any, default: bool = False) -> bool:
+    """Parse booleans from JSON, GUI, and legacy saved project values."""
+
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return default
+    if isinstance(value, (int, float)):
+        return value != 0
+    text = str(value).strip().lower()
+    if text in {"1", "true", "yes", "y", "on"}:
+        return True
+    if text in {"0", "false", "no", "n", "off", ""}:
+        return False
+    return default
+
+
 # ─── SPAR FACTORY ────────────────────────────────────────────────────────────
 
 def build_spar(spar_type: str, inputs: dict, prefix: str) -> CrossSection:
@@ -220,7 +237,7 @@ class WingStressAnalyzer:
         self.Weight      = float(i["Weight"])
         self.Wing_Weight = float(i["Wing_Weight"])
         self.Tail_Down   = float(i["Tail_Down_1g"])
-        self.dist_relief = bool(i.get("distribute_wing_weight", False))
+        self.dist_relief = parse_bool(i.get("distribute_wing_weight", False))
         self.config      = i.get("config", "strut_braced")
         self.strut_bl    = float(i.get("strut_bl", 104.0))
         self.strut_vert  = float(i.get("strut_vert", 44.0))
@@ -228,8 +245,8 @@ class WingStressAnalyzer:
         self.strut_mat   = i.get("strut_mat", "4130 Chromoly (normalized)")
         self.strut_od    = float(i.get("strut_tube_od", 3.0))
         self.strut_wall  = float(i.get("strut_tube_wall", 0.065))
-        self.secondary   = bool(i.get("secondary_bending", False))
-        self.jury        = bool(i.get("jury_strut", False))
+        self.secondary   = parse_bool(i.get("secondary_bending", False))
+        self.jury        = parse_bool(i.get("jury_strut", False))
         self.jury_bl     = float(i.get("jury_spar_bl", 60.0))
         self.curvature_sign = float(i.get("curvature_sign", 1.0))
         self.wood_kd     = float(i.get("wood_knockdown", 0.75))
@@ -251,7 +268,7 @@ class WingStressAnalyzer:
         self.t_c         = float(i.get("airfoil_t_c", 0.12))
 
         # D-cell
-        self.dcell_enabled = bool(i.get("dcell_enabled", False))
+        self.dcell_enabled = parse_bool(i.get("dcell_enabled", False))
         if self.dcell_enabled:
             c2s   = self.front_pct * self.root_chord
             t_web = float(i.get("front_spar_t_web",
@@ -264,7 +281,7 @@ class WingStressAnalyzer:
             self.dcell = None
 
         # Geodetic
-        self.geodetic_enabled = bool(i.get("geodetic_enabled", False))
+        self.geodetic_enabled = parse_bool(i.get("geodetic_enabled", False))
         if self.geodetic_enabled and self.wing_struct == "fabric_buildup":
             self.geodetic = GeodeticPanel(
                 rib_spacing=self.rib_spacing,
