@@ -695,6 +695,23 @@ class GeodeticPanel:
         A = self.A_strip * scale**2
         return A * math.sin(θ) * math.cos(θ) * 2.0 / s
 
+    def shear_stiffness_per_span(self, reduction_factor: float = 0.75,
+                                 scale: float = 1.0) -> float:
+        """Distributed elastic shear stiffness from diagonal strip axial action.
+
+        Preliminary two-spar elastic-connection estimate:
+            k_s = 2 * A * E * sin(theta) * cos(theta) / s * f_red
+
+        where ``s`` is strip spacing along the span. ``f_red`` accounts for
+        compression diagonal effectiveness, joint/glue compliance, crossings,
+        gusset flexibility, and construction details.
+        """
+        θ = math.radians(self.angle_deg)
+        A = self.A_strip * scale**2
+        E = MATERIAL_DB[self.mat_name]["E"]
+        s = self.s_strip * scale
+        return 2.0 * A * E * math.sin(θ) * math.cos(θ) / max(s, 1e-9) * reduction_factor
+
     def enclosed_area(self, c_box: float, h_spar: float) -> float:
         """Rectangle between spars [in²] at given chord and spar height."""
         return c_box * h_spar

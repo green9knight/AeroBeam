@@ -80,6 +80,7 @@ DEFAULT_INPUTS: Dict[str, Any] = {
     "geodetic_enabled": False,
     "geodetic_mat": "Sitka Spruce", "geodetic_w": 1.0, "geodetic_t": 0.125,
     "geodetic_strips_per_bay": 2, "geodetic_angle": 45.0,
+    "geodetic_reduction_factor": 0.75,
     "skin_top_mat": "6061-T6", "skin_top_thick": 0.025,
     "skin_bot_mat": "6061-T6", "skin_bot_thick": 0.025,
     "wood_knockdown": 0.75,
@@ -437,9 +438,8 @@ class WingStressAnalyzer:
         k_rib = 0.0
 
         if self.geodetic is not None:
-            G_geo = MATERIAL_DB[self.geodetic.mat_name]["G"]
-            t_eff_geo = self.geodetic.t_eff(1.0)
-            k_geo = G_geo * t_eff_geo / spar_gap
+            red = float(self.inp.get("geodetic_reduction_factor", 0.75))
+            k_geo = self.geodetic.shear_stiffness_per_span(red, 1.0)
         else:
             k_geo = 0.0
 
@@ -1306,8 +1306,10 @@ class WingStressAnalyzer:
                 sig_s=t.get("geodetic_strip_stress", 0.0)
                 strip_f=t.get("geodetic_strip_force", 0.0)
                 q_geo=t.get("geodetic_q", 0.0)
+                red=float(self.inp.get("geodetic_reduction_factor", 0.75))
                 Fb_s=MATERIAL_DB[self.geodetic.mat_name]["Fb"]
                 L += [f"  Geodetic τ eff: {tg:>9,.0f} psi"]
+                L += [f"  Geodetic stiffness reduction f_red={red:.2f} (joint/compression/detail allowance)"]
                 L += [f"  ANC-18 drag-truss demand: q={q_geo:>7.1f} lb/in  strip F={strip_f:>7.1f} lb"]
                 L += [f"  Strip axial σ demand: {sig_s:>9,.0f} psi   MS vs Fb only:{mf(Fb_s/max(sig_s,1)-1)}"]
                 L += ["  Check joints, glue, compression strips, and details separately per ANC-18."]

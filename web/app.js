@@ -136,6 +136,7 @@ const inputSections = [
           ["geodetic_t", "Strip thickness (in)", "number", "0.001"],
           ["geodetic_strips_per_bay", "Strips per rib bay", "number", "1"],
           ["geodetic_angle", "Strip angle (deg)", "number", "1"],
+          ["geodetic_reduction_factor", "Stiffness reduction factor", "number", "0.01"],
         ],
       },
       {

@@ -77,6 +77,23 @@ class TorsionCouplingTest(unittest.TestCase):
         self.assertGreater(analyzer._geodetic_kappa, 0.0)
         self.assertLessEqual(analyzer._geodetic_kappa, 1.0)
 
+    def test_geodetic_reduction_factor_changes_transfer_stiffness(self):
+        base_inputs_dict = base_inputs(
+            dcell_enabled=True,
+            geodetic_enabled=True,
+            rib_t_web=0.125,
+            geodetic_w=1.0,
+            geodetic_t=0.125,
+            geodetic_strips_per_bay=2,
+        )
+        low = WingStressAnalyzer({**base_inputs_dict, "geodetic_reduction_factor": 0.5})
+        high = WingStressAnalyzer({**base_inputs_dict, "geodetic_reduction_factor": 1.0})
+        low.analyze()
+        high.analyze()
+
+        self.assertGreater(high._torsion_stiffness, low._torsion_stiffness)
+        self.assertGreater(high._geodetic_kappa, low._geodetic_kappa)
+
 
 if __name__ == "__main__":
     unittest.main()

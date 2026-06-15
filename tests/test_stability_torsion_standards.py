@@ -129,6 +129,27 @@ class StabilityTorsionStandardsTest(unittest.TestCase):
         stress_from_force = panel.strip_force(q) / panel.A_strip
         self.assertAlmostEqual(stress_from_force, stress_from_t_eff)
 
+    def test_geodetic_shear_stiffness_uses_axial_strip_formula_and_reduction(self):
+        panel = GeodeticPanel(
+            rib_spacing=10.0,
+            strips_per_bay=2,
+            strip_width=1.0,
+            strip_thick=0.125,
+            angle_deg=45.0,
+            mat_name="Sitka Spruce",
+        )
+        theta = math.radians(45.0)
+        expected_full = (
+            2.0
+            * panel.A_strip
+            * MATERIAL_DB["Sitka Spruce"]["E"]
+            * math.sin(theta)
+            * math.cos(theta)
+            / panel.s_strip
+        )
+        self.assertAlmostEqual(panel.shear_stiffness_per_span(1.0), expected_full)
+        self.assertAlmostEqual(panel.shear_stiffness_per_span(0.75), expected_full * 0.75)
+
 
 if __name__ == "__main__":
     unittest.main()

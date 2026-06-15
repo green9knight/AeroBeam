@@ -119,6 +119,7 @@ Current coverage:
 - single-cell D-cell Bredt-Batho `GJ`.
 - two-cell Bredt-Batho equilibrium and equal-twist compatibility residuals.
 - geodetic strip force consistency with the equivalent shear thickness relation.
+- geodetic axial-strip shear stiffness formula and reduction-factor sensitivity.
 - dynamic pressure `q = 1/2 rho V^2`;
 - lift distributions integrate to requested total lift;
 - chord-based lift follows chord ratio;
