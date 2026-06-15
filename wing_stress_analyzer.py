@@ -647,9 +647,75 @@ class WingStressAnalyzer:
         upper = total_length * (1.0 - fraction)
         return max(lower, upper)
 
-    def _strut_forces(self, M_total):
+    def _reaction_moment(self, reaction_bl: float) -> np.ndarray:
+        """Moment array from a unit upward reaction at ``reaction_bl``."""
+
+        out = np.zeros(self.N)
+        for k in range(self.N):
+            if self.x[k] <= reaction_bl:
+                out[k] = reaction_bl - self.x[k]
+        return out
+
+    def _support_reactions(self, M_total: np.ndarray, EI: np.ndarray) -> dict:
+        """Return vertical reactions for main strut and optional load-bearing jury.
+
+        Without a valid jury BL, this reduces to the existing statics relation
+        ``R_strut = M_root / strut_bl``. With a valid jury station between the
+        fuselage and main strut attach, the jury and main strut reactions are
+        solved with:
+
+        1. root moment relief: R_j*j + R_s*s = M_root
+        2. compatibility: after root-slope adjustment, z(jury) and z(strut)
+           are both zero.
+        """
+
+        strut_bl = max(self.strut_bl, 1.0)
+        strut_unit = self._reaction_moment(strut_bl)
+
+        if not self.jury or not (self.strut_fuse_bl < self.jury_bl < self.strut_bl):
+            R_strut = M_total[0] / strut_bl
+            return {
+                "strut": R_strut,
+                "jury": 0.0,
+                "moment": R_strut * strut_unit,
+            }
+
+        jury_bl = self.jury_bl
+        jury_unit = self._reaction_moment(jury_bl)
+        ji = int(np.argmin(np.abs(self.x - jury_bl)))
+        si = self._strut_idx()
+
+        def compatibility(moment: np.ndarray) -> float:
+            _, z = self._deflect_cantilever(moment, EI)
+            return z[ji] - z[si] * (self.x[ji] / max(self.x[si], 1e-9))
+
+        rhs = np.array([M_total[0], compatibility(M_total)])
+        matrix = np.array([
+            [jury_bl, strut_bl],
+            [compatibility(jury_unit), compatibility(strut_unit)],
+        ])
+
+        try:
+            R_jury, R_strut = np.linalg.solve(matrix, rhs)
+        except np.linalg.LinAlgError:
+            R_jury = 0.0
+            R_strut = M_total[0] / strut_bl
+
+        # A reversed reaction would mean this geometry/stiffness does not make
+        # the jury act as an upward support. Fall back to buckling-only behavior.
+        if R_jury < 0.0 or R_strut < 0.0:
+            R_jury = 0.0
+            R_strut = M_total[0] / strut_bl
+
+        return {
+            "strut": float(R_strut),
+            "jury": float(R_jury),
+            "moment": R_jury * jury_unit + R_strut * strut_unit,
+        }
+
+    def _strut_forces(self, M_total, Fv_override: Optional[float] = None):
         """M_total = moment array BEFORE strut subtraction."""
-        Fv = M_total[0] / max(self.strut_bl, 1)
+        Fv = M_total[0] / max(self.strut_bl, 1) if Fv_override is None else Fv_override
         rise = self.strut_vert
         run  = max(self.strut_bl - self.strut_fuse_bl, 1.0)  # net horizontal distance
         L    = math.sqrt(rise**2 + run**2)
@@ -692,13 +758,14 @@ class WingStressAnalyzer:
 
         # Strut
         si = self._strut_idx()
-        Fv=Fa=Ps=Pe=0.0; L_strut=1.0
+        Fv=Fa=Ps=Pe=0.0; L_strut=1.0; Fv_jury=0.0; Fv_strut_attach=0.0
         if self.config in ("strut_braced","single_strut"):
-            Fv,Fa,Ps,Pe,L_strut = self._strut_forces(np.abs(M))  # always use magnitude for strut loads
-            M_strut = np.zeros(self.N)
-            for k in range(self.N):
-                if self.x[k]<=self.strut_bl:
-                    M_strut[k] = Fv*(self.strut_bl-self.x[k])
+            reactions = self._support_reactions(np.abs(M), self._EI_f)
+            Fv_jury = reactions["jury"]
+            Fv_strut_attach = reactions["strut"]
+            Fv_total = Fv_jury + Fv_strut_attach
+            Fv,Fa,Ps,Pe,L_strut = self._strut_forces(np.abs(M), Fv_override=Fv_total)
+            M_strut = reactions["moment"]
             M = M - M_strut * sign   # subtract signed strut reaction (front spar)
 
         # P-delta
@@ -789,6 +856,7 @@ class WingStressAnalyzer:
             "z_max_rear":float(np.max(np.abs(z_r))),
             "z_delta_max":float(np.max(np.abs(z_r - z_f))),
             "Fv":Fv,"F_axial":Fa,"P_spar":Ps,"P_euler":Pe,
+            "Fv_jury":Fv_jury, "Fv_strut_attach":Fv_strut_attach,
             "V_root":float(V[0]),"M_root":float(M[0]),
             "pdelta_warn":pw, "pdelta_amp":pdelta_amp,
         }
@@ -1066,6 +1134,8 @@ class WingStressAnalyzer:
             "mat":self.strut_mat, "E":sm["E"], "Ftu":sm["Ftu"],
             "od":od,"wall":wa,"area":A_st,
             "Fv":self.pos["Fv"],"F_axial":self.pos["F_axial"],
+            "Fv_jury":self.pos.get("Fv_jury", 0.0),
+            "Fv_strut_attach":self.pos.get("Fv_strut_attach", self.pos["Fv"]),
             "P_euler":self.pos["P_euler"],
             "length":L_st, "effective_length":L_eff,
             "sigma_axial":sig_ax,
@@ -1156,11 +1226,13 @@ class WingStressAnalyzer:
             L += [f"  Tube: {s['od']}\" × {s['wall']}\"   A={s['area']:.4f} in²"]
             L += [f"  Length={s['length']:.1f}\"   Euler length={s['effective_length']:.1f}\""]
             L += [f"  Fv (vertical)={s['Fv']:,.0f} lb   Fa (axial)={s['F_axial']:,.0f} lb   Pe (Euler)={s['P_euler']:,.0f} lb"]
+            if self.jury:
+                L += [f"  Vertical reactions: jury={s['Fv_jury']:,.0f} lb   main strut attach={s['Fv_strut_attach']:,.0f} lb"]
             L += [f"  SF (safety factor) Euler buckling :{mf(s['SF_euler']-1)}"]
             L += [f"  MS (margin of safety) axial       :{mf(s['MS_axial'])}"]
             L += [f"  Strut wt (½)  : {s['weight_half']:.2f} lb"]
             if self.jury:
-                L += ["  Jury strut affects Euler length/Pe only; wing lift/shear loads stay unchanged."]
+                L += ["  Jury strut modeled as load-bearing support plus Euler brace."]
             if p.get("pdelta_warn"): L += ["  ⚠ P-delta amplification > 2×"]
 
 

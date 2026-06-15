@@ -60,7 +60,9 @@ class ConfigToggleTest(unittest.TestCase):
         jury = analyze_with(jury_strut=True, jury_spar_bl=60.0)
 
         self.assertGreater(jury.strut_summary["P_euler"], base.strut_summary["P_euler"])
-        self.assertAlmostEqual(jury.strut_summary["F_axial"], base.strut_summary["F_axial"])
+        self.assertGreater(jury.strut_summary["Fv_jury"], 0.0)
+        station = 20
+        self.assertLess(abs(jury.pos["M_front"][station]), abs(base.pos["M_front"][station]))
 
 
 if __name__ == "__main__":
