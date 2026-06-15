@@ -87,16 +87,26 @@ Initial harness:
 
 - `tests/test_benchmarks.py`
 - `tests/test_section_standards.py`
+- `tests/test_stability_torsion_standards.py`
 - `benchmarks/cases/01_uniform_cantilever.aerobeam`
+- `benchmarks/cases/02_elliptical_cantilever.aerobeam`
 - `benchmarks/expected/01_uniform_cantilever.json`
+- `benchmarks/expected/02_elliptical_cantilever.json`
 
 Current coverage:
 
 - root shear, root moment, front spar root moment, and tip deflection for a
   uniform cantilever beam;
+- root shear and root moment for an elliptical cantilever beam using
+  `M = 4 L b / (3 pi)`;
 - round tube area/I/EI;
 - plain rectangular section `bh^3/12`;
 - symmetric same-material I-beam neutral axis and inertia.
+- pin-ended Euler strut buckling;
+- flat skin compression buckling;
+- web shear buckling;
+- cap column buckling;
+- single-cell D-cell Bredt-Batho `GJ`.
 
 This is a harness seed, not sufficient validation.
 

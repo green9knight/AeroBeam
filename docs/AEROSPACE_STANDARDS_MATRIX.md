@@ -82,3 +82,30 @@ No output may be marketed or labelled as "validated", "certified",
 2. assumptions are visible in the PDF report;
 3. regression tests protect the benchmark;
 4. high-risk experimental outputs are either removed or clearly watermarked.
+
+## Current automated benchmark coverage
+
+The following rows now have initial automated checks. These tests do not
+complete validation, but they provide regression protection for standard
+formula implementations:
+
+- Uniform cantilever shear, root moment, and tip deflection.
+- Elliptical cantilever root shear and root moment.
+- Round tube area, inertia, and EI.
+- Plain rectangular section area, neutral axis, and inertia.
+- Symmetric same-material I-beam neutral axis and inertia.
+- Pin-ended main strut Euler buckling.
+- Flat skin compression buckling formula.
+- Web shear buckling formula and shear coefficient.
+- Cap column Euler formula.
+- Single-cell D-cell Bredt-Batho `GJ`.
+
+The following remain explicitly unvalidated/high risk:
+
+- load-bearing jury support reactions beyond the basic regression checks;
+- rear spar coupling factor and rear spar load path in cantilever/single-strut
+  configurations;
+- rib/geodetic/skin torsion sharing;
+- geodetic equivalent shear panel thickness;
+- divergence speed estimate;
+- post-buckled aluminum skin behavior.
