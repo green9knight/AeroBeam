@@ -1254,6 +1254,21 @@ class WingStressAnalyzer:
             "weight_half":A_st*sm["rho"]*L_st,
         }
 
+        # Local fitting / bearing load demands only. AeroBeam does not size
+        # bolts, bushings, lugs, doublers, bearing pads, or tube crush details.
+        jury_idx = int(np.argmin(np.abs(self.x - self.jury_bl))) if self.N else 0
+        self.fitting_loads = {
+            "front_root_vertical": abs(float(self.pos["V_root"] * self.lsf)),
+            "rear_root_vertical": abs(float(self.pos["V_root"] * self.rsf)) if self.num_spars == 2 else 0.0,
+            "main_strut_vertical": abs(float(self.pos.get("Fv_strut_attach", self.pos["Fv"]))),
+            "jury_vertical": abs(float(self.pos.get("Fv_jury", 0.0))),
+            "main_strut_axial": abs(float(self.pos["F_axial"])),
+            "front_spar_strut_attach_vertical": abs(float(self.pos.get("Fv_strut_attach", self.pos["Fv"]))),
+            "rear_spar_strut_attach_vertical": abs(float(self.pos.get("Fv_strut_attach", self.pos["Fv"]))) if self.config == "strut_braced" and self.num_spars == 2 else 0.0,
+            "front_spar_jury_attach_vertical": abs(float(self.pos.get("Fv_jury", 0.0))),
+            "rear_spar_jury_coupling_vertical": abs(float(self._jury_coupling_stiffness() * self.pos.get("z_delta", np.zeros(self.N))[jury_idx])) if self.jury else 0.0,
+        }
+
         # Spar weights
         scale_tip = self.tip_chord / self.root_chord
         try:
@@ -1345,6 +1360,21 @@ class WingStressAnalyzer:
             if self.jury:
                 L += ["  Jury strut modeled as load-bearing support plus Euler brace."]
             if p.get("pdelta_warn"): L += ["  ⚠ P-delta amplification > 2×"]
+
+        if hasattr(self, "fitting_loads"):
+            fl = self.fitting_loads
+            L += [f"\n── LOCAL FITTING / BEARING LOAD DEMANDS {'─'*12}"]
+            L += [f"  Front root fitting vertical demand : {fl['front_root_vertical']:>9,.0f} lb"]
+            if self.num_spars == 2:
+                L += [f"  Rear  root fitting vertical demand : {fl['rear_root_vertical']:>9,.0f} lb"]
+            if self.config in ("strut_braced","single_strut"):
+                L += [f"  Main strut attach vertical demand  : {fl['main_strut_vertical']:>9,.0f} lb"]
+                L += [f"  Main strut axial fitting demand    : {fl['main_strut_axial']:>9,.0f} lb"]
+                if fl["jury_vertical"] > 0:
+                    L += [f"  Jury attach vertical demand        : {fl['jury_vertical']:>9,.0f} lb"]
+                if fl["rear_spar_jury_coupling_vertical"] > 0:
+                    L += [f"  Rear spar jury-link demand         : {fl['rear_spar_jury_coupling_vertical']:>9,.0f} lb"]
+            L += ["  Reinforce/check tube bearing, bushings, lugs, doublers, and local crush separately."]
 
 
         L += [""]

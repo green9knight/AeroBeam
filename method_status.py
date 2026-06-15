@@ -43,6 +43,11 @@ METHOD_STATUS = {
         "label": "Web, skin, cap, and tube buckling warnings",
         "note": "Plate/column screening checks; boundary-condition benchmarks required.",
     },
+    "fittings": {
+        "status": "DISPLAY",
+        "label": "Local fitting and bearing load demands",
+        "note": "Reports loads to be reacted at fittings only; bearing, lugs, bushings, bolts, doublers, and local crush sizing are outside AeroBeam.",
+    },
     "divergence": {
         "status": "EXPERIMENTAL",
         "label": "Divergence speed screening",
@@ -55,7 +60,7 @@ def method_status_lines() -> list[str]:
     """Return compact lines for reports and UI diagnostics."""
 
     lines = ["METHOD STATUS: BETA / PRELIMINARY"]
-    for key in ("loads", "sections", "strut", "jury", "pdelta", "torsion", "buckling", "divergence"):
+    for key in ("loads", "sections", "strut", "jury", "pdelta", "torsion", "buckling", "fittings", "divergence"):
         item = METHOD_STATUS[key]
         lines.append(f"  {item['status']}: {item['label']}")
     return lines
