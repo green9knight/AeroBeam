@@ -1,6 +1,17 @@
 # AeroBeam
 Wing spar design and stress analysis.
 
+## Engineering status
+
+AeroBeam is currently a beta/preliminary design tool. Do not use results for
+airworthiness or final structural sizing without independent verification by a
+qualified aircraft structures engineer.
+
+Before relying on a result, read:
+
+- `docs/STRUCTURAL_METHODS_AUDIT.md`
+- `docs/VALIDATION_PLAN.md`
+
 ## Run the web front end
 
 ```bash
