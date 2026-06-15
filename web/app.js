@@ -2,6 +2,8 @@ const state = {
   defaults: {},
   inputs: {},
   options: {},
+  runId: 0,
+  isRunning: false,
 };
 
 const inputSections = [
@@ -286,6 +288,12 @@ function setStatus(message, kind = "") {
   el.className = `status ${kind}`;
 }
 
+function markInputsChanged() {
+  if (!state.isRunning) {
+    setStatus("Inputs changed — click Run Analysis");
+  }
+}
+
 function authHeaders(extra = {}) {
   const password = (document.getElementById("betaPassword")?.value || "").trim();
   return password
@@ -346,6 +354,14 @@ function syncInputsFromForm() {
   }
   updateAllSparFieldVisibility({ prune: true });
   document.getElementById("jsonEditor").value = JSON.stringify(state.inputs, null, 2);
+}
+
+function setRunButtonRunning(running) {
+  state.isRunning = running;
+  const button = document.getElementById("runBtn");
+  if (!button) return;
+  button.disabled = running;
+  button.textContent = running ? "Running..." : "Run Analysis";
 }
 
 function fieldDefault(key, type) {
@@ -449,7 +465,14 @@ function createField(field) {
     input.value = state.inputs[key] ?? "";
     wrapper.appendChild(input);
   }
-  input.addEventListener("change", syncInputsFromForm);
+  input.addEventListener("input", () => {
+    syncInputsFromForm();
+    markInputsChanged();
+  });
+  input.addEventListener("change", () => {
+    syncInputsFromForm();
+    markInputsChanged();
+  });
   return wrapper;
 }
 
@@ -856,12 +879,25 @@ function drawGeometry(geometry) {
 }
 
 async function runAnalysis() {
+  if (state.isRunning) return;
+  const runId = ++state.runId;
   try {
+    setRunButtonRunning(true);
     syncInputsFromForm();
     // Let advanced JSON override quick fields when the editor is open/edited.
     loadJsonEditor();
     rememberBetaPassword();
-    setStatus("Running analysis...");
+    const started = new Date();
+    setStatus(`Running analysis #${runId}...`);
+    document.getElementById("summary").textContent = `Running analysis #${runId}...\nStarted ${started.toLocaleTimeString()}`;
+    updateCards({
+      sigma_max_front: null,
+      sigma_max_rear: null,
+      spar_weight_total: null,
+      z_delta_max: null,
+      torsion: {},
+    });
+    await new Promise((resolve) => requestAnimationFrame(resolve));
     const response = await fetch("/api/analyze", {
       method: "POST",
       headers: authHeaders({ "Content-Type": "application/json" }),
@@ -869,14 +905,19 @@ async function runAnalysis() {
     });
     const payload = await response.json();
     if (!payload.ok) throw new Error(`${payload.error}\n${payload.traceback || ""}`);
+    if (runId !== state.runId) return;
 
-    document.getElementById("summary").textContent = payload.summary;
+    const finished = new Date();
+    document.getElementById("summary").textContent =
+      `Analysis #${runId} complete — ${finished.toLocaleTimeString()}\n\n${payload.summary}`;
     updateCards(payload.metrics);
     renderPlots(payload);
-    setStatus("Analysis complete", "ok");
+    setStatus(`Analysis #${runId} complete`, "ok");
   } catch (error) {
     document.getElementById("summary").textContent = error.stack || String(error);
     setStatus("Analysis failed", "error");
+  } finally {
+    if (runId === state.runId) setRunButtonRunning(false);
   }
 }
 
@@ -946,7 +987,10 @@ async function init() {
   syncFormFromInputs();
   for (const key of allInputKeys()) {
     const el = document.querySelector(`[data-key="${key}"]`);
-    if (el) el.addEventListener("change", syncInputsFromForm);
+    if (el) {
+      el.addEventListener("input", markInputsChanged);
+      el.addEventListener("change", markInputsChanged);
+    }
   }
   document.getElementById("runBtn").addEventListener("click", runAnalysis);
   document.getElementById("reportBtn").addEventListener("click", downloadReport);
