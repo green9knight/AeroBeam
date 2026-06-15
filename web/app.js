@@ -198,6 +198,58 @@ function allInputKeys() {
   );
 }
 
+function sparPrefixForKey(key) {
+  if (key.startsWith("front_spar_")) return "front_spar";
+  if (key.startsWith("rear_spar_")) return "rear_spar";
+  return "";
+}
+
+function relevantSparKeys(prefix, sparType) {
+  const common = new Set([`${prefix}_type`]);
+  const keys = {
+    "Round Tube": [`${prefix}_mat`, `${prefix}_od`, `${prefix}_wall`],
+    "Plain Rectangular": [`${prefix}_cap_mat`, `${prefix}_width`, `${prefix}_height`],
+    "I-Beam": [
+      `${prefix}_cap_mat`, `${prefix}_web_mat`, `${prefix}_b_top`, `${prefix}_t_top`,
+      `${prefix}_b_bot`, `${prefix}_t_bot`, `${prefix}_h_web`, `${prefix}_t_web`,
+    ],
+    "C-Channel": [
+      `${prefix}_cap_mat`, `${prefix}_web_mat`, `${prefix}_b_top`, `${prefix}_t_top`,
+      `${prefix}_b_bot`, `${prefix}_t_bot`, `${prefix}_h_web`, `${prefix}_t_web`,
+    ],
+    "Routed (Monolithic)": [
+      `${prefix}_cap_mat`, `${prefix}_b_top`, `${prefix}_t_top`, `${prefix}_b_bot`,
+      `${prefix}_t_bot`, `${prefix}_h_web`, `${prefix}_t_web`,
+    ],
+    "Double I-Beam": [
+      `${prefix}_cap_mat`, `${prefix}_web_mat`, `${prefix}_b_top`, `${prefix}_t_top`,
+      `${prefix}_b_bot`, `${prefix}_t_bot`, `${prefix}_h_web`, `${prefix}_t_web`,
+      `${prefix}_web_spacing`,
+    ],
+    "Box Spar": [
+      `${prefix}_cap_mat`, `${prefix}_web_mat`, `${prefix}_b_outer`, `${prefix}_h_outer`,
+      `${prefix}_t_web`, `${prefix}_t_cap`,
+    ],
+    "Aluminum I-Beam": [
+      `${prefix}_cap_mat`, `${prefix}_web_mat`, `${prefix}_b_top`, `${prefix}_t_top`,
+      `${prefix}_b_bot`, `${prefix}_t_bot`, `${prefix}_h_web`, `${prefix}_t_web`,
+    ],
+    "Aluminum C-Spar": [
+      `${prefix}_cap_mat`, `${prefix}_b_top`, `${prefix}_t_top`, `${prefix}_h_web`,
+      `${prefix}_t_web`, `${prefix}_cap_side`,
+    ],
+  };
+  for (const key of keys[sparType] || []) common.add(key);
+  return common;
+}
+
+function isRelevantSparKey(key) {
+  const prefix = sparPrefixForKey(key);
+  if (!prefix) return true;
+  const sparType = state.inputs[`${prefix}_type`] || state.defaults[`${prefix}_type`] || "Round Tube";
+  return relevantSparKeys(prefix, sparType).has(key);
+}
+
 function setStatus(message, kind = "") {
   const el = document.getElementById("status");
   el.textContent = message;
@@ -230,6 +282,7 @@ function syncFormFromInputs() {
       el.value = state.inputs[key] ?? "";
     }
   }
+  updateAllSparFieldVisibility({ prune: true });
   document.getElementById("jsonEditor").value = JSON.stringify(state.inputs, null, 2);
 }
 
@@ -237,6 +290,10 @@ function syncInputsFromForm() {
   for (const key of allInputKeys()) {
     const el = document.querySelector(`[data-key="${key}"]`);
     if (!el) continue;
+    if (el.disabled) {
+      delete state.inputs[key];
+      continue;
+    }
     if (el.type === "checkbox") {
       state.inputs[key] = el.checked;
     } else if (el.tagName === "SELECT") {
@@ -246,6 +303,7 @@ function syncInputsFromForm() {
       state.inputs[key] = Number.isFinite(value) ? value : el.value;
     }
   }
+  updateAllSparFieldVisibility({ prune: true });
   document.getElementById("jsonEditor").value = JSON.stringify(state.inputs, null, 2);
 }
 
@@ -291,7 +349,7 @@ function ensureSchemaDefaults() {
     for (const group of section.groups) {
       for (const field of group.fields) {
         const [key, , type] = field;
-        if (state.inputs[key] === undefined) {
+        if (isRelevantSparKey(key) && state.inputs[key] === undefined) {
           state.inputs[key] = fieldDefault(key, type);
         }
       }
@@ -311,6 +369,9 @@ function createField(field) {
   const [key, label, type, meta] = field;
   const wrapper = document.createElement("label");
   wrapper.textContent = label;
+  wrapper.dataset.key = key;
+  const prefix = sparPrefixForKey(key);
+  if (prefix) wrapper.dataset.sparPrefix = prefix;
 
   let input;
   if (type === "select") {
@@ -328,6 +389,7 @@ function createField(field) {
   }
 
   input.dataset.key = key;
+  if (prefix) input.dataset.sparPrefix = prefix;
   if (type === "checkbox") {
     wrapper.classList.add("check");
     input.checked = Boolean(state.inputs[key]);
@@ -340,6 +402,38 @@ function createField(field) {
   }
   input.addEventListener("change", syncInputsFromForm);
   return wrapper;
+}
+
+function updateSparFieldVisibility(prefix, { prune = false } = {}) {
+  const typeKey = `${prefix}_type`;
+  const sparType = state.inputs[typeKey] || state.defaults[typeKey] || "Round Tube";
+  const relevant = relevantSparKeys(prefix, sparType);
+
+  document.querySelectorAll(`[data-spar-prefix="${prefix}"]`).forEach((el) => {
+    const key = el.dataset.key;
+    if (!key) return;
+    const visible = relevant.has(key);
+    const wrapper = el.matches("label") ? el : document.querySelector(`label[data-key="${key}"]`);
+    const input = el.matches("input, select, textarea") ? el : wrapper?.querySelector("input, select, textarea");
+    if (wrapper) wrapper.classList.toggle("hidden-field", !visible);
+    if (input) input.disabled = !visible;
+
+    if (visible && state.inputs[key] === undefined) {
+      const field = inputSections.flatMap((section) => section.groups).flatMap((group) => group.fields).find((item) => item[0] === key);
+      state.inputs[key] = fieldDefault(key, field?.[2] || "text");
+      if (input) {
+        if (input.type === "checkbox") input.checked = Boolean(state.inputs[key]);
+        else input.value = state.inputs[key] ?? "";
+      }
+    } else if (!visible && prune) {
+      delete state.inputs[key];
+    }
+  });
+}
+
+function updateAllSparFieldVisibility(options = {}) {
+  updateSparFieldVisibility("front_spar", options);
+  updateSparFieldVisibility("rear_spar", options);
 }
 
 function renderInputTabs() {
