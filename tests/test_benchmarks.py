@@ -16,6 +16,7 @@ def output_value(analyzer: WingStressAnalyzer, key: str) -> float:
         "V_root": analyzer.pos["V_root"],
         "M_root": analyzer.pos["M_root"],
         "M_front_root": analyzer.pos["M_front"][0],
+        "z_tip_front": analyzer.pos["z_front"][-1],
     }
     return float(mapping[key])
 

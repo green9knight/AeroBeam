@@ -15,6 +15,11 @@
       "value": 50000.0,
       "rtol": 0.005,
       "basis": "Single front spar carries full moment"
+    },
+    "z_tip_front": {
+      "value": 19.359739028470987,
+      "rtol": 0.005,
+      "basis": "Uniform cantilever deflection delta = w L^4 / (8 EI) using 3 x 0.065 6061-T6 tube EI"
     }
   }
 }

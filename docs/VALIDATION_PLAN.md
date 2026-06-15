@@ -86,11 +86,19 @@ Add tests that:
 Initial harness:
 
 - `tests/test_benchmarks.py`
+- `tests/test_section_standards.py`
 - `benchmarks/cases/01_uniform_cantilever.aerobeam`
 - `benchmarks/expected/01_uniform_cantilever.json`
 
-This first case covers only root shear/moment for a uniform cantilever beam.
-It is a harness seed, not sufficient validation.
+Current coverage:
+
+- root shear, root moment, front spar root moment, and tip deflection for a
+  uniform cantilever beam;
+- round tube area/I/EI;
+- plain rectangular section `bh^3/12`;
+- symmetric same-material I-beam neutral axis and inertia.
+
+This is a harness seed, not sufficient validation.
 
 ## Phase 5 - UI/report safety language
 
