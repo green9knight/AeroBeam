@@ -761,6 +761,7 @@ class WingStressAnalyzer:
 
         return {
             "w":w, "V":V, "M":M,
+            "M_front":Mf, "M_rear":Mr,
             "z_front":z_f, "z_rear":z_r,
             "theta_front":th_f, "theta_rear":th_r,
             "sigma_front":sig_f, "sigma_rear":sig_r,
@@ -1327,9 +1328,11 @@ class WingStressAnalyzer:
         a[1].plot(x, self.pos["V"], "g-")
         a[1].plot(x, self.neg["V"], "g--")
         a[1].set(title="Shear [lb]")
-        a[2].plot(x, self.pos["M"], "r-")
-        a[2].plot(x, self.neg["M"], "r--")
-        a[2].set(title="Moment [lb·in]")
+        a[2].plot(x, self.pos["M_front"], "b-", label="Frt +g")
+        a[2].plot(x, self.pos["M_rear"], "c-", label="Rr +g")
+        a[2].plot(x, self.neg["M_front"], "b--", label="Frt -g")
+        a[2].plot(x, self.neg["M_rear"], "c--", label="Rr -g")
+        a[2].set(title="Spar Moment [lb·in]"); a[2].legend()
         a[3].plot(x, self.pos["z_front"], "m-",  label="Frt +g (up)")
         a[3].plot(x, self.pos["z_rear"],  "c-",  label="Rr +g (up)")
         a[3].plot(x, self.neg["z_front"], "m--", label="Frt -g (down)")
@@ -1509,11 +1512,15 @@ class WingStressAnalyzer:
                           linestyle="--", label="%.0fg" % self.n_neg)
             axs[0,1].set_title("Shear [lb]"); axs[0,1].legend(fontsize=8)
 
-            axs[1,0].plot(x, self.pos["M"],         color=PDF_BLUE, lw=2,
-                          label="+%.0fg" % self.n)
-            axs[1,0].plot(x, self.neg["M"],         color=PDF_GREY, lw=1.5,
-                          linestyle="--", label="%.0fg" % self.n_neg)
-            axs[1,0].set_title("Moment [lb·in]"); axs[1,0].legend(fontsize=8)
+            axs[1,0].plot(x, self.pos["M_front"],   color=PDF_BLUE, lw=2,
+                          label="Frt +%.0fg" % self.n)
+            axs[1,0].plot(x, self.pos["M_rear"],    color=PDF_NAVY, lw=1.5,
+                          label="Rr +%.0fg" % self.n)
+            axs[1,0].plot(x, self.neg["M_front"],   color=PDF_GREY, lw=1.5,
+                          linestyle="--", label="Frt %.0fg" % self.n_neg)
+            axs[1,0].plot(x, self.neg["M_rear"],    color="#888888", lw=1,
+                          linestyle=(0,(2,3)), label="Rr %.0fg" % self.n_neg)
+            axs[1,0].set_title("Spar Moment [lb·in]"); axs[1,0].legend(fontsize=8)
 
             axs[1,1].plot(x, self.pos["z_front"],   color=PDF_BLUE, lw=2,
                           label="Frt +g (up)")

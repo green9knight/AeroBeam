@@ -504,9 +504,11 @@ function renderPlots(payload) {
     { label: "+g", values: s.positive.V, color: "#085097" },
     { label: "-g", values: s.negative.V, color: "#d2b75f", dash: [6, 4] },
   ]);
-  drawPlot("plotMoment", "Bending Moment", x, [
-    { label: "+g", values: s.positive.M, color: "#085097" },
-    { label: "-g", values: s.negative.M, color: "#d2b75f", dash: [6, 4] },
+  drawPlot("plotMoment", "Spar Bending Moment", x, [
+    { label: "front +g", values: s.positive.M_front, color: "#085097" },
+    { label: "rear +g", values: s.positive.M_rear, color: "#024084", width: 1.8 },
+    { label: "front -g", values: s.negative.M_front, color: "#d2b75f", dash: [6, 4] },
+    { label: "rear -g", values: s.negative.M_rear, color: "#e5c87a", dash: [3, 4], width: 1.6 },
   ]);
   drawPlot("plotDeflection", "Deflection", x, [
     { label: "front +g", values: s.positive.z_front, color: "#085097" },

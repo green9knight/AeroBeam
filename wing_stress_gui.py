@@ -1394,10 +1394,12 @@ class WingStressGUI:
         ax2.set(title="Shear [lb]", xlabel="Span [in]")
         ax2.grid(True,alpha=0.3)
 
-        ax3.plot(x, a.pos["M"], color="#085097", lw=2)
-        ax3.plot(x, a.neg["M"], color="#D2B75F", lw=1.5, linestyle="--")
-        ax3.set(title="Moment [lb·in]", xlabel="Span [in]")
-        ax3.grid(True,alpha=0.3)
+        ax3.plot(x, a.pos["M_front"], color="#085097", lw=2, label="Frt +g")
+        ax3.plot(x, a.pos["M_rear"], color="#B9BCC2", lw=1.5, label="Rr +g")
+        ax3.plot(x, a.neg["M_front"], color="#D2B75F", lw=1.5, linestyle="--", label="Frt -g")
+        ax3.plot(x, a.neg["M_rear"], color="#E5C87A", lw=1, linestyle="--", label="Rr -g")
+        ax3.set(title="Spar Moment [lb·in]", xlabel="Span [in]")
+        ax3.legend(fontsize=7); ax3.grid(True,alpha=0.3)
 
         ax4.plot(x, a.pos["z_front"], color="#085097", lw=2,   label="Frt +g (up)")
         ax4.plot(x, a.pos["z_rear"],  color="#B9BCC2", lw=1.5, label="Rr +g (up)")
