@@ -406,7 +406,7 @@ function updateCards(metrics) {
   document.getElementById("frontStress").textContent = `${fmt(metrics.sigma_max_front, 0)} psi`;
   document.getElementById("rearStress").textContent = `${fmt(metrics.sigma_max_rear, 0)} psi`;
   document.getElementById("sparWeight").textContent = `${fmt(metrics.spar_weight_total, 2)} lb`;
-  document.getElementById("twistRoot").textContent = `${fmt(metrics.torsion?.phi_root_deg, 3)}°`;
+  document.getElementById("relativeFlex").textContent = `${fmt(metrics.z_delta_max, 3)} in`;
 }
 
 function minMax(seriesList) {
@@ -513,6 +513,7 @@ function renderPlots(payload) {
   drawPlot("plotDeflection", "Deflection", x, [
     { label: "front +g", values: s.positive.z_front, color: "#085097" },
     { label: "rear +g", values: s.positive.z_rear, color: "#024084" },
+    { label: "rear-front Δ +g", values: s.positive.z_delta, color: "#6e9b5a", dash: [2, 3], width: 1.4 },
     { label: "front -g", values: s.negative.z_front, color: "#d2b75f", dash: [6, 4] },
     { label: "rear -g", values: s.negative.z_rear, color: "#e5c87a", dash: [4, 4] },
   ]);

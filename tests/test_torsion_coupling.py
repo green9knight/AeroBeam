@@ -54,8 +54,10 @@ class TorsionCouplingTest(unittest.TestCase):
         self.assertGreater(rear_deflection, 1e-6)
         self.assertIn("M_front", analyzer.pos)
         self.assertIn("M_rear", analyzer.pos)
+        self.assertIn("z_delta", analyzer.pos)
         self.assertGreater(np.max(np.abs(analyzer.pos["M_rear"])), 1.0)
         self.assertFalse(np.allclose(analyzer.pos["M_front"], analyzer.pos["M_rear"]))
+        self.assertTrue(np.allclose(analyzer.pos["z_delta"], analyzer.pos["z_rear"] - analyzer.pos["z_front"]))
 
     def test_geodetic_transfer_stiffness_is_available_for_case_solution(self):
         analyzer = WingStressAnalyzer(

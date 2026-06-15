@@ -1403,6 +1403,7 @@ class WingStressGUI:
 
         ax4.plot(x, a.pos["z_front"], color="#085097", lw=2,   label="Frt +g (up)")
         ax4.plot(x, a.pos["z_rear"],  color="#B9BCC2", lw=1.5, label="Rr +g (up)")
+        ax4.plot(x, a.pos["z_delta"], color="#6E9B5A", lw=1.2, linestyle=":", label="Rr-Frt Δ +g")
         ax4.plot(x, a.neg["z_front"], color="#D2B75F", lw=1.5, linestyle="--", label="Frt -g (down)")
         ax4.plot(x, a.neg["z_rear"],  color="#E5C87A", lw=1,   linestyle="--", label="Rr -g (down)")
         ax4.axhline(y=0, color="k", lw=0.5, alpha=0.4)

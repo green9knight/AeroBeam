@@ -763,11 +763,13 @@ class WingStressAnalyzer:
             "w":w, "V":V, "M":M,
             "M_front":Mf, "M_rear":Mr,
             "z_front":z_f, "z_rear":z_r,
+            "z_delta":z_r - z_f,
             "theta_front":th_f, "theta_rear":th_r,
             "sigma_front":sig_f, "sigma_rear":sig_r,
             "sig_f_root":float(sig_f[0]), "sig_r_root":float(sig_r[0]),
             "z_max_front":float(np.max(np.abs(z_f))),
             "z_max_rear":float(np.max(np.abs(z_r))),
+            "z_delta_max":float(np.max(np.abs(z_r - z_f))),
             "Fv":Fv,"F_axial":Fa,"P_spar":Ps,"P_euler":Pe,
             "V_root":float(V[0]),"M_root":float(M[0]),
             "pdelta_warn":pw,
@@ -1120,6 +1122,7 @@ class WingStressAnalyzer:
         L += [f"  Root M (bending moment): {p['M_root']:>10,.1f} lb·in"]
         L += [f"  Front z_max (tip deflection): {p['z_max_front']:>10.3f} in  (+up)"]
         L += [f"  Rear  z_max (tip deflection): {p['z_max_rear']:>10.3f} in  (+up)"]
+        L += [f"  Rear-front Δz max (relative flex): {p['z_delta_max']:>8.3f} in"]
         L += [f"  Front σ_max (bending stress): {self.sigma_max_front:>10,.0f} psi  at x={self.x_sigma_max_front:.1f}\""]
         L += [f"  Rear  σ_max   : {self.sigma_max_rear:>10,.0f} psi  at x={self.x_sigma_max_rear:.1f}\""]
 
@@ -1335,6 +1338,7 @@ class WingStressAnalyzer:
         a[2].set(title="Spar Moment [lb·in]"); a[2].legend()
         a[3].plot(x, self.pos["z_front"], "m-",  label="Frt +g (up)")
         a[3].plot(x, self.pos["z_rear"],  "c-",  label="Rr +g (up)")
+        a[3].plot(x, self.pos["z_delta"], "g:",  label="Rr-Frt Δ +g")
         a[3].plot(x, self.neg["z_front"], "m--", label="Frt -g (down)")
         a[3].plot(x, self.neg["z_rear"],  "c--", label="Rr -g (down)")
         a[3].axhline(y=0, color="k", lw=0.5, alpha=0.4)
@@ -1526,6 +1530,8 @@ class WingStressAnalyzer:
                           label="Frt +g (up)")
             axs[1,1].plot(x, self.pos["z_rear"],    color=PDF_NAVY, lw=1.5,
                           linestyle=(0,(4,2)), label="Rr +g (up)")
+            axs[1,1].plot(x, self.pos["z_delta"],   color=PDF_GREEN, lw=1.1,
+                          linestyle=":", label="Rr-Frt Δ +g")
             axs[1,1].plot(x, self.neg["z_front"],   color=PDF_GREY, lw=1.5,
                           linestyle="--", label="Frt -g (dn)")
             axs[1,1].plot(x, self.neg["z_rear"],    color="#888888", lw=1,
