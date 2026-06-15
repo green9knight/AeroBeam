@@ -155,6 +155,18 @@ def parse_bool(value: Any, default: bool = False) -> bool:
     return default
 
 
+def parse_fraction(value: Any, default: float = 0.0) -> float:
+    """Parse a fraction that may be entered as 0.30 or 30 for 30%."""
+
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return default
+    if abs(number) > 1.0:
+        number /= 100.0
+    return number
+
+
 # ─── SPAR FACTORY ────────────────────────────────────────────────────────────
 
 def build_spar(spar_type: str, inputs: dict, prefix: str) -> CrossSection:
@@ -238,9 +250,9 @@ class WingStressAnalyzer:
         self.bearing_allowable_psi = float(i.get("bearing_allowable_psi", 12000.0))
         self.lift_type   = i["lift_distribution_type"]
         self.num_spars   = int(i["num_spars"])
-        self.front_pct   = float(i["front_spar_percent"])
-        self.rear_pct    = float(i["rear_spar_percent"])
-        self.lsf         = float(i["front_spar_load_share"])
+        self.front_pct   = parse_fraction(i["front_spar_percent"], 0.15)
+        self.rear_pct    = parse_fraction(i["rear_spar_percent"], 0.65)
+        self.lsf         = parse_fraction(i["front_spar_load_share"], 0.55)
         self.rsf         = 1.0 - self.lsf
         self.wing_struct = i.get("wing_structure_type", "fabric_tube")
         self.ng_lift     = float(i["ng_lift"])

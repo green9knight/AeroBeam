@@ -1,6 +1,6 @@
 import unittest
 
-from wing_stress_analyzer import DEFAULT_INPUTS, WingStressAnalyzer, parse_bool
+from wing_stress_analyzer import DEFAULT_INPUTS, WingStressAnalyzer, parse_bool, parse_fraction
 
 
 def analyze_with(**overrides):
@@ -39,6 +39,23 @@ class ConfigToggleTest(unittest.TestCase):
         self.assertFalse(analyzer.dist_relief)
         self.assertFalse(analyzer.secondary)
         self.assertFalse(analyzer.jury)
+
+    def test_percent_style_values_are_normalized(self):
+        self.assertAlmostEqual(parse_fraction(30), 0.30)
+        self.assertAlmostEqual(parse_fraction("80"), 0.80)
+        self.assertAlmostEqual(parse_fraction(0.55), 0.55)
+
+        analyzer = WingStressAnalyzer(
+            {
+                **DEFAULT_INPUTS,
+                "front_spar_percent": 30,
+                "rear_spar_percent": 80,
+                "front_spar_load_share": 75,
+            }
+        )
+        self.assertAlmostEqual(analyzer.front_pct, 0.30)
+        self.assertAlmostEqual(analyzer.rear_pct, 0.80)
+        self.assertAlmostEqual(analyzer.lsf, 0.75)
 
     def test_distributed_wing_weight_changes_root_shear(self):
         base = analyze_with(distribute_wing_weight=False)

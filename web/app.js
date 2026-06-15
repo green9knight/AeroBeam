@@ -27,9 +27,9 @@ const inputSections = [
       {
         title: "Spar Positions",
         fields: [
-          ["front_spar_percent", "Front spar x/c", "number", "0.01"],
-          ["rear_spar_percent", "Rear spar x/c", "number", "0.01"],
-          ["front_spar_load_share", "Front spar load share", "number", "0.01"],
+          ["front_spar_percent", "Front spar location (% chord or 0-1)", "number", "0.01"],
+          ["rear_spar_percent", "Rear spar location (% chord or 0-1)", "number", "0.01"],
+          ["front_spar_load_share", "Front spar load share (% or 0-1)", "number", "0.01"],
           ["num_spars", "Number of spars", "number", "1"],
         ],
       },
