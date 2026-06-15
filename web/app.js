@@ -158,6 +158,12 @@ const inputSections = [
     title: "Buckling",
     groups: [
       {
+        title: "Fitting / Bearing Demand",
+        fields: [
+          ["bearing_allowable_psi", "Bearing allowable for area demand (psi)", "number", "100"],
+        ],
+      },
+      {
         title: "Stiffeners & Nose Ribs",
         fields: [
           ["stiffener_spacing", "Web stiffener spacing (in, 0=rib)", "number", "0.1"],

@@ -24,6 +24,14 @@ class FittingDemandTest(unittest.TestCase):
         self.assertAlmostEqual(demands["main_strut_vertical"], abs(analyzer.pos["Fv_strut_attach"]))
         self.assertAlmostEqual(demands["jury_vertical"], abs(analyzer.pos["Fv_jury"]))
         self.assertAlmostEqual(demands["main_strut_axial"], abs(analyzer.pos["F_axial"]))
+        self.assertAlmostEqual(
+            demands["front_root_vertical_bearing_area_required"],
+            demands["front_root_vertical"] / demands["bearing_allowable_psi"],
+        )
+        self.assertAlmostEqual(
+            demands["main_strut_vertical_bearing_area_required"],
+            demands["main_strut_vertical"] / demands["bearing_allowable_psi"],
+        )
 
     def test_summary_states_local_reinforcement_scope(self):
         analyzer = WingStressAnalyzer({**DEFAULT_INPUTS, "config": "strut_braced"})
@@ -31,6 +39,7 @@ class FittingDemandTest(unittest.TestCase):
         summary = analyzer.summary_text()
 
         self.assertIn("LOCAL FITTING / BEARING LOAD DEMANDS", summary)
+        self.assertIn("Req. bearing area", summary)
         self.assertIn("Reinforce/check tube bearing", summary)
         self.assertNotIn("bearing MS", summary)
 

@@ -70,7 +70,7 @@ report as one of:
 | Web bending buckling | plate compression buckling | Bruhn/NACA example | PRELIMINARY | Add benchmark. |
 | Cap column buckling | Euler column between ribs | Bruhn/Timoshenko example | EXPERIMENTAL/PRELIMINARY | Validate axis and restraint assumptions. |
 | Tube wall crippling | simplified cylindrical shell/crippling warning | NASA SP-8007 or handbook example | EXPERIMENTAL/PRELIMINARY | Treat as warning only until validated. |
-| Local fitting / bearing load demand | free-body reaction loads at root, strut, and jury fittings | fitting design by separate standards/manual methods | DISPLAY | Reports load demand only; bearing, lugs, bushings, bolts, doublers, and local tube crush sizing are outside AeroBeam. |
+| Local fitting / bearing load demand | free-body reaction loads at root, strut, and jury fittings plus required bearing area from user allowable | fitting design by separate standards/manual methods | DISPLAY | Reports load and required bearing-area demand only; bearing, lugs, bushings, bolts, doublers, and local tube crush sizing are outside AeroBeam. |
 | Divergence speed | simplified closed-form aeroelastic divergence | aeroelastic text example | EXPERIMENTAL | Keep labelled screening-only. |
 | Margin of safety | `allowable/applied - 1` | standard stress margin definition | PRELIMINARY | Clarify allowables and ultimate vs limit load. |
 | Combined stress interaction | simplified interaction equation | material-specific failure criterion | EXPERIMENTAL/PRELIMINARY | Validate per material family. |
@@ -122,6 +122,7 @@ formula implementations:
 - Load-bearing jury reactions for one uniform-load, constant-grid independent
   Euler-Bernoulli beam FE case.
 - Local fitting/bearing load demand values match root, strut, and jury reaction loads.
+- Required bearing-area demand equals load divided by user allowable.
 - Independent two-spar spring FE scaffold verifies zero-coupling and
   high-coupling limiting behavior. Production rear spar response now uses an
   elastic spring solve; AeroBeam `kappa` is a diagnostic relative-deflection

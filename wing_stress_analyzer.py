@@ -120,6 +120,7 @@ DEFAULT_INPUTS: Dict[str, Any] = {
     "front_spar_doubler_extent": 1,     # rib bays each side of doubler station
     "rear_spar_doubler_t":       0.0,
     "rear_spar_doubler_extent":  1,
+    "bearing_allowable_psi":     12000.0,  # demand-only required bearing area
 }
 
 
@@ -234,6 +235,7 @@ class WingStressAnalyzer:
         self.front_doubler_extent = int(float(i.get("front_spar_doubler_extent", 1)))
         self.rear_doubler_t       = float(i.get("rear_spar_doubler_t", 0.0))
         self.rear_doubler_extent  = int(float(i.get("rear_spar_doubler_extent", 1)))
+        self.bearing_allowable_psi = float(i.get("bearing_allowable_psi", 12000.0))
         self.lift_type   = i["lift_distribution_type"]
         self.num_spars   = int(i["num_spars"])
         self.front_pct   = float(i["front_spar_percent"])
@@ -1268,6 +1270,12 @@ class WingStressAnalyzer:
             "front_spar_jury_attach_vertical": abs(float(self.pos.get("Fv_jury", 0.0))),
             "rear_spar_jury_coupling_vertical": abs(float(self._jury_coupling_stiffness() * self.pos.get("z_delta", np.zeros(self.N))[jury_idx])) if self.jury else 0.0,
         }
+        self.fitting_loads["bearing_allowable_psi"] = self.bearing_allowable_psi
+        for key, value in list(self.fitting_loads.items()):
+            if key.endswith("_vertical") or key.endswith("_axial"):
+                self.fitting_loads[f"{key}_bearing_area_required"] = (
+                    abs(value) / max(self.bearing_allowable_psi, 1e-9)
+                )
 
         # Spar weights
         scale_tip = self.tip_chord / self.root_chord
@@ -1374,6 +1382,14 @@ class WingStressAnalyzer:
                     L += [f"  Jury attach vertical demand        : {fl['jury_vertical']:>9,.0f} lb"]
                 if fl["rear_spar_jury_coupling_vertical"] > 0:
                     L += [f"  Rear spar jury-link demand         : {fl['rear_spar_jury_coupling_vertical']:>9,.0f} lb"]
+            L += [f"  Bearing-area demand uses allowable : {fl['bearing_allowable_psi']:>9,.0f} psi"]
+            L += [f"  Req. bearing area, front root      : {fl['front_root_vertical_bearing_area_required']:>9.3f} in²"]
+            if self.num_spars == 2:
+                L += [f"  Req. bearing area, rear root       : {fl['rear_root_vertical_bearing_area_required']:>9.3f} in²"]
+            if self.config in ("strut_braced","single_strut"):
+                L += [f"  Req. bearing area, strut attach    : {fl['main_strut_vertical_bearing_area_required']:>9.3f} in²"]
+                if fl["jury_vertical"] > 0:
+                    L += [f"  Req. bearing area, jury attach     : {fl['jury_vertical_bearing_area_required']:>9.3f} in²"]
             L += ["  Reinforce/check tube bearing, bushings, lugs, doublers, and local crush separately."]
 
 

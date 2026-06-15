@@ -56,7 +56,7 @@ at least one independent structural method.
 | Web shear/bending buckling | `web_buckling`, `web_bending_buckling` | plate buckling coefficient estimates | B/C | Standard-style preliminary checks. Needs verification against Bruhn/NACA examples and correct stiffener boundary assumptions. |
 | Cap column buckling | `cap_column_buckling` | Euler column between ribs using strong-axis assumption | C | The strong-axis/web-restraint assumption is not universally valid. Needs review for each cap attachment type. |
 | Tube wall crippling | `_compute_buckling` | simplified NASA SP-8007 style expression with imperfection factor | C | Useful warning only. Not a complete local buckling/crippling design method. |
-| Local fitting / bearing load demand | `fitting_loads`, `summary_text` | reports root, strut, and jury reaction demands for local reinforcement design | Display | No bearing, lug, bushing, bolt, doubler, or local crush sizing is performed. |
+| Local fitting / bearing load demand | `fitting_loads`, `summary_text` | reports root, strut, and jury reaction demands plus required bearing area from a user allowable | Display | No bearing, lug, bushing, bolt, doubler, or local crush sizing is performed. |
 | Divergence | `_divergence` | closed-form divergence speed using estimated shear center | C/D | Simplified estimate. Shear center is approximate; no aeroelastic coupling/eigenvalue analysis. Must be labelled screening-only. |
 | Margin of safety | `_ms` | stress ratio allowables, simple combined interaction | B/C | Basic stress margin is standard; combined bending/torsion interaction is simplified and not a full failure criterion for all materials. |
 
