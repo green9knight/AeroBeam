@@ -3,6 +3,7 @@ import unittest
 
 from spar_sections import (
     DCellSkin,
+    GeodeticPanel,
     MATERIAL_DB,
     STRUT_MATERIALS,
     cap_column_buckling,
@@ -101,6 +102,20 @@ class StabilityTorsionStandardsTest(unittest.TestCase):
         self.assertAlmostEqual(torque_check, torque)
         self.assertAlmostEqual(phi_1, phi_2)
         self.assertAlmostEqual(gj, torque / phi_1)
+
+    def test_geodetic_strip_force_is_consistent_with_equivalent_shear_thickness(self):
+        panel = GeodeticPanel(
+            rib_spacing=10.0,
+            strips_per_bay=2,
+            strip_width=1.0,
+            strip_thick=0.125,
+            angle_deg=45.0,
+            mat_name="Sitka Spruce",
+        )
+        q = 75.0
+        stress_from_t_eff = q / panel.t_eff()
+        stress_from_force = panel.strip_force(q) / panel.A_strip
+        self.assertAlmostEqual(stress_from_force, stress_from_t_eff)
 
 
 if __name__ == "__main__":

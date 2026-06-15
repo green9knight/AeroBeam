@@ -14,6 +14,9 @@ The program should use and cite recognized sources such as:
 - **14 CFR / FAR 23.303** - factor of safety, limit and ultimate load concepts.
 - **FAA AC 43.13-1B** - acceptable methods, wood material allowables, repair and
   construction guidance for non-transport aircraft.
+- **ANC-18, Design of Wood Aircraft Structures** - wood aircraft structural
+  design methods, including two-spar wings, drag-truss systems, plywood
+  elements, joints, and wood construction details.
 - **Bruhn, Analysis and Design of Flight Vehicle Structures** - wing beam,
   column, plate buckling, shear web and built-up member methods.
 - **NACA / NASA technical notes** - plate buckling, panel buckling, tube
@@ -61,7 +64,7 @@ report as one of:
 | D-cell bending contribution | thin skin transformed elements | Hand section calculation | EXPERIMENTAL/PRELIMINARY | Validate with real airfoil geometry. |
 | D-cell torsion | Bredt-Batho single cell | Closed-cell torsion hand example | PRELIMINARY | Add GJ/shear-flow benchmark. |
 | Two-cell torsion | Bredt-Batho multi-cell | two-cell hand example | PRELIMINARY | Add `q1/q2/GJ` benchmark. |
-| Geodetic equivalent panel | equivalent shear thickness approximation | truss/shear-panel independent model | EXPERIMENTAL | Keep labelled experimental until benchmarked. |
+| Geodetic/drag-truss strip demand | ANC-18 two-spar/drag-truss framework plus equivalent shear thickness approximation | ANC-18 hand examples or independent truss/shear-panel model | EXPERIMENTAL/PRELIMINARY | Reports strip force/stress demand only; joints, glue, compression stability, and detail design remain separate. |
 | Rib torsion demand | required rib bay torque and front/rear attach reactions | independent rib design / frame model | DISPLAY/PRELIMINARY | AeroBeam reports demand only; it does not size ribs. |
 | Rear spar coupling factor | stiffness-blend approximation | independent two-spar + torsion model | EXPERIMENTAL | Keep labelled experimental until benchmarked. |
 | Aluminum skin buckling | flat plate buckling | NACA/Bruhn example | PRELIMINARY | Define boundary conditions and post-buckling meaning. |
@@ -126,6 +129,7 @@ The following remain explicitly unvalidated/high risk:
   configurations;
 - rib structural sizing is not performed; AeroBeam only reports required rib
   reactions;
+- geodetic equivalent shear stiffness and full ANC-18 drag-truss sizing;
 - geodetic/skin torsion sharing;
 - geodetic equivalent shear panel thickness;
 - divergence speed estimate;

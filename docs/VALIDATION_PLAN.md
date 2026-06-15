@@ -62,7 +62,8 @@ Each expected file should contain only defensible values and tolerances:
 
 12. D-cell single-cell Bredt.
 13. Two-cell Bredt with known hand solution.
-14. Geodetic equivalent panel against an independent truss/shear panel model.
+14. Geodetic/drag-truss strip demand against ANC-18 examples or an independent
+    truss/shear panel model.
 15. Rib bay torque/reaction demand against a frame/beam model; rib structural
     sizing remains a separate design task.
 
@@ -115,6 +116,7 @@ Current coverage:
 - cap column buckling;
 - single-cell D-cell Bredt-Batho `GJ`.
 - two-cell Bredt-Batho equilibrium and equal-twist compatibility residuals.
+- geodetic strip force consistency with the equivalent shear thickness relation.
 - dynamic pressure `q = 1/2 rho V^2`;
 - lift distributions integrate to requested total lift;
 - chord-based lift follows chord ratio;

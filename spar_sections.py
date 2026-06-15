@@ -712,10 +712,17 @@ class GeodeticPanel:
         return (2 * c / t) + (h / tw)
 
     def strip_force(self, q2: float, scale: float = 1.0) -> float:
-        """Axial force per strip given shear flow q2 [lb/in]."""
+        """Axial force per strip from panel shear flow q2 [lb/in].
+
+        Consistent with ``t_eff = 2*A*sin(theta)*cos(theta)/s``:
+            q = sigma_strip * t_eff
+            F_strip = sigma_strip * A
+                     = q*s / (2*sin(theta)*cos(theta))
+        """
         θ = math.radians(self.angle_deg)
         s = self.s_strip * scale
-        return q2 * s / (2 * math.cos(θ))
+        denom = 2.0 * math.sin(θ) * math.cos(θ)
+        return q2 * s / max(denom, 1e-9)
 
     def strip_stress(self, q2: float, scale: float = 1.0) -> float:
         """Axial stress in each strip [psi]."""

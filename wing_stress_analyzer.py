@@ -530,6 +530,23 @@ class WingStressAnalyzer:
         rib_reaction = rib_bay_torque / max(spar_gap, 1e-9)
         rib_reaction_station = float(self.x[max_idx])
 
+        # ANC-18-style drag-truss demand for a geodetic/diagonal strip panel:
+        # report required shear flow and strip axial force. This is a demand
+        # output only; joints, glue, compression stability, and detail design
+        # remain outside this global wing solver.
+        geodetic_q = 0.0
+        geodetic_strip_force = 0.0
+        geodetic_strip_stress = 0.0
+        geodetic_station = 0.0
+        if self.geodetic is not None:
+            q_geo = np.abs(q2f * T_run)
+            geo_idx = int(np.argmax(q_geo))
+            geodetic_q = float(q_geo[geo_idx])
+            geo_scale = float(scales[geo_idx])
+            geodetic_strip_force = float(self.geodetic.strip_force(geodetic_q, geo_scale))
+            geodetic_strip_stress = float(self.geodetic.strip_stress(geodetic_q, geo_scale))
+            geodetic_station = float(self.x[geo_idx])
+
         # ── Cruise speed torsion check and CP positions ──────────────────────
         q_vc  = dynamic_pressure_psi(self.Vc_mph, self.alt_ft)
         q_va  = dynamic_pressure_psi(self.Va_mph, self.alt_ft)
@@ -575,7 +592,11 @@ class WingStressAnalyzer:
                 "k_rib":k_rib,"k_geo":k_geo,"k_total":k_total,
                 "rib_bay_torque":rib_bay_torque,
                 "rib_reaction_required":rib_reaction,
-                "rib_reaction_station":rib_reaction_station}
+                "rib_reaction_station":rib_reaction_station,
+                "geodetic_q":geodetic_q,
+                "geodetic_strip_force":geodetic_strip_force,
+                "geodetic_strip_stress":geodetic_strip_stress,
+                "geodetic_station":geodetic_station}
 
     # ── Divergence ───────────────────────────────────────────────────────────
 
@@ -1277,11 +1298,14 @@ class WingStressAnalyzer:
                 L += ["  Rib sizing is not performed; design ribs/attachments for this reaction."]
             if self.geodetic:
                 tg=abs(float(t["tau_geo"][0]))
-                Fs2=MATERIAL_DB[self.geodetic.mat_name]["Fsu"]
-                sig_s=self.geodetic.strip_stress(abs(self.q2_frac[0])*t["T_running"][0])
+                sig_s=t.get("geodetic_strip_stress", 0.0)
+                strip_f=t.get("geodetic_strip_force", 0.0)
+                q_geo=t.get("geodetic_q", 0.0)
                 Fb_s=MATERIAL_DB[self.geodetic.mat_name]["Fb"]
                 L += [f"  Geodetic τ eff: {tg:>9,.0f} psi"]
-                L += [f"  Strip σ  root : {sig_s:>9,.0f} psi   MS:{mf(Fb_s/max(sig_s,1)-1)}"]
+                L += [f"  ANC-18 drag-truss demand: q={q_geo:>7.1f} lb/in  strip F={strip_f:>7.1f} lb"]
+                L += [f"  Strip axial σ demand: {sig_s:>9,.0f} psi   MS vs Fb only:{mf(Fb_s/max(sig_s,1)-1)}"]
+                L += ["  Check joints, glue, compression strips, and details separately per ANC-18."]
 
         L += [f"\n── DIVERGENCE {'─'*39}"]
         if d["divergent"] and d["V_div"]<float("inf"):
