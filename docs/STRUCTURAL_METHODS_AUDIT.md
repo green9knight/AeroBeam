@@ -51,7 +51,7 @@ at least one independent structural method.
 | Geodetic / drag-truss strip demand | `GeodeticPanel`, `_torsion` | reports shear flow, strip force, and axial stress demand using an ANC-18-style two-spar drag-truss framing plus equivalent shear thickness | C/D | Demand output only. Bond/joint/attachment sizing and local member stability are outside AeroBeam. |
 | Rib torsion demand | `_torsion` | reports required rib bay torque and front/rear attach reactions | C | Demand output only. AeroBeam no longer sizes rib geometry/materials. |
 | Rear spar load path for cantilever/single-strut | `_one_case`, `_elastic_coupled_rear_response` | rear spar beam with torsion-couple load elastically connected to front spar by distributed geodetic/skin springs | C | Scalar `kappa` blend removed; still needs quantitative calibration before using for final rear spar sizing. |
-| Aluminum skin wing box | `SkinPanel`, `WingBox`, `_gj_arrays` | simplified skin panels and two-cell torsion | C | Partial model. Does not include stringers, fasteners, shear flow/rivet loads, effective width iteration, or post-buckled diagonal tension. |
+| Aluminum skin wing box | `SkinPanel`, `WingBox`, `_gj_arrays` | simplified skin panels and two-cell torsion | C | Partial model. Reports effective-width and cap/stringer demand only. Does not size stringers, fasteners, frames, rivets, or post-buckled diagonal tension fields. |
 | Skin compression buckling | `skin_compression_buckling` | flat plate buckling | B/C | Standard basis, but boundary conditions and post-buckled load redistribution are simplified. Report treats as warning for semi-monocoque. |
 | Web shear/bending buckling | `web_buckling`, `web_bending_buckling` | plate buckling coefficient estimates | B/C | Standard-style preliminary checks. Needs verification against Bruhn/NACA examples and correct stiffener boundary assumptions. |
 | Cap column buckling | `cap_column_buckling` | Euler column between ribs using strong-axis assumption | C | The strong-axis/web-restraint assumption is not universally valid. Needs review for each cap attachment type. |
@@ -89,9 +89,9 @@ than the model supports:
      design tasks outside the current solver.
 
 5. **Aluminum skin post-buckling**
-   - Current skin buckling warning does not size post-buckled skin/stringer
-     systems.
-   - Good as a warning, not as a final design check.
+   - Current output estimates effective width and remaining cap/stringer demand.
+   - It does not size stringers, frames, fasteners, rivets, or diagonal tension
+     field behavior.
 
 6. **Divergence**
    - Current calculation is a screening estimate only.

@@ -61,6 +61,29 @@ class StabilityTorsionStandardsTest(unittest.TestCase):
         self.assertAlmostEqual(result["b_eff"], expected)
         self.assertAlmostEqual(result["load_per_length"], 20_000.0 * expected * 0.025)
 
+    def test_aluminum_skin_reports_remaining_cap_stringer_load_demand(self):
+        from wing_stress_analyzer import DEFAULT_INPUTS, WingStressAnalyzer
+
+        inputs = dict(DEFAULT_INPUTS)
+        inputs.update(
+            {
+                "wing_structure_type": "aluminum_skin",
+                "skin_top_thick": 0.025,
+                "skin_bot_thick": 0.025,
+                "rib_spacing": 12.0,
+            }
+        )
+        analyzer = WingStressAnalyzer(inputs)
+        analyzer.analyze()
+        front = analyzer.buckling["front"]
+
+        total = front["skin_total_load_per_in"]
+        effective = front["skin_eff_load_per_in"]
+        demand = front["cap_stringer_load_per_in"]
+
+        self.assertAlmostEqual(demand, max(total - effective, 0.0))
+        self.assertAlmostEqual(front["cap_stringer_load_per_bay"], demand * analyzer.rib_spacing)
+
     def test_web_shear_buckling_matches_plate_formula(self):
         result = web_buckling(t_web=0.032, h_web=6.0, stiffener_spacing=12.0, mat_name="6061-T6")
         E = MATERIAL_DB["6061-T6"]["E"]

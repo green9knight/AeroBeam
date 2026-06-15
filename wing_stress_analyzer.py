@@ -1169,6 +1169,11 @@ class WingStressAnalyzer:
                 r["skin_b_eff"] = eff["b_eff"]
                 r["skin_b_eff_ratio"] = eff["b_eff_ratio"]
                 r["skin_eff_load_per_in"] = eff["load_per_length"]
+                skin_total_load_per_in = sigma_gov * b_skin * t_sk
+                cap_stringer_load_per_in = max(skin_total_load_per_in - eff["load_per_length"], 0.0)
+                r["skin_total_load_per_in"] = skin_total_load_per_in
+                r["cap_stringer_load_per_in"] = cap_stringer_load_per_in
+                r["cap_stringer_load_per_bay"] = cap_stringer_load_per_in * self.rib_spacing
                 # D-cell skin (nose ribs if present)
                 if self.dcell:
                     b_dc = self.nose_rib_spacing
@@ -1511,6 +1516,9 @@ class WingStressAnalyzer:
                     if "skin_b_eff" in bk:
                         L += ["  Effective width: be=%5.2fin (%.0f%% panel), skin load=%.0f lb/in" %
                               (bk["skin_b_eff"], bk["skin_b_eff_ratio"]*100, bk["skin_eff_load_per_in"])]
+                        L += ["  Cap/stringer compression demand: %.0f lb/in  (%.0f lb per rib bay)" %
+                              (bk["cap_stringer_load_per_in"], bk["cap_stringer_load_per_bay"])]
+                        L += ["  Stringer/rivet/fastener/frame sizing is outside AeroBeam."]
                     if bk["MS_skin_buckling"] < 0 and "t_min_skin" in bk:
                         L += ["  >>> t_skin min = %.4fin for non-buckling skin" % bk["t_min_skin"]]
                 if "sigma_cr_dcell_skin" in bk:

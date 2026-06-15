@@ -118,6 +118,7 @@ Current coverage:
 - pin-ended Euler strut buckling;
 - flat skin compression buckling;
 - skin effective width using `be = min(b, 1.9*t*sqrt(E/sigma))`;
+- remaining cap/stringer compression demand from effective-width skin load;
 - web shear buckling;
 - cap column buckling;
 - single-cell D-cell Bredt-Batho `GJ`.
