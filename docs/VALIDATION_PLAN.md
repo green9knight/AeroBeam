@@ -103,6 +103,8 @@ Current coverage:
   uniform cantilever beam;
 - independent Euler-Bernoulli finite-element cross-check for uniform
   cantilever tip deflection;
+- independent two-spar spring finite-element scaffold for zero/high coupling
+  limiting behavior and `kappa` monotonicity;
 - root shear and root moment for an elliptical cantilever beam using
   `M = 4 L b / (3 pi)`;
 - round tube area/I/EI;
@@ -133,6 +135,10 @@ Current coverage:
 - divergence screening formula arithmetic.
 
 This is a harness seed, not sufficient validation.
+
+The two-spar coupling scaffold validates limiting behavior only. It does not
+yet calibrate AeroBeam's scalar `kappa` against quantitative two-spar
+elastic-connection outputs for production sizing.
 
 ## Phase 5 - UI/report safety language
 
