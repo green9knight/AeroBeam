@@ -67,7 +67,7 @@ report as one of:
 | Geodetic/drag-truss strip demand | ANC-18 two-spar/drag-truss framework plus equivalent shear thickness approximation | ANC-18 hand examples or independent truss/shear-panel model | EXPERIMENTAL/PRELIMINARY | Reports strip force/stress demand only; joints, glue, compression stability, and detail design remain separate. |
 | Rib torsion demand | required rib bay torque and front/rear attach reactions | independent rib design / frame model | DISPLAY/PRELIMINARY | AeroBeam reports demand only; it does not size ribs. |
 | Rear spar coupling factor | stiffness-blend approximation | independent two-spar + torsion model | EXPERIMENTAL | Keep labelled experimental until benchmarked. |
-| Aluminum skin buckling | flat plate buckling | NACA/Bruhn example | PRELIMINARY | Define boundary conditions and post-buckling meaning. |
+| Aluminum skin buckling/effective width | flat plate buckling plus von Karman/Winter effective-width screening | Bruhn/Niu/Megson/NACA examples | PRELIMINARY | Reports effective width/load estimate only; stringer/rivet/post-buckled panel sizing remains separate. |
 | Web shear buckling | plate buckling coefficient | Bruhn/NACA example | PRELIMINARY | Add benchmark and stiffener boundary statement. |
 | Web bending buckling | plate compression buckling | Bruhn/NACA example | PRELIMINARY | Add benchmark. |
 | Cap column buckling | Euler column between ribs | Bruhn/Timoshenko example | EXPERIMENTAL/PRELIMINARY | Validate axis and restraint assumptions. |
@@ -111,6 +111,7 @@ formula implementations:
   idealization.
 - Pin-ended main strut Euler buckling.
 - Flat skin compression buckling formula.
+- Skin effective-width screening formula.
 - Web shear buckling formula and shear coefficient.
 - Cap column Euler formula.
 - Single-cell D-cell Bredt-Batho `GJ`.

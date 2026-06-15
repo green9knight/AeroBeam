@@ -1129,6 +1129,32 @@ def skin_compression_buckling(t_skin: float, b_panel: float,
     return {"sigma_cr_skin": sigma_cr, "k": k, "b_panel": b_panel}
 
 
+def skin_effective_width(t_skin: float, b_panel: float,
+                         sigma_edge: float, mat_name: str) -> dict:
+    """
+    Post-buckled compression effective width screening calculation.
+
+    Uses common von Karman/Winter-style aircraft preliminary sizing concept:
+        b_e = 1.9 t sqrt(E / sigma_e), capped at the actual panel width.
+
+    This is a demand/capacity estimate only. It does not size stringers,
+    rivets, inter-rivet buckling, frames/ribs, crippling, or post-buckled
+    diagonal-tension shear behavior.
+    """
+    m = MATERIAL_DB[mat_name]
+    E = m["E"]
+    sigma = max(abs(sigma_edge), 1e-9)
+    b_eff_raw = 1.9 * t_skin * math.sqrt(E / sigma)
+    b_eff = min(b_panel, b_eff_raw)
+    load_per_length = sigma * b_eff * t_skin
+    return {
+        "b_eff": b_eff,
+        "b_eff_ratio": b_eff / max(b_panel, 1e-9),
+        "load_per_length": load_per_length,
+        "formula": "b_eff = min(b, 1.9*t*sqrt(E/sigma_edge))",
+    }
+
+
 def cap_column_buckling(b_cap: float, t_cap: float, rib_spacing: float,
                         mat_name: str) -> dict:
     """

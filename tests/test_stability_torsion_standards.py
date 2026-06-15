@@ -8,6 +8,7 @@ from spar_sections import (
     STRUT_MATERIALS,
     cap_column_buckling,
     skin_compression_buckling,
+    skin_effective_width,
     web_buckling,
     two_cell_bredt,
 )
@@ -48,6 +49,17 @@ class StabilityTorsionStandardsTest(unittest.TestCase):
         nu = 0.33
         expected = 4.0 * math.pi**2 * E * (0.025 / 12.0) ** 2 / (12.0 * (1.0 - nu**2))
         self.assertAlmostEqual(result["sigma_cr_skin"], expected)
+
+    def test_skin_effective_width_matches_von_karman_winter_screening_formula(self):
+        result = skin_effective_width(
+            t_skin=0.025,
+            b_panel=12.0,
+            sigma_edge=20_000.0,
+            mat_name="6061-T6",
+        )
+        expected = min(12.0, 1.9 * 0.025 * math.sqrt(MATERIAL_DB["6061-T6"]["E"] / 20_000.0))
+        self.assertAlmostEqual(result["b_eff"], expected)
+        self.assertAlmostEqual(result["load_per_length"], 20_000.0 * expected * 0.025)
 
     def test_web_shear_buckling_matches_plate_formula(self):
         result = web_buckling(t_web=0.032, h_web=6.0, stiffener_spacing=12.0, mat_name="6061-T6")

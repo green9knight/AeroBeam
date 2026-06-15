@@ -112,6 +112,7 @@ Current coverage:
 - aluminum C-spar neutral axis and inertia including the web-edge idealization;
 - pin-ended Euler strut buckling;
 - flat skin compression buckling;
+- skin effective width using `be = min(b, 1.9*t*sqrt(E/sigma))`;
 - web shear buckling;
 - cap column buckling;
 - single-cell D-cell Bredt-Batho `GJ`.

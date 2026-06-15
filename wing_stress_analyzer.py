@@ -17,6 +17,7 @@ from spar_sections import (
     MATERIAL_DB, STRUT_MATERIALS,
     two_cell_bredt, allowable_bending, allowable_shear,
     web_buckling, web_bending_buckling, skin_compression_buckling, cap_column_buckling,
+    skin_effective_width,
 )
 from airfoil_database import AIRFOIL_DB, get_airfoil
 from method_status import method_status_lines
@@ -1058,6 +1059,10 @@ class WingStressAnalyzer:
                 # Flag as WARN (not FAIL) when skin buckles — only FAIL if sigma_cr < 0.5*sigma_gov
                 r["MS_skin_buckling"] = sk["sigma_cr_skin"] / max(sigma_gov, 1e-9) - 1
                 r["skin_buckling_acceptable"] = True  # semi-monocoque: post-buckled OK
+                eff = skin_effective_width(t_sk, b_skin, sigma_gov, self.top_skin.mat_name)
+                r["skin_b_eff"] = eff["b_eff"]
+                r["skin_b_eff_ratio"] = eff["b_eff_ratio"]
+                r["skin_eff_load_per_in"] = eff["load_per_length"]
                 # D-cell skin (nose ribs if present)
                 if self.dcell:
                     b_dc = self.nose_rib_spacing
@@ -1389,6 +1394,9 @@ class WingStressAnalyzer:
                     note = " (note: post-buckled OK for semi-mono)" if bk["MS_skin_buckling"] < 0 else ""
                     L += ["  Skin buckl (compression buckling) σ_cr=%6.0f psi  MS:%s%s" %
                           (bk["sigma_cr_skin"], mf(bk["MS_skin_buckling"]), note)]
+                    if "skin_b_eff" in bk:
+                        L += ["  Effective width: be=%5.2fin (%.0f%% panel), skin load=%.0f lb/in" %
+                              (bk["skin_b_eff"], bk["skin_b_eff_ratio"]*100, bk["skin_eff_load_per_in"])]
                     if bk["MS_skin_buckling"] < 0 and "t_min_skin" in bk:
                         L += ["  >>> t_skin min = %.4fin for non-buckling skin" % bk["t_min_skin"]]
                 if "sigma_cr_dcell_skin" in bk:
