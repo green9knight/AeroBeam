@@ -98,7 +98,14 @@ DEFAULT_INPUTS: Dict[str, Any] = {
     "strut_mat": "4130 Chromoly (normalized)",
     "strut_tube_od": 3.0, "strut_tube_wall": 0.065,
     "secondary_bending": False,
-    "jury_strut": False, "jury_spar_bl": 60.0, "jury_coupling_stiffness": 0.0,
+    "jury_strut": False, "jury_spar_bl": 60.0,
+    "jury_tube_mat": "6061-T6 Aluminum",
+    "jury_tube_od": 0.75,
+    "jury_tube_wall": 0.035,
+    "jury_front_link_length": 18.0,
+    "jury_rear_link_length": 18.0,
+    "jury_front_link_angle": 45.0,
+    "jury_rear_link_angle": 45.0,
     "airfoil": "NACA 4412", "Cm_ac": -0.099,  "Cm_flap": 0.0,  # delta Cm with full flaps
     "Cl_alpha": 6.30, "x_ac_c": 0.246,
     "Vd_mph": 100.0, "altitude_ft": 2000.0, "Vc_mph": 80.0, "Va_mph": 60.0,
@@ -251,7 +258,13 @@ class WingStressAnalyzer:
         self.secondary   = parse_bool(i.get("secondary_bending", False))
         self.jury        = parse_bool(i.get("jury_strut", False))
         self.jury_bl     = float(i.get("jury_spar_bl", 60.0))
-        self.jury_coupling_stiffness = float(i.get("jury_coupling_stiffness", 0.0))
+        self.jury_tube_mat = i.get("jury_tube_mat", "6061-T6 Aluminum")
+        self.jury_tube_od = float(i.get("jury_tube_od", 0.75))
+        self.jury_tube_wall = float(i.get("jury_tube_wall", 0.035))
+        self.jury_front_link_length = float(i.get("jury_front_link_length", 18.0))
+        self.jury_rear_link_length = float(i.get("jury_rear_link_length", 18.0))
+        self.jury_front_link_angle = float(i.get("jury_front_link_angle", 45.0))
+        self.jury_rear_link_angle = float(i.get("jury_rear_link_angle", 45.0))
         self.curvature_sign = float(i.get("curvature_sign", 1.0))
         self.wood_kd     = float(i.get("wood_knockdown", 0.75))
         self.rib_h_web = float(i.get("rib_h_web", 3.0))
@@ -695,6 +708,33 @@ class WingStressAnalyzer:
 
     # ── Strut forces ─────────────────────────────────────────────────────────
 
+    def _jury_tube_area(self) -> float:
+        if self.jury_tube_wall <= 0.0 or self.jury_tube_od <= 0.0:
+            return 0.0
+        inner = max(self.jury_tube_od - 2.0 * self.jury_tube_wall, 0.0)
+        return math.pi / 4.0 * (self.jury_tube_od**2 - inner**2)
+
+    def _jury_link_vertical_stiffness(self, length: float, angle_deg: float) -> float:
+        if not self.jury or length <= 0.0:
+            return 0.0
+        mat = STRUT_MATERIALS.get(self.jury_tube_mat, STRUT_MATERIALS["6061-T6 Aluminum"])
+        axial = mat["E"] * self._jury_tube_area() / length
+        theta = math.radians(angle_deg)
+        return axial * math.sin(theta) ** 2
+
+    def _jury_coupling_stiffness(self) -> float:
+        """Equivalent front/rear vertical coupling from same-tube jury links."""
+
+        k_front = self._jury_link_vertical_stiffness(
+            self.jury_front_link_length, self.jury_front_link_angle)
+        k_rear = self._jury_link_vertical_stiffness(
+            self.jury_rear_link_length, self.jury_rear_link_angle)
+        if k_front <= 0.0 or k_rear <= 0.0:
+            return 0.0
+        # Two links connected through the common strut node behave like springs
+        # in series for relative front/rear vertical displacement.
+        return 1.0 / (1.0 / k_front + 1.0 / k_rear)
+
     def _strut_effective_buckling_length(self, total_length: float) -> float:
         """Return unsupported strut length for Euler buckling.
 
@@ -884,8 +924,9 @@ class WingStressAnalyzer:
 
         elif self.config in ("cantilever", "single_strut") and self.num_spars == 2:
             point_couplings = []
-            if self.jury and self.jury_coupling_stiffness > 0.0:
-                point_couplings.append((self.jury_bl, self.jury_coupling_stiffness))
+            jury_k = self._jury_coupling_stiffness()
+            if self.jury and jury_k > 0.0:
+                point_couplings.append((self.jury_bl, jury_k))
             th_r, z_r, Mr = self._elastic_coupled_rear_response(w_rear, z_f, k_transfer, point_couplings)
             _, z_r_free, _ = self._elastic_coupled_rear_response(w_rear, z_f, 0.0, [])
             free_delta = float(np.max(np.abs(z_r_free - z_f)))
@@ -1356,8 +1397,12 @@ class WingStressAnalyzer:
             if hasattr(self, "_geodetic_kappa"):
                 kap = self._geodetic_kappa
                 L += [f"  Geodetic coupling k : {kap:.4f}  (1.0=fully coupled, 0=cantilever)"]
-                if self.jury and self.jury_coupling_stiffness > 0:
-                    L += [f"  Jury front/rear soft coupling: k={self.jury_coupling_stiffness:,.0f} lb/in at BL {self.jury_bl:.1f}\""]
+                jury_k = self._jury_coupling_stiffness()
+                if self.jury and jury_k > 0:
+                    L += [f"  Jury tube front/rear coupling: k={jury_k:,.0f} lb/in at BL {self.jury_bl:.1f}\""]
+                    L += [f"  Jury links: {self.jury_tube_od:.3f}x{self.jury_tube_wall:.3f} {self.jury_tube_mat}, "
+                          f"Lf={self.jury_front_link_length:.1f}\" @ {self.jury_front_link_angle:.0f}°, "
+                          f"Lr={self.jury_rear_link_length:.1f}\" @ {self.jury_rear_link_angle:.0f}°"]
                 if kap < 0.5:
                     L += ["  ⚠ Weak coupling — rear spar closer to free cantilever"]
                 elif kap > 0.95:

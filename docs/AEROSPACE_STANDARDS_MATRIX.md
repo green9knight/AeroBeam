@@ -48,7 +48,7 @@ report as one of:
 | Cantilever deflection | Euler-Bernoulli beam theory | Closed-form `wL^4/(8EI)` style cases | STANDARD after benchmark | Add constant-EI benchmark. |
 | Strut-braced support deflection | Indeterminate beam with point support | independent Euler-Bernoulli beam model | PRELIMINARY | Expand support reaction/deflection benchmarks. |
 | Load-bearing jury support | Indeterminate beam with two supports | Independent beam/frame model | PRELIMINARY after limited FE benchmark | Add more load/support/variable-EI cases before production. |
-| Jury front/rear soft coupling | discrete elastic spring between front and rear spars at jury station | independent frame/beam model | EXPERIMENTAL/PRELIMINARY | Optional user stiffness; useful for sensitivity studies, not yet a standard sizing method. |
+| Jury front/rear tube-link coupling | same-tube jury links projected as axial stiffness springs between spars through the strut node | independent frame/beam model | EXPERIMENTAL/PRELIMINARY | Uses `EA/L * sin²(theta)` and springs in series; link loads/Euler/joints still require separate sizing. |
 | Main strut axial load | Statics/trigonometry | Hand free-body diagram | PRELIMINARY | Add benchmark values for `Fv`, `Fa`, `Ps`. |
 | Strut Euler buckling | Euler column, assumed `K=1` | Timoshenko/Gere, Bruhn column examples | PRELIMINARY | Add K-factor input or clearly state pin-ended. |
 | Jury-braced Euler length | Column braced at intermediate point | Euler column segment length | PRELIMINARY | Benchmark longest unsupported segment logic. |

@@ -49,8 +49,8 @@ Each expected file should contain only defensible values and tolerances:
    aeronautical structures examples.
 4. Strut-braced single support, compare to independent beam/frame calculations.
 5. Strut-braced plus jury support, compare to an independent beam model.
-6. Jury front/rear soft coupling, compare to an independent frame/beam model
-   with a discrete elastic link between spars.
+6. Jury front/rear tube-link coupling, compare to an independent frame/beam
+   model with the same tube axial stiffness and link geometry.
 
 ### Sections
 
