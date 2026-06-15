@@ -50,6 +50,32 @@ class LoadsAeroStandardsTest(unittest.TestCase):
         root_to_tip_chord_ratio = analyzer.chord_x[0] / analyzer.chord_x[-1]
         self.assertAlmostEqual(root_to_tip_load_ratio, root_to_tip_chord_ratio)
 
+    def test_distributed_wing_weight_relief_matches_uniform_down_load(self):
+        base_inputs = {
+            "b": 200.0,
+            "num_points": 401,
+            "lift_distribution_type": "uniform",
+            "ng_lift": 1000.0,
+            "Wing_Weight": 200.0,
+            "config": "cantilever",
+            "num_spars": 1,
+            "front_spar_load_share": 1.0,
+            "secondary_bending": False,
+            "jury_strut": False,
+        }
+        base = analyzer_with(**base_inputs, distribute_wing_weight=False)
+        relief = analyzer_with(**base_inputs, distribute_wing_weight=True)
+        base.analyze()
+        relief.analyze()
+
+        b_half = base.b_half
+        self.assertAlmostEqual(base.pos["V_root"] - relief.pos["V_root"], 200.0, delta=1.0)
+        self.assertAlmostEqual(
+            base.pos["M_root"] - relief.pos["M_root"],
+            200.0 * b_half / 2.0,
+            delta=200.0 * b_half / 2.0 * 0.01,
+        )
+
     def test_strut_axial_load_matches_vertical_reaction_trigonometry(self):
         analyzer = WingStressAnalyzer(
             {

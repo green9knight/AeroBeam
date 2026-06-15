@@ -97,6 +97,8 @@ formula implementations:
 - Uniform, elliptical, chord-based, and Schrenk lift distributions integrate
   to requested total lift.
 - Chord-based lift follows the chord ratio.
+- Distributed wing-weight relief matches uniform downward load effects on root
+  shear and root moment.
 - Round tube area, inertia, and EI.
 - Plain rectangular section area, neutral axis, and inertia.
 - Symmetric same-material I-beam neutral axis and inertia.

@@ -139,6 +139,74 @@ class JuryIndependentBeamTest(unittest.TestCase):
         expected = (1000.0 * 100.0 / 2.0) / 80.0
         self.assertAlmostEqual(analyzer.strut_summary["Fv_strut_attach"], expected, delta=expected * 0.01)
 
+    def test_strut_braced_uniform_deflection_matches_independent_fe_model(self):
+        inputs = dict(DEFAULT_INPUTS)
+        inputs.update(
+            {
+                "b": 200.0,
+                "num_points": 101,
+                "root_chord": 48.0,
+                "tip_chord": 48.0,
+                "lift_distribution_type": "uniform",
+                "ng_lift": 1000.0,
+                "config": "strut_braced",
+                "front_spar_load_share": 1.0,
+                "strut_fuse_bl": 0.0,
+                "strut_bl": 80.0,
+                "jury_strut": False,
+                "secondary_bending": False,
+                "distribute_wing_weight": False,
+                "dcell_enabled": False,
+                "geodetic_enabled": False,
+            }
+        )
+        analyzer = WingStressAnalyzer(inputs)
+        analyzer.analyze()
+        w = analyzer._lift_dist(inputs["ng_lift"])
+        reactions = beam_fe_support_reactions(analyzer.x, w, analyzer._EI_f, [0.0, inputs["strut_bl"]])
+        fe_z = beam_fe_displacements(analyzer.x, w, analyzer._EI_f, [0.0, inputs["strut_bl"]])
+
+        self.assertAlmostEqual(
+            analyzer.strut_summary["Fv_strut_attach"],
+            reactions[inputs["strut_bl"]],
+            delta=abs(reactions[inputs["strut_bl"]]) * 0.02,
+        )
+        self.assertAlmostEqual(analyzer.pos["z_front"][-1], fe_z[-1], delta=0.04)
+
+    def test_strut_braced_elliptical_deflection_matches_independent_fe_model(self):
+        inputs = dict(DEFAULT_INPUTS)
+        inputs.update(
+            {
+                "b": 200.0,
+                "num_points": 101,
+                "root_chord": 48.0,
+                "tip_chord": 48.0,
+                "lift_distribution_type": "elliptical",
+                "ng_lift": 1000.0,
+                "config": "strut_braced",
+                "front_spar_load_share": 1.0,
+                "strut_fuse_bl": 0.0,
+                "strut_bl": 80.0,
+                "jury_strut": False,
+                "secondary_bending": False,
+                "distribute_wing_weight": False,
+                "dcell_enabled": False,
+                "geodetic_enabled": False,
+            }
+        )
+        analyzer = WingStressAnalyzer(inputs)
+        analyzer.analyze()
+        w = analyzer._lift_dist(inputs["ng_lift"])
+        reactions = beam_fe_support_reactions(analyzer.x, w, analyzer._EI_f, [0.0, inputs["strut_bl"]])
+        fe_z = beam_fe_displacements(analyzer.x, w, analyzer._EI_f, [0.0, inputs["strut_bl"]])
+
+        self.assertAlmostEqual(
+            analyzer.strut_summary["Fv_strut_attach"],
+            reactions[inputs["strut_bl"]],
+            delta=abs(reactions[inputs["strut_bl"]]) * 0.03,
+        )
+        self.assertAlmostEqual(analyzer.pos["z_front"][-1], fe_z[-1], delta=0.04)
+
     def test_jury_reactions_match_independent_beam_model_for_uniform_case(self):
         inputs = dict(DEFAULT_INPUTS)
         inputs.update(

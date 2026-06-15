@@ -117,6 +117,8 @@ Current coverage:
 - dynamic pressure `q = 1/2 rho V^2`;
 - lift distributions integrate to requested total lift;
 - chord-based lift follows chord ratio;
+- distributed wing-weight relief reduces root shear and root moment by the
+  expected uniform-load amounts;
 - strut axial load trigonometry;
 - main strut single-support static reaction;
 - load-bearing jury support reactions for one independent Euler-Bernoulli beam
