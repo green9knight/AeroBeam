@@ -113,7 +113,11 @@ const inputSections = [
       {
         title: "Structure & Skin",
         fields: [
-          ["wing_structure_type", "Wing structure type", "select", ["fabric_tube", "fabric_buildup", "aluminum_skin"]],
+          ["wing_structure_type", "Wing structure type", "select", [
+            { value: "fabric_tube", label: "Fabric / Tube ladder" },
+            { value: "fabric_buildup", label: "Fabric / Built-up + D-cell + optional geodetic" },
+            { value: "aluminum_skin", label: "Aluminum stressed skin" },
+          ]],
           ["skin_top_mat", "Top skin material", "select", "materials"],
           ["skin_top_thick", "Top skin thickness (in)", "number", "0.001"],
           ["skin_bot_mat", "Bottom skin material", "select", "materials"],
@@ -250,6 +254,32 @@ function isRelevantSparKey(key) {
   return relevantSparKeys(prefix, sparType).has(key);
 }
 
+function isRelevantStructureKey(key) {
+  const structure = state.inputs.wing_structure_type || state.defaults.wing_structure_type || "fabric_tube";
+  const geodeticEnabled = Boolean(state.inputs.geodetic_enabled);
+  const geodeticDetails = new Set([
+    "geodetic_mat",
+    "geodetic_w",
+    "geodetic_t",
+    "geodetic_strips_per_bay",
+    "geodetic_angle",
+  ]);
+  const skinDetails = new Set([
+    "skin_top_mat",
+    "skin_top_thick",
+    "skin_bot_mat",
+    "skin_bot_thick",
+  ]);
+
+  if (geodeticDetails.has(key)) {
+    return structure === "fabric_buildup" && geodeticEnabled;
+  }
+  if (skinDetails.has(key)) {
+    return structure === "aluminum_skin";
+  }
+  return true;
+}
+
 function setStatus(message, kind = "") {
   const el = document.getElementById("status");
   el.textContent = message;
@@ -349,7 +379,7 @@ function ensureSchemaDefaults() {
     for (const group of section.groups) {
       for (const field of group.fields) {
         const [key, , type] = field;
-        if (isRelevantSparKey(key) && state.inputs[key] === undefined) {
+        if (isRelevantSparKey(key) && isRelevantStructureKey(key) && state.inputs[key] === undefined) {
           state.inputs[key] = fieldDefault(key, type);
         }
       }
@@ -365,6 +395,14 @@ function optionsFor(choice) {
   return [];
 }
 
+function optionValue(option) {
+  return typeof option === "object" ? option.value : option;
+}
+
+function optionLabel(option) {
+  return typeof option === "object" ? option.label : option;
+}
+
 function createField(field) {
   const [key, label, type, meta] = field;
   const wrapper = document.createElement("label");
@@ -376,10 +414,10 @@ function createField(field) {
   let input;
   if (type === "select") {
     input = document.createElement("select");
-    for (const value of optionsFor(meta)) {
+    for (const optionDef of optionsFor(meta)) {
       const option = document.createElement("option");
-      option.value = value;
-      option.textContent = value;
+      option.value = optionValue(optionDef);
+      option.textContent = optionLabel(optionDef);
       input.appendChild(option);
     }
   } else {
@@ -434,6 +472,35 @@ function updateSparFieldVisibility(prefix, { prune = false } = {}) {
 function updateAllSparFieldVisibility(options = {}) {
   updateSparFieldVisibility("front_spar", options);
   updateSparFieldVisibility("rear_spar", options);
+  updateStructureFieldVisibility(options);
+}
+
+function updateStructureFieldVisibility({ prune = false } = {}) {
+  const managed = [
+    "geodetic_mat",
+    "geodetic_w",
+    "geodetic_t",
+    "geodetic_strips_per_bay",
+    "geodetic_angle",
+    "skin_top_mat",
+    "skin_top_thick",
+    "skin_bot_mat",
+    "skin_bot_thick",
+  ];
+
+  for (const key of managed) {
+    const wrapper = document.querySelector(`label[data-key="${key}"]`);
+    const input = document.querySelector(`[data-key="${key}"]`);
+    const visible = isRelevantStructureKey(key);
+    if (wrapper) wrapper.classList.toggle("hidden-field", !visible);
+    if (input) input.disabled = !visible;
+    if (!visible && prune) delete state.inputs[key];
+    if (visible && state.inputs[key] === undefined) {
+      const field = inputSections.flatMap((section) => section.groups).flatMap((group) => group.fields).find((item) => item[0] === key);
+      state.inputs[key] = fieldDefault(key, field?.[2] || "text");
+      if (input) input.value = state.inputs[key] ?? "";
+    }
+  }
 }
 
 function renderInputTabs() {
