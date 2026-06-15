@@ -13,8 +13,8 @@ must be benchmarked before the result should be trusted for design decisions.
 
 AeroBeam is not approved for airworthiness decisions. It is a preliminary
 design and education tool until every critical load path below has been
-benchmarked against hand calculations, the original spreadsheet, and at least
-one independent structural method.
+benchmarked against hand calculations, aeronautical engineering references, and
+at least one independent structural method.
 
 ## Confidence categories
 
@@ -32,10 +32,10 @@ one independent structural method.
 | Area | Code location | Current method | Category | Audit finding |
 | --- | --- | --- | --- | --- |
 | Atmosphere / dynamic pressure | `isa_density`, `dynamic_pressure_psi` | ISA density approximation and `q = 1/2 rho V^2` | A | Suitable for preliminary work. Verify units in regression tests. |
-| Lift distribution | `_lift_dist` | uniform, elliptical, chord-based, Schrenk average | A/B | Schrenk and elliptical are established preliminary methods. Needs benchmark against spreadsheet for every distribution. |
+| Lift distribution | `_lift_dist` | uniform, elliptical, chord-based, Schrenk average | A/B | Schrenk and elliptical are established preliminary methods. Needs hand/numerical benchmark for every distribution. |
 | Shear and moment integration | `_shear_moment` | numerical tip-to-root integration of distributed load | A | Direct beam shear/moment integration. Needs sign convention documentation and golden cases. |
 | Cantilever deflection | `_deflect_cantilever` | integrate curvature `M/EI` from root | A/B | Standard Euler-Bernoulli beam integration. Assumes small deflection and no shear deflection. |
-| Strut-braced deflection | `_deflect_strut` | root slope correction to enforce zero deflection at strut station | B | Reasonable for an ideal vertical support point. Needs spreadsheet benchmark and clarity that strut axial flexibility is ignored. |
+| Strut-braced deflection | `_deflect_strut` | root slope correction to enforce zero deflection at strut station | B | Reasonable for an ideal vertical support point. Needs expanded independent beam benchmarks and clarity that strut axial flexibility is ignored. |
 | Main strut reaction | `_support_reactions`, no jury case | root moment relief `R = M_root / strut_bl` | A/B | Standard statics for a single vertical support. Assumes vertical component only and ideal support. |
 | Jury strut as load-bearing support | `_support_reactions`, jury case | solves main/jury reactions using root moment equilibrium plus beam compatibility | C/D | Recently added based on design intuition. It is plausible but not yet benchmarked. Needs derivation, free-body diagram, and comparison to frame/beam model before production. |
 | Strut axial load | `_strut_forces` | vertical reaction resolved by strut angle | A/B | Standard trigonometry. Assumes all vertical reaction goes through one equivalent strut member. |
@@ -71,7 +71,7 @@ than the model supports:
 2. **Load-bearing jury strut reactions**
    - The compatibility solve is plausible but new.
    - Needs a clean free-body diagram, sign convention review, and comparison to
-     the original spreadsheet or a hand frame model.
+     hand frame / finite-element beam models.
 
 3. **Geodetic / drag-truss strip demand**
    - ANC-18 is now the governing reference for wood two-spar/drag-truss framing.
@@ -116,7 +116,8 @@ Create saved `.aerobeam` files and expected numerical outputs for each:
 
 1. Uniform cantilever beam, constant EI, closed-form shear/moment/deflection.
 2. Elliptical cantilever lift case, constant EI, independent numerical check.
-3. Strut-braced beam with one ideal support, benchmark against spreadsheet.
+3. Strut-braced beam with one ideal support, benchmark against independent
+   beam/frame calculations.
 4. Strut-braced beam with load-bearing jury support, benchmark against a
    statically indeterminate beam calculation.
 5. Round tube spar stress and EI, hand-calculated.

@@ -25,9 +25,6 @@ The program should use and cite recognized sources such as:
   stability.
 - **Roark / Young** - beam formulas and structural idealizations.
 - **Bredt-Batho thin-wall torsion theory** - closed-cell torsion and shear flow.
-- **Original AeroBeam spreadsheet** - project-specific benchmark source; useful
-  only after its assumptions are documented.
-
 ## Required output classification
 
 Every numerical result exposed to users should be tagged internally and in the
@@ -44,12 +41,12 @@ report as one of:
 | --- | --- | --- | --- | --- |
 | Limit/ultimate load entry | FAR 23.303 load-factor concept | User guide examples for normal/utility/aerobatic categories | PRELIMINARY | Explicitly define whether entered `n` is limit or ultimate. |
 | Dynamic pressure | ISA + `q = 1/2 rho V^2` | Atmosphere unit test | STANDARD after test | Add unit test at sea level and altitude. |
-| Schrenk lift distribution | Schrenk approximation | Spreadsheet + hand numerical comparison | PRELIMINARY | Benchmark root shear/moment for known planforms. |
+| Schrenk lift distribution | Schrenk approximation | hand numerical comparison / aeronautical structures text example | PRELIMINARY | Benchmark root shear/moment for known planforms. |
 | Elliptical lift distribution | Classical lifting assumption | Closed-form root moment for cantilever | PRELIMINARY | Add benchmark test. |
 | Uniform lift distribution | Elementary beam loading | Closed-form cantilever shear/moment/deflection | STANDARD after benchmark | Add golden benchmark. |
 | Shear/moment integration | Beam equilibrium | Closed-form cases | STANDARD after benchmark | Validate sign and integration accuracy. |
 | Cantilever deflection | Euler-Bernoulli beam theory | Closed-form `wL^4/(8EI)` style cases | STANDARD after benchmark | Add constant-EI benchmark. |
-| Strut-braced support deflection | Indeterminate beam with point support | Original spreadsheet + independent beam model | PRELIMINARY | Benchmark support reactions and deflection. |
+| Strut-braced support deflection | Indeterminate beam with point support | independent Euler-Bernoulli beam model | PRELIMINARY | Expand support reaction/deflection benchmarks. |
 | Load-bearing jury support | Indeterminate beam with two supports | Independent beam/frame model | PRELIMINARY after limited FE benchmark | Add more load/support/variable-EI cases before production. |
 | Main strut axial load | Statics/trigonometry | Hand free-body diagram | PRELIMINARY | Add benchmark values for `Fv`, `Fa`, `Ps`. |
 | Strut Euler buckling | Euler column, assumed `K=1` | Timoshenko/Gere, Bruhn column examples | PRELIMINARY | Add K-factor input or clearly state pin-ended. |

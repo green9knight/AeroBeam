@@ -45,8 +45,9 @@ Each expected file should contain only defensible values and tolerances:
 
 1. Uniform cantilever, constant EI, closed form.
 2. Elliptical lift, constant EI, independent numerical integration.
-3. Schrenk lift, compare to original spreadsheet.
-4. Strut-braced single support, compare to original spreadsheet.
+3. Schrenk lift, compare to independent numerical integration / accepted
+   aeronautical structures examples.
+4. Strut-braced single support, compare to independent beam/frame calculations.
 5. Strut-braced plus jury support, compare to an independent beam model.
 
 ### Sections
