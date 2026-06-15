@@ -1,7 +1,16 @@
 import math
 import unittest
 
-from spar_sections import AluminumCSpar, BoxSpar, IBeam, MATERIAL_DB, PlainRect, RoundTube
+from spar_sections import (
+    ANGLE_DESCRIPTIONS,
+    AluminumCSpar,
+    BoxSpar,
+    IBeam,
+    MATERIAL_DB,
+    PlainRect,
+    RoundTube,
+    get_angle,
+)
 
 
 def transformed_props(elements, reference_material):
@@ -149,6 +158,16 @@ class SectionStandardsTest(unittest.TestCase):
         self.assertAlmostEqual(props.I_tr, expected["I_tr"])
         self.assertAlmostEqual(props.y_top, expected["y_top"])
         self.assertAlmostEqual(props.y_bot, expected["y_bot"])
+
+    def test_large_aluminum_angle_library_includes_2_5_by_2_5_by_3_8(self):
+        description = "2-1/2 x 2-1/2 x 3/8"
+        self.assertIn(description, ANGLE_DESCRIPTIONS)
+        angle = get_angle(description)
+        self.assertIsNotNone(angle)
+        expected_area = (2.5 + 2.5 - 0.375) * 0.375
+        self.assertAlmostEqual(angle.area, expected_area)
+        self.assertAlmostEqual(angle.b_equiv, 2.5)
+        self.assertAlmostEqual(angle.t_equiv, expected_area / 2.5)
 
 
 if __name__ == "__main__":

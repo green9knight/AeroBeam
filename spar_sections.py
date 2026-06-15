@@ -566,6 +566,12 @@ ALUMINUM_ANGLES: List[AluminumAngle] = [
     AluminumAngle(1.500, 1.500, 0.1875, '1-1/2 x 1-1/2 x 3/16'),
     AluminumAngle(2.000, 2.000, 0.1250, '2 x 2 x 1/8'),
     AluminumAngle(2.000, 2.000, 0.1875, '2 x 2 x 3/16'),
+    AluminumAngle(2.000, 2.000, 0.2500, '2 x 2 x 1/4'),
+    AluminumAngle(2.000, 2.000, 0.3750, '2 x 2 x 3/8'),
+    AluminumAngle(2.500, 2.500, 0.1250, '2-1/2 x 2-1/2 x 1/8'),
+    AluminumAngle(2.500, 2.500, 0.1875, '2-1/2 x 2-1/2 x 3/16'),
+    AluminumAngle(2.500, 2.500, 0.2500, '2-1/2 x 2-1/2 x 1/4'),
+    AluminumAngle(2.500, 2.500, 0.3750, '2-1/2 x 2-1/2 x 3/8'),
     # Unequal leg (cap x web)
     AluminumAngle(1.000, 0.750, 0.0938, '1 x 3/4 x 3/32'),
     AluminumAngle(1.250, 1.000, 0.0938, '1-1/4 x 1 x 3/32'),
