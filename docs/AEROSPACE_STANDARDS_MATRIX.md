@@ -47,7 +47,7 @@ report as one of:
 | Shear/moment integration | Beam equilibrium | Closed-form cases | STANDARD after benchmark | Validate sign and integration accuracy. |
 | Cantilever deflection | Euler-Bernoulli beam theory | Closed-form `wL^4/(8EI)` style cases | STANDARD after benchmark | Add constant-EI benchmark. |
 | Strut-braced support deflection | Indeterminate beam with point support | Original spreadsheet + independent beam model | PRELIMINARY | Benchmark support reactions and deflection. |
-| Load-bearing jury support | Indeterminate beam with two supports | Independent beam/frame model | EXPERIMENTAL | Must be validated or labelled experimental in UI/report. |
+| Load-bearing jury support | Indeterminate beam with two supports | Independent beam/frame model | PRELIMINARY after limited FE benchmark | Add more load/support/variable-EI cases before production. |
 | Main strut axial load | Statics/trigonometry | Hand free-body diagram | PRELIMINARY | Add benchmark values for `Fv`, `Fa`, `Ps`. |
 | Strut Euler buckling | Euler column, assumed `K=1` | Timoshenko/Gere, Bruhn column examples | PRELIMINARY | Add K-factor input or clearly state pin-ended. |
 | Jury-braced Euler length | Column braced at intermediate point | Euler column segment length | PRELIMINARY | Benchmark longest unsupported segment logic. |
@@ -90,6 +90,8 @@ complete validation, but they provide regression protection for standard
 formula implementations:
 
 - Uniform cantilever shear, root moment, and tip deflection.
+- Uniform cantilever tip deflection cross-checked against an independent
+  Euler-Bernoulli finite-element solve.
 - Elliptical cantilever root shear and root moment.
 - Dynamic pressure `q = 1/2 rho V^2`.
 - Uniform, elliptical, chord-based, and Schrenk lift distributions integrate
@@ -109,12 +111,15 @@ formula implementations:
 - Single-cell D-cell Bredt-Batho `GJ`.
 - Two-cell Bredt-Batho equilibrium and equal-twist compatibility residuals.
 - Strut axial load trigonometry.
+- Main strut single-support statics.
+- Load-bearing jury reactions for one uniform-load, constant-grid independent
+  Euler-Bernoulli beam FE case.
 - P-delta scalar amplification formula.
 - Divergence screening formula arithmetic.
 
 The following remain explicitly unvalidated/high risk:
 
-- load-bearing jury support reactions beyond the basic regression checks;
+- load-bearing jury support reactions beyond the initial uniform-load FE benchmark;
 - rear spar coupling factor and rear spar load path in cantilever/single-strut
   configurations;
 - rib/geodetic/skin torsion sharing;

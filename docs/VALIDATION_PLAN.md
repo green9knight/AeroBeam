@@ -98,6 +98,8 @@ Current coverage:
 
 - root shear, root moment, front spar root moment, and tip deflection for a
   uniform cantilever beam;
+- independent Euler-Bernoulli finite-element cross-check for uniform
+  cantilever tip deflection;
 - root shear and root moment for an elliptical cantilever beam using
   `M = 4 L b / (3 pi)`;
 - round tube area/I/EI;
@@ -116,6 +118,9 @@ Current coverage:
 - lift distributions integrate to requested total lift;
 - chord-based lift follows chord ratio;
 - strut axial load trigonometry;
+- main strut single-support static reaction;
+- load-bearing jury support reactions for one independent Euler-Bernoulli beam
+  finite-element benchmark;
 - P-delta scalar amplification formula;
 - divergence screening formula arithmetic.
 
