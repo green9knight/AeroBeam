@@ -1,33 +1,202 @@
 const state = {
   defaults: {},
   inputs: {},
+  options: {},
 };
 
-const quickKeys = [
-  "b",
-  "root_chord",
-  "tip_chord",
-  "taper_start_bl",
-  "front_spar_percent",
-  "rear_spar_percent",
-  "front_spar_load_share",
-  "rib_spacing",
-  "config",
-  "wing_structure_type",
-  "front_spar_type",
-  "rear_spar_type",
-  "front_spar_mat",
-  "rear_spar_mat",
-  "n",
-  "n_neg",
-  "ng_lift",
-  "Vd_mph",
-  "altitude_ft",
-  "Cm_ac",
-  "dcell_enabled",
-  "geodetic_enabled",
-  "distribute_wing_weight",
+const inputSections = [
+  {
+    id: "geometry",
+    title: "Wing Geometry",
+    groups: [
+      {
+        title: "Planform",
+        fields: [
+          ["b", "Span (in)", "number", "0.1"],
+          ["r", "Root attach BL (in)", "number", "0.1"],
+          ["root_chord", "Root chord (in)", "number", "0.1"],
+          ["tip_chord", "Tip chord (in)", "number", "0.1"],
+          ["taper_start_bl", "Taper start BL (in)", "number", "0.1"],
+          ["rib_spacing", "Rib spacing (in)", "number", "0.1"],
+          ["num_points", "Analysis stations", "number", "1"],
+          ["lift_distribution_type", "Lift distribution", "select", ["schrenk", "elliptical", "chord_based", "uniform"]],
+        ],
+      },
+      {
+        title: "Spar Positions",
+        fields: [
+          ["front_spar_percent", "Front spar x/c", "number", "0.01"],
+          ["rear_spar_percent", "Rear spar x/c", "number", "0.01"],
+          ["front_spar_load_share", "Front spar load share", "number", "0.01"],
+          ["num_spars", "Number of spars", "number", "1"],
+        ],
+      },
+    ],
+  },
+  {
+    id: "airfoil",
+    title: "Flight & Airfoil",
+    groups: [
+      {
+        title: "Airfoil",
+        fields: [
+          ["airfoil", "Airfoil name", "text"],
+          ["airfoil_t_c", "Thickness t/c", "number", "0.001"],
+          ["Cm_ac", "Cm aerodynamic moment", "number", "0.001"],
+          ["Cm_flap", "Flap delta Cm", "number", "0.001"],
+          ["Cl_alpha", "Cl_alpha (/rad)", "number", "0.01"],
+          ["x_ac_c", "Aerodynamic center x/c", "number", "0.001"],
+        ],
+      },
+      {
+        title: "Flight Conditions",
+        fields: [
+          ["Vd_mph", "Dive speed Vd (mph)", "number", "1"],
+          ["Vc_mph", "Cruise speed Vc (mph)", "number", "1"],
+          ["Va_mph", "Maneuver speed Va (mph)", "number", "1"],
+          ["altitude_ft", "Altitude (ft)", "number", "100"],
+          ["curvature_sign", "Curvature sign", "number", "1"],
+        ],
+      },
+    ],
+  },
+  {
+    id: "loads",
+    title: "Loads & Config",
+    groups: [
+      {
+        title: "Loads",
+        fields: [
+          ["Weight", "Gross weight (lb)", "number", "1"],
+          ["Wing_Weight", "Wing weight (lb)", "number", "1"],
+          ["Tail_Down_1g", "Tail download at 1g (lb)", "number", "1"],
+          ["n", "Positive load factor (+g)", "number", "0.1"],
+          ["n_neg", "Negative load factor (-g)", "number", "0.1"],
+          ["ng_lift", "Design semi-span lift (lb)", "number", "1"],
+          ["distribute_wing_weight", "Distribute wing weight relief", "checkbox"],
+        ],
+      },
+      {
+        title: "Configuration, Strut, Jury",
+        fields: [
+          ["config", "Configuration", "select", ["strut_braced", "cantilever", "single_strut"]],
+          ["strut_fuse_bl", "Strut BL at fuselage (in)", "number", "0.1"],
+          ["strut_bl", "Strut BL at spar (in)", "number", "0.1"],
+          ["strut_vert", "Strut rise (in)", "number", "0.1"],
+          ["strut_mat", "Strut material", "select", "strutMaterials"],
+          ["strut_tube_od", "Strut OD (in)", "number", "0.001"],
+          ["strut_tube_wall", "Strut wall (in)", "number", "0.001"],
+          ["secondary_bending", "P-delta amplification", "checkbox"],
+          ["jury_strut", "Enable jury strut", "checkbox"],
+          ["jury_spar_bl", "Jury spar BL (in)", "number", "0.1"],
+        ],
+      },
+    ],
+  },
+  {
+    id: "front",
+    title: "Front Spar",
+    groups: [
+      { title: "Type & Tube", fields: sparFields("front_spar") },
+      { title: "D-cell", fields: [["dcell_enabled", "Enable D-cell", "checkbox"], ["dcell_skin_mat", "D-cell material", "select", "materials"], ["dcell_skin_thick", "D-cell skin thickness (in)", "number", "0.001"]] },
+    ],
+  },
+  {
+    id: "rear",
+    title: "Rear Spar",
+    groups: [{ title: "Type & Geometry", fields: sparFields("rear_spar") }],
+  },
+  {
+    id: "structure",
+    title: "Wing Structure",
+    groups: [
+      {
+        title: "Structure & Skin",
+        fields: [
+          ["wing_structure_type", "Wing structure type", "select", ["fabric_tube", "fabric_buildup", "aluminum_skin"]],
+          ["skin_top_mat", "Top skin material", "select", "materials"],
+          ["skin_top_thick", "Top skin thickness (in)", "number", "0.001"],
+          ["skin_bot_mat", "Bottom skin material", "select", "materials"],
+          ["skin_bot_thick", "Bottom skin thickness (in)", "number", "0.001"],
+          ["wood_knockdown", "Wood knockdown factor", "number", "0.01"],
+        ],
+      },
+      {
+        title: "Geodetic Box",
+        fields: [
+          ["geodetic_enabled", "Enable geodetic", "checkbox"],
+          ["geodetic_mat", "Geodetic strip material", "select", "materials"],
+          ["geodetic_w", "Strip width (in)", "number", "0.001"],
+          ["geodetic_t", "Strip thickness (in)", "number", "0.001"],
+          ["geodetic_strips_per_bay", "Strips per rib bay", "number", "1"],
+          ["geodetic_angle", "Strip angle (deg)", "number", "1"],
+        ],
+      },
+      {
+        title: "Rib Structure",
+        fields: [
+          ["rib_mat", "Rib material", "select", "materials"],
+          ["rib_h_web", "Rib web height (in)", "number", "0.001"],
+          ["rib_t_web", "Rib web thickness (in)", "number", "0.001"],
+          ["rib_b_cap", "Rib cap width (in)", "number", "0.001"],
+          ["rib_t_cap", "Rib cap thickness (in)", "number", "0.001"],
+        ],
+      },
+    ],
+  },
+  {
+    id: "buckling",
+    title: "Buckling",
+    groups: [
+      {
+        title: "Stiffeners & Nose Ribs",
+        fields: [
+          ["stiffener_spacing", "Web stiffener spacing (in, 0=rib)", "number", "0.1"],
+          ["nose_rib_spacing", "Nose rib spacing (in, 0=rib)", "number", "0.1"],
+        ],
+      },
+      {
+        title: "Web Doublers",
+        fields: [
+          ["front_spar_doubler_t", "Front doubler thickness (in)", "number", "0.001"],
+          ["front_spar_doubler_extent", "Front doubler extent (rib bays)", "number", "1"],
+          ["rear_spar_doubler_t", "Rear doubler thickness (in)", "number", "0.001"],
+          ["rear_spar_doubler_extent", "Rear doubler extent (rib bays)", "number", "1"],
+        ],
+      },
+    ],
+  },
 ];
+
+function sparFields(prefix) {
+  return [
+    [`${prefix}_type`, "Spar type", "select", "sparTypes"],
+    [`${prefix}_mat`, "Tube/material", "select", "materials"],
+    [`${prefix}_od`, "Tube OD (in)", "number", "0.001"],
+    [`${prefix}_wall`, "Tube wall (in)", "number", "0.001"],
+    [`${prefix}_width`, "Rect width (in)", "number", "0.001"],
+    [`${prefix}_height`, "Rect height (in)", "number", "0.001"],
+    [`${prefix}_cap_mat`, "Cap material", "select", "materials"],
+    [`${prefix}_web_mat`, "Web material", "select", "materials"],
+    [`${prefix}_b_top`, "Top cap width (in)", "number", "0.001"],
+    [`${prefix}_t_top`, "Top cap height/thickness (in)", "number", "0.001"],
+    [`${prefix}_b_bot`, "Bottom cap width (in)", "number", "0.001"],
+    [`${prefix}_t_bot`, "Bottom cap height/thickness (in)", "number", "0.001"],
+    [`${prefix}_h_web`, "Shear web clear height (in)", "number", "0.001"],
+    [`${prefix}_t_web`, "Shear web thickness (in)", "number", "0.001"],
+    [`${prefix}_web_spacing`, "Double web spacing (in)", "number", "0.001"],
+    [`${prefix}_b_outer`, "Box outer width (in)", "number", "0.001"],
+    [`${prefix}_h_outer`, "Box outer height (in)", "number", "0.001"],
+    [`${prefix}_t_cap`, "Box cap thickness (in)", "number", "0.001"],
+    [`${prefix}_cap_side`, "C-spar cap side", "select", ["top", "bottom"]],
+  ];
+}
+
+function allInputKeys() {
+  return inputSections.flatMap((section) =>
+    section.groups.flatMap((group) => group.fields.map((field) => field[0]))
+  );
+}
 
 function setStatus(message, kind = "") {
   const el = document.getElementById("status");
@@ -51,20 +220,8 @@ function rememberBetaPassword() {
   if (password) sessionStorage.setItem("aerobeamBetaPassword", password);
 }
 
-function fillSelect(selector, values, current) {
-  const el = document.querySelector(selector);
-  el.innerHTML = "";
-  for (const value of values) {
-    const option = document.createElement("option");
-    option.value = value;
-    option.textContent = value;
-    el.appendChild(option);
-  }
-  if (current !== undefined) el.value = current;
-}
-
 function syncFormFromInputs() {
-  for (const key of quickKeys) {
+  for (const key of allInputKeys()) {
     const el = document.querySelector(`[data-key="${key}"]`);
     if (!el) continue;
     if (el.type === "checkbox") {
@@ -77,7 +234,7 @@ function syncFormFromInputs() {
 }
 
 function syncInputsFromForm() {
-  for (const key of quickKeys) {
+  for (const key of allInputKeys()) {
     const el = document.querySelector(`[data-key="${key}"]`);
     if (!el) continue;
     if (el.type === "checkbox") {
@@ -90,6 +247,135 @@ function syncInputsFromForm() {
     }
   }
   document.getElementById("jsonEditor").value = JSON.stringify(state.inputs, null, 2);
+}
+
+function fieldDefault(key, type) {
+  if (state.defaults[key] !== undefined) return state.defaults[key];
+  if (type === "checkbox") return false;
+  if (key.endsWith("_cap_mat")) return "Sitka Spruce";
+  if (key.endsWith("_web_mat")) return "Birch Plywood";
+  if (key.endsWith("_mat")) return "6061-T6";
+  const defaults = {
+    front_spar_width: 2.0,
+    rear_spar_width: 2.0,
+    front_spar_height: 4.0,
+    rear_spar_height: 4.0,
+    front_spar_b_top: 1.5,
+    rear_spar_b_top: 1.5,
+    front_spar_t_top: 0.75,
+    rear_spar_t_top: 0.75,
+    front_spar_b_bot: 1.5,
+    rear_spar_b_bot: 1.5,
+    front_spar_t_bot: 0.75,
+    rear_spar_t_bot: 0.75,
+    front_spar_h_web: 4.5,
+    rear_spar_h_web: 4.5,
+    front_spar_t_web: 0.125,
+    rear_spar_t_web: 0.125,
+    front_spar_web_spacing: 1.0,
+    rear_spar_web_spacing: 1.0,
+    front_spar_b_outer: 2.0,
+    rear_spar_b_outer: 2.0,
+    front_spar_h_outer: 5.0,
+    rear_spar_h_outer: 5.0,
+    front_spar_t_cap: 0.75,
+    rear_spar_t_cap: 0.75,
+    front_spar_cap_side: "top",
+    rear_spar_cap_side: "top",
+  };
+  return defaults[key] ?? "";
+}
+
+function ensureSchemaDefaults() {
+  for (const section of inputSections) {
+    for (const group of section.groups) {
+      for (const field of group.fields) {
+        const [key, , type] = field;
+        if (state.inputs[key] === undefined) {
+          state.inputs[key] = fieldDefault(key, type);
+        }
+      }
+    }
+  }
+}
+
+function optionsFor(choice) {
+  if (Array.isArray(choice)) return choice;
+  if (choice === "materials") return state.options.materials || [];
+  if (choice === "strutMaterials") return state.options.strutMaterials || [];
+  if (choice === "sparTypes") return state.options.sparTypes || [];
+  return [];
+}
+
+function createField(field) {
+  const [key, label, type, meta] = field;
+  const wrapper = document.createElement("label");
+  wrapper.textContent = label;
+
+  let input;
+  if (type === "select") {
+    input = document.createElement("select");
+    for (const value of optionsFor(meta)) {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = value;
+      input.appendChild(option);
+    }
+  } else {
+    input = document.createElement("input");
+    input.type = type || "text";
+    if (meta && type === "number") input.step = meta;
+  }
+
+  input.dataset.key = key;
+  if (type === "checkbox") {
+    wrapper.classList.add("check");
+    input.checked = Boolean(state.inputs[key]);
+    wrapper.textContent = "";
+    wrapper.appendChild(input);
+    wrapper.append(` ${label}`);
+  } else {
+    input.value = state.inputs[key] ?? "";
+    wrapper.appendChild(input);
+  }
+  input.addEventListener("change", syncInputsFromForm);
+  return wrapper;
+}
+
+function renderInputTabs() {
+  const tabs = document.getElementById("inputTabs");
+  const panels = document.getElementById("inputTabPanels");
+  tabs.innerHTML = "";
+  panels.innerHTML = "";
+
+  inputSections.forEach((section, index) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = `tab-button ${index === 0 ? "active" : ""}`;
+    button.textContent = section.title;
+    button.addEventListener("click", () => {
+      document.querySelectorAll(".tab-button").forEach((el) => el.classList.remove("active"));
+      document.querySelectorAll(".input-tab-panel").forEach((el) => el.classList.remove("active"));
+      button.classList.add("active");
+      document.getElementById(`tab-${section.id}`).classList.add("active");
+    });
+    tabs.appendChild(button);
+
+    const panel = document.createElement("div");
+    panel.id = `tab-${section.id}`;
+    panel.className = `input-tab-panel ${index === 0 ? "active" : ""}`;
+    for (const group of section.groups) {
+      const title = document.createElement("div");
+      title.className = "input-section-title";
+      title.textContent = group.title;
+      panel.appendChild(title);
+      const grid = document.createElement("section");
+      grid.className = "grid";
+      for (const field of group.fields) grid.appendChild(createField(field));
+      panel.appendChild(grid);
+    }
+    panels.appendChild(panel);
+  });
 }
 
 function normalizeLoadedInputs(payload) {
@@ -105,6 +391,7 @@ function normalizeLoadedInputs(payload) {
 function loadJsonEditor() {
   const text = document.getElementById("jsonEditor").value;
   state.inputs = JSON.parse(text);
+  ensureSchemaDefaults();
   syncFormFromInputs();
 }
 
@@ -454,6 +741,7 @@ async function uploadInputs(event) {
     const text = await file.text();
     const loaded = normalizeLoadedInputs(JSON.parse(text));
     state.inputs = { ...state.defaults, ...loaded };
+    ensureSchemaDefaults();
     syncFormFromInputs();
     setStatus(`Loaded ${file.name}`, "ok");
     await runAnalysis();
@@ -470,22 +758,18 @@ async function init() {
   const payload = await response.json();
   state.defaults = payload.defaults;
   state.inputs = JSON.parse(JSON.stringify(payload.defaults));
+  state.options = {
+    sparTypes: payload.sparTypes || [],
+    materials: payload.materials || [],
+    strutMaterials: payload.strutMaterials || [],
+  };
+  ensureSchemaDefaults();
   const savedPassword = sessionStorage.getItem("aerobeamBetaPassword") || "";
   if (savedPassword) document.getElementById("betaPassword").value = savedPassword;
 
-  fillSelect('[data-key="config"]', ["strut_braced", "cantilever", "single_strut"], state.inputs.config);
-  fillSelect(
-    '[data-key="wing_structure_type"]',
-    ["fabric_tube", "fabric_buildup", "aluminum_skin"],
-    state.inputs.wing_structure_type
-  );
-  fillSelect('[data-key="front_spar_type"]', payload.sparTypes, state.inputs.front_spar_type);
-  fillSelect('[data-key="rear_spar_type"]', payload.sparTypes, state.inputs.rear_spar_type);
-  fillSelect('[data-key="front_spar_mat"]', payload.materials, state.inputs.front_spar_mat);
-  fillSelect('[data-key="rear_spar_mat"]', payload.materials, state.inputs.rear_spar_mat);
-
+  renderInputTabs();
   syncFormFromInputs();
-  for (const key of quickKeys) {
+  for (const key of allInputKeys()) {
     const el = document.querySelector(`[data-key="${key}"]`);
     if (el) el.addEventListener("change", syncInputsFromForm);
   }

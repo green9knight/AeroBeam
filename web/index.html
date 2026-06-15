@@ -17,48 +17,14 @@
 
     <main class="layout">
       <aside class="panel inputs">
-        <div class="panel-title">Quick Setup</div>
+        <div class="panel-title">AeroBeam Inputs</div>
 
         <section class="beta-row">
           <label>Beta password<input id="betaPassword" type="password" autocomplete="current-password" /></label>
         </section>
 
-        <section class="grid">
-          <label>Span (in)<input data-key="b" type="number" step="0.1" /></label>
-          <label>Root chord (in)<input data-key="root_chord" type="number" step="0.1" /></label>
-          <label>Tip chord (in)<input data-key="tip_chord" type="number" step="0.1" /></label>
-          <label>Taper start BL (in)<input data-key="taper_start_bl" type="number" step="0.1" /></label>
-          <label>Front spar %<input data-key="front_spar_percent" type="number" step="0.01" /></label>
-          <label>Rear spar %<input data-key="rear_spar_percent" type="number" step="0.01" /></label>
-          <label>Load share<input data-key="front_spar_load_share" type="number" step="0.01" /></label>
-          <label>Rib spacing (in)<input data-key="rib_spacing" type="number" step="0.1" /></label>
-        </section>
-
-        <section class="grid">
-          <label>Configuration<select data-key="config"></select></label>
-          <label>Structure<select data-key="wing_structure_type"></select></label>
-          <label>Front spar<select data-key="front_spar_type"></select></label>
-          <label>Rear spar<select data-key="rear_spar_type"></select></label>
-          <label>Front material<select data-key="front_spar_mat"></select></label>
-          <label>Rear material<select data-key="rear_spar_mat"></select></label>
-        </section>
-
-        <section class="grid">
-          <label>Ultimate +g<input data-key="n" type="number" step="0.1" /></label>
-          <label>Negative g<input data-key="n_neg" type="number" step="0.1" /></label>
-          <label>Design lift (lb)<input data-key="ng_lift" type="number" step="1" /></label>
-          <label>Vd (mph)<input data-key="Vd_mph" type="number" step="1" /></label>
-          <label>Altitude (ft)<input data-key="altitude_ft" type="number" step="100" /></label>
-          <label>Cm<input data-key="Cm_ac" type="number" step="0.001" /></label>
-        </section>
-
-        <section>
-          <div class="row">
-            <label class="check"><input data-key="dcell_enabled" type="checkbox" /> D-cell</label>
-            <label class="check"><input data-key="geodetic_enabled" type="checkbox" /> Geodetic</label>
-            <label class="check"><input data-key="distribute_wing_weight" type="checkbox" /> Weight relief</label>
-          </div>
-        </section>
+        <nav id="inputTabs" class="input-tabs" aria-label="AeroBeam input tabs"></nav>
+        <section id="inputTabPanels" class="input-tab-panels"></section>
 
         <details>
           <summary>Advanced JSON inputs</summary>
