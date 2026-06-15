@@ -25,9 +25,11 @@ os.environ.setdefault("MPLBACKEND", "Agg")
 import numpy as np
 
 from airfoil_database import AIRFOIL_DB
+from common_tube_spars import COMMON_TUBE_SIZES
 from method_status import METHOD_STATUS
 from spar_sections import (
     MATERIAL_DB,
+    ALUMINUM_ANGLES,
     ANGLE_DESCRIPTIONS,
     STRUT_MATERIALS,
     all_mat_names,
@@ -179,7 +181,27 @@ class AeroBeamHandler(BaseHTTPRequestHandler):
                     "materials": all_mat_names(),
                     "strutMaterials": strut_mat_names(),
                     "angles": ANGLE_DESCRIPTIONS,
+                    "angleData": {
+                        angle.description: {
+                            "b_equiv": angle.b_equiv,
+                            "t_equiv": angle.t_equiv,
+                            "area": angle.area,
+                            "weight_per_foot": angle.weight_per_foot,
+                        }
+                        for angle in ALUMINUM_ANGLES
+                    },
+                    "tubeSpars": [
+                        {
+                            "description": str(tube),
+                            "od": tube.od,
+                            "wall": tube.wall,
+                            "I": tube.I,
+                            "EI": tube.EI,
+                        }
+                        for tube in COMMON_TUBE_SIZES
+                    ],
                     "airfoils": sorted(AIRFOIL_DB.keys()),
+                    "airfoilData": AIRFOIL_DB,
                     "materialData": MATERIAL_DB,
                     "strutMaterialData": STRUT_MATERIALS,
                     "methodStatus": METHOD_STATUS,

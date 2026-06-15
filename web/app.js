@@ -180,6 +180,8 @@ const inputSections = [
 function sparFields(prefix) {
   return [
     [`${prefix}_type`, "Spar type", "select", "sparTypes"],
+    [`${prefix}_tube_select`, "Tube quick-select", "select", "tubeSpars"],
+    [`${prefix}_angle_select`, "Angle quick-select", "select", "angles"],
     [`${prefix}_mat`, "Tube/material", "select", "materials"],
     [`${prefix}_od`, "Tube OD (in)", "number", "0.001"],
     [`${prefix}_wall`, "Tube wall (in)", "number", "0.001"],
@@ -216,14 +218,14 @@ function sparPrefixForKey(key) {
 function relevantSparKeys(prefix, sparType) {
   const common = new Set([`${prefix}_type`]);
   const keys = {
-    "Round Tube": [`${prefix}_mat`, `${prefix}_od`, `${prefix}_wall`],
+    "Round Tube": [`${prefix}_tube_select`, `${prefix}_mat`, `${prefix}_od`, `${prefix}_wall`],
     "Plain Rectangular": [`${prefix}_cap_mat`, `${prefix}_width`, `${prefix}_height`],
     "I-Beam": [
-      `${prefix}_cap_mat`, `${prefix}_web_mat`, `${prefix}_b_top`, `${prefix}_t_top`,
+      `${prefix}_angle_select`, `${prefix}_cap_mat`, `${prefix}_web_mat`, `${prefix}_b_top`, `${prefix}_t_top`,
       `${prefix}_b_bot`, `${prefix}_t_bot`, `${prefix}_h_web`, `${prefix}_t_web`,
     ],
     "C-Channel": [
-      `${prefix}_cap_mat`, `${prefix}_web_mat`, `${prefix}_b_top`, `${prefix}_t_top`,
+      `${prefix}_angle_select`, `${prefix}_cap_mat`, `${prefix}_web_mat`, `${prefix}_b_top`, `${prefix}_t_top`,
       `${prefix}_b_bot`, `${prefix}_t_bot`, `${prefix}_h_web`, `${prefix}_t_web`,
     ],
     "Routed (Monolithic)": [
@@ -231,7 +233,7 @@ function relevantSparKeys(prefix, sparType) {
       `${prefix}_t_bot`, `${prefix}_h_web`, `${prefix}_t_web`,
     ],
     "Double I-Beam": [
-      `${prefix}_cap_mat`, `${prefix}_web_mat`, `${prefix}_b_top`, `${prefix}_t_top`,
+      `${prefix}_angle_select`, `${prefix}_cap_mat`, `${prefix}_web_mat`, `${prefix}_b_top`, `${prefix}_t_top`,
       `${prefix}_b_bot`, `${prefix}_t_bot`, `${prefix}_h_web`, `${prefix}_t_web`,
       `${prefix}_web_spacing`,
     ],
@@ -240,11 +242,11 @@ function relevantSparKeys(prefix, sparType) {
       `${prefix}_t_web`, `${prefix}_t_cap`,
     ],
     "Aluminum I-Beam": [
-      `${prefix}_cap_mat`, `${prefix}_web_mat`, `${prefix}_b_top`, `${prefix}_t_top`,
+      `${prefix}_angle_select`, `${prefix}_cap_mat`, `${prefix}_web_mat`, `${prefix}_b_top`, `${prefix}_t_top`,
       `${prefix}_b_bot`, `${prefix}_t_bot`, `${prefix}_h_web`, `${prefix}_t_web`,
     ],
     "Aluminum C-Spar": [
-      `${prefix}_cap_mat`, `${prefix}_b_top`, `${prefix}_t_top`, `${prefix}_h_web`,
+      `${prefix}_angle_select`, `${prefix}_cap_mat`, `${prefix}_b_top`, `${prefix}_t_top`, `${prefix}_h_web`,
       `${prefix}_t_web`, `${prefix}_cap_side`,
     ],
   };
@@ -349,7 +351,7 @@ function syncFormFromInputs() {
       el.value = state.inputs[key] ?? "";
     }
   }
-  updateAllSparFieldVisibility({ prune: true });
+  updateAllSparFieldVisibility({ prune: false });
   document.getElementById("jsonEditor").value = JSON.stringify(state.inputs, null, 2);
 }
 
@@ -358,7 +360,6 @@ function syncInputsFromForm() {
     const el = document.querySelector(`[data-key="${key}"]`);
     if (!el) continue;
     if (el.disabled) {
-      delete state.inputs[key];
       continue;
     }
     if (el.type === "checkbox") {
@@ -370,7 +371,7 @@ function syncInputsFromForm() {
       state.inputs[key] = Number.isFinite(value) ? value : el.value;
     }
   }
-  updateAllSparFieldVisibility({ prune: true });
+  updateAllSparFieldVisibility({ prune: false });
   document.getElementById("jsonEditor").value = JSON.stringify(state.inputs, null, 2);
 }
 
@@ -388,6 +389,8 @@ function fieldDefault(key, type) {
   if (key.endsWith("_cap_mat")) return "Sitka Spruce";
   if (key.endsWith("_web_mat")) return "Birch Plywood";
   if (key.endsWith("_mat")) return "6061-T6";
+  if (key.endsWith("_tube_select")) return "(Manual)";
+  if (key.endsWith("_angle_select")) return "(Manual flat bar)";
   const defaults = {
     front_spar_width: 2.0,
     rear_spar_width: 2.0,
@@ -424,7 +427,7 @@ function ensureSchemaDefaults() {
     for (const group of section.groups) {
       for (const field of group.fields) {
         const [key, , type] = field;
-        if (isRelevantSparKey(key) && isRelevantStructureKey(key) && state.inputs[key] === undefined) {
+        if (isRelevantStructureKey(key) && state.inputs[key] === undefined) {
           state.inputs[key] = fieldDefault(key, type);
         }
       }
@@ -437,6 +440,8 @@ function optionsFor(choice) {
   if (choice === "materials") return state.options.materials || [];
   if (choice === "strutMaterials") return state.options.strutMaterials || [];
   if (choice === "sparTypes") return state.options.sparTypes || [];
+  if (choice === "tubeSpars") return ["(Manual)", ...(state.options.tubeSpars || []).map((tube) => tube.description)];
+  if (choice === "angles") return state.options.angles || [];
   return [];
 }
 
@@ -469,6 +474,7 @@ function createField(field) {
     input = document.createElement("input");
     input.type = type || "text";
     if (meta && type === "number") input.step = meta;
+    if (key === "airfoil") input.setAttribute("list", "airfoilOptions");
   }
 
   input.dataset.key = key;
@@ -483,15 +489,71 @@ function createField(field) {
     input.value = state.inputs[key] ?? "";
     wrapper.appendChild(input);
   }
-  input.addEventListener("input", () => {
-    syncInputsFromForm();
-    markInputsChanged();
-  });
-  input.addEventListener("change", () => {
-    syncInputsFromForm();
-    markInputsChanged();
-  });
+  input.addEventListener("input", () => handleFieldChange(key));
+  input.addEventListener("change", () => handleFieldChange(key));
   return wrapper;
+}
+
+function setFieldValue(key, value) {
+  state.inputs[key] = value;
+  const el = document.querySelector(`[data-key="${key}"]`);
+  if (!el) return;
+  if (el.type === "checkbox") el.checked = parseBool(value);
+  else el.value = value ?? "";
+}
+
+function prefixFromHelperKey(key, suffix) {
+  return key.slice(0, -suffix.length);
+}
+
+function applyTubeSelect(key) {
+  const prefix = prefixFromHelperKey(key, "_tube_select");
+  const selected = state.inputs[key];
+  if (!selected || selected === "(Manual)") return;
+  const tube = (state.options.tubeSpars || []).find((item) => item.description === selected);
+  if (!tube) return;
+  setFieldValue(`${prefix}_od`, tube.od);
+  setFieldValue(`${prefix}_wall`, tube.wall);
+}
+
+function applyAngleSelect(key) {
+  const prefix = prefixFromHelperKey(key, "_angle_select");
+  const selected = state.inputs[key];
+  if (!selected || selected === "(Manual flat bar)") return;
+  const angle = (state.options.angleData || {})[selected];
+  if (!angle) return;
+  setFieldValue(`${prefix}_b_top`, angle.b_equiv);
+  setFieldValue(`${prefix}_t_top`, Number(angle.t_equiv).toFixed(4));
+  const sparType = state.inputs[`${prefix}_type`];
+  if (sparType !== "Aluminum C-Spar") {
+    setFieldValue(`${prefix}_b_bot`, angle.b_equiv);
+    setFieldValue(`${prefix}_t_bot`, Number(angle.t_equiv).toFixed(4));
+  }
+}
+
+function applyAirfoilSelection() {
+  const airfoil = (state.options.airfoilData || {})[state.inputs.airfoil];
+  if (!airfoil) return;
+  for (const [source, target] of [
+    ["t_c", "airfoil_t_c"],
+    ["Cm_ac", "Cm_ac"],
+    ["Cl_alpha", "Cl_alpha"],
+    ["x_ac_c", "x_ac_c"],
+  ]) {
+    if (airfoil[source] !== null && airfoil[source] !== undefined) {
+      setFieldValue(target, airfoil[source]);
+    }
+  }
+}
+
+function handleFieldChange(key) {
+  syncInputsFromForm();
+  if (key.endsWith("_tube_select")) applyTubeSelect(key);
+  if (key.endsWith("_angle_select")) applyAngleSelect(key);
+  if (key === "airfoil") applyAirfoilSelection();
+  updateAllSparFieldVisibility({ prune: false });
+  document.getElementById("jsonEditor").value = JSON.stringify(state.inputs, null, 2);
+  markInputsChanged();
 }
 
 function updateSparFieldVisibility(prefix, { prune = false } = {}) {
@@ -515,8 +577,6 @@ function updateSparFieldVisibility(prefix, { prune = false } = {}) {
         if (input.type === "checkbox") input.checked = parseBool(state.inputs[key]);
         else input.value = state.inputs[key] ?? "";
       }
-    } else if (!visible && prune) {
-      delete state.inputs[key];
     }
   });
 }
@@ -546,7 +606,6 @@ function updateStructureFieldVisibility({ prune = false } = {}) {
     const visible = isRelevantStructureKey(key);
     if (wrapper) wrapper.classList.toggle("hidden-field", !visible);
     if (input) input.disabled = !visible;
-    if (!visible && prune) delete state.inputs[key];
     if (visible && state.inputs[key] === undefined) {
       const field = inputSections.flatMap((section) => section.groups).flatMap((group) => group.fields).find((item) => item[0] === key);
       state.inputs[key] = fieldDefault(key, field?.[2] || "text");
@@ -1002,7 +1061,21 @@ async function init() {
     sparTypes: payload.sparTypes || [],
     materials: payload.materials || [],
     strutMaterials: payload.strutMaterials || [],
+    angles: payload.angles || [],
+    angleData: payload.angleData || {},
+    tubeSpars: payload.tubeSpars || [],
+    airfoils: payload.airfoils || [],
+    airfoilData: payload.airfoilData || {},
   };
+  const airfoilList = document.getElementById("airfoilOptions");
+  if (airfoilList) {
+    airfoilList.innerHTML = "";
+    for (const name of state.options.airfoils || []) {
+      const option = document.createElement("option");
+      option.value = name;
+      airfoilList.appendChild(option);
+    }
+  }
   renderMethodStatus(payload.methodStatus || {});
   ensureSchemaDefaults();
   const savedPassword = sessionStorage.getItem("aerobeamBetaPassword") || "";
