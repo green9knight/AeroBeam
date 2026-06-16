@@ -1,10 +1,7 @@
 #!/usr/bin/env python3
 """
-AeroBeam Web Backend - Render Ready Version
-Includes:
-- Proper 0.0.0.0 binding + dynamic PORT
-- /healthz endpoint for Render health checks
-- Strong error handling (prevents silent crashes)
+AeroBeam Web Backend - Render Ready (Complete)
+Fixes: binding, health check, and missing plot data for frontend
 """
 
 from __future__ import annotations
@@ -17,7 +14,6 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 os.environ.setdefault("MPLBACKEND", "Agg")
-
 import numpy as np
 
 from wing_stress_analyzer import DEFAULT_INPUTS, WingStressAnalyzer
@@ -29,8 +25,71 @@ PORT = int(os.environ.get("PORT", "8000"))
 BETA_PASSWORD = os.environ.get("AEROBEAM_BETA_PASSWORD", "").strip()
 
 
+def _jsonable(value):
+    if isinstance(value, np.ndarray):
+        return [_jsonable(item) for item in value.tolist()]
+    if isinstance(value, (np.floating, np.integer)):
+        return value.item()
+    if isinstance(value, dict):
+        return {str(key): _jsonable(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_jsonable(item) for item in value]
+    if isinstance(value, float) and not np.isfinite(value):
+        return None
+    return value
+
+
+def _series(analyzer):
+    x = analyzer.x
+    pos = analyzer.pos
+    neg = analyzer.neg
+    torsion = analyzer.torsion or {}
+    return _jsonable({
+        "x": x,
+        "chord": analyzer.chord_x,
+        "positive": {
+            "w": pos.get("w", []),
+            "V": pos.get("V", []),
+            "M": pos.get("M", []),
+            "M_front": pos.get("M_front", []),
+            "M_rear": pos.get("M_rear", []),
+            "z_front": pos.get("z_front", []),
+            "z_rear": pos.get("z_rear", []),
+            "z_delta": pos.get("z_delta", []),
+            "sigma_front": pos.get("sigma_front", []),
+            "sigma_rear": pos.get("sigma_rear", []),
+        },
+        "negative": {
+            "w": neg.get("w", []),
+            "V": neg.get("V", []),
+            "M": neg.get("M", []),
+            "M_front": neg.get("M_front", []),
+            "M_rear": neg.get("M_rear", []),
+            "z_front": neg.get("z_front", []),
+            "z_rear": neg.get("z_rear", []),
+            "z_delta": neg.get("z_delta", []),
+            "sigma_front": neg.get("sigma_front", []),
+            "sigma_rear": neg.get("sigma_rear", []),
+        },
+        "torsion": {
+            "T_total": torsion.get("T_total", []),
+            "T_running": torsion.get("T_running", []),
+            "phi_deg": np.degrees(torsion.get("phi", [])) if torsion.get("phi") is not None else [],
+        },
+        "geometry": {
+            "b_half": getattr(analyzer, "b_half", 0),
+            "root_bl": getattr(analyzer, "r", 0),
+            "x": x,
+            "chord": analyzer.chord_x,
+            "front_spar": getattr(analyzer, "front_pct", 0) * analyzer.chord_x,
+            "rear_spar": getattr(analyzer, "rear_pct", 0) * analyzer.chord_x,
+            "front_spar_percent": getattr(analyzer, "front_pct", 0),
+            "rear_spar_percent": getattr(analyzer, "rear_pct", 0),
+        }
+    })
+
+
 def safe_run_analysis(inputs: dict) -> dict:
-    """Run analysis safely. Never crashes the server."""
     try:
         full_inputs = dict(DEFAULT_INPUTS)
         if inputs:
@@ -50,6 +109,7 @@ def safe_run_analysis(inputs: dict) -> dict:
                 "spar_weight_total": getattr(analyzer, "spar_weight_total", None),
                 "z_delta_max": getattr(analyzer, "max_z_delta", None),
             },
+            "series": _series(analyzer),
         }
     except Exception as e:
         tb = traceback.format_exc()
@@ -81,7 +141,6 @@ class AeroBeamHandler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         path = parsed.path
 
-        # === Health check for Render ===
         if path == "/healthz":
             self.send_response(200)
             self.send_header("Content-Type", "text/plain")
@@ -100,7 +159,6 @@ class AeroBeamHandler(BaseHTTPRequestHandler):
             })
             return
 
-        # Serve static frontend files
         if path in ("/", "/index.html"):
             self._serve_file("index.html")
             return
@@ -123,7 +181,6 @@ class AeroBeamHandler(BaseHTTPRequestHandler):
             self._send_json({"ok": False, "error": "Invalid JSON"}, 400)
             return
 
-        # Simple beta password check
         if BETA_PASSWORD:
             if data.get("betaPassword", "") != BETA_PASSWORD:
                 self._send_json({"ok": False, "error": "Invalid beta password"}, 401)
