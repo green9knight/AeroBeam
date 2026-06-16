@@ -556,9 +556,9 @@ class WingStressGUI:
         self._le(f,"Rib spacing (in):","rib_spacing",12.0, row=r); r+=1
 
         section_label(f,"Spar Positions", row=r); r+=1
-        self._le(f,"Front spar x/c (0.05 = 5% chord):","front_spar_percent",0.05, row=r); r+=1
-        self._le(f,"Rear spar x/c (0.85 = 85% chord):", "rear_spar_percent", 0.85, row=r); r+=1
-        self._le(f,"Front spar load share (% or 0.0-1.0):","front_spar_load_share",0.55, row=r); r+=1
+        self._le(f,"Front spar % chord:","front_spar_percent",0.15, row=r); r+=1
+        self._le(f,"Rear spar % chord:", "rear_spar_percent", 0.65, row=r); r+=1
+        self._le(f,"Front spar load share (0.0-1.0):","front_spar_load_share",0.55, row=r); r+=1
         # Re-propose spar heights when chord or spar positions change
         for _nm in ("root_chord","front_spar_percent","rear_spar_percent","airfoil_t_c"):
             if _nm in self._vars:
@@ -874,7 +874,7 @@ class WingStressGUI:
         self._le(f,"Rib web thickness (in):","rib_t_web",0.125,row=r); r+=1
         self._le(f,"Rib cap width (in):","rib_b_cap",0.75,row=r); r+=1
         self._le(f,"Rib cap thickness (in):","rib_t_cap",0.125,row=r); r+=1
-        self._lc(f,"Rib material:","rib_mat",all_mat_names(),"Birch Plywood",row=r); r+=1
+        self._lc(f,"Rib material:","rib_mat",wood_mat_names(),"Birch Plywood",row=r); r+=1
         self._rib_info = tk.StringVar(value="")
         ttk.Label(f,textvariable=self._rib_info,foreground=C_TEXT_DIM,
                   font=("Courier",8)).grid(row=r,column=0,columnspan=4,sticky="w",padx=4); r+=1
@@ -930,9 +930,6 @@ class WingStressGUI:
         section_label(f,"Jury Strut",row=r); r+=1
         self._lchk(f,"Enable jury strut","jury_strut",False,row=r); r+=1
         self._le(f,"Jury spar BL (in):","jury_spar_bl",60.0,row=r); r+=1
-        for nm in ("jury_strut", "jury_spar_bl"):
-            if nm in self._vars:
-                self._vars[nm].trace_add("write", lambda *_: self._update_strut_info())
 
         self._refresh_config()
         self._update_strut_info()
@@ -1142,17 +1139,9 @@ class WingStressGUI:
             I    = math.pi/64*(od**4-id_**4)
             mat  = self._vars["strut_mat"].get()
             E    = STRUT_MATERIALS[mat]["E"]
-            L_eff = L
-            if bool(self._vars.get("jury_strut", type("V",(),{"get":lambda s:False})()).get()):
-                jury_bl = float(self._vars.get("jury_spar_bl", type("V",(),{"get":lambda s:"0"})()).get())
-                run = bl - fuse_bl
-                jury_run = jury_bl - fuse_bl
-                if run > 1e-9 and 0.0 < jury_run < run:
-                    frac = jury_run / run
-                    L_eff = max(L * frac, L * (1.0 - frac))
-            Pe   = math.pi**2*E*I/L_eff**2
+            Pe   = math.pi**2*E*I/L**2
             self._strut_info.set(
-                f"L={L:.1f}\"  L_eff={L_eff:.1f}\"  I={I:.4f} in⁴  Pe={Pe:,.0f} lb")
+                f"L={L:.1f}\"  I={I:.4f} in⁴  Pe={Pe:,.0f} lb")
         except: pass
 
     def _update_q(self):
@@ -1308,23 +1297,43 @@ class WingStressGUI:
     # ── Collect inputs ────────────────────────────────────────────────────────
 
     def _collect(self) -> dict:
-        """Collect all GUI inputs into a dict for the analyzer."""
-        # Start from cache so non-visible spar fields are preserved
-        out = dict(self._data_cache)
+        """
+        Collect all GUI inputs into a dict for the analyzer.
+        - Starts from cache (which was set on last load/save and has all keys)
+        - Falls back to DEFAULT_INPUTS ONLY for keys genuinely absent from cache
+        - Overlays live var values with proper type coercion
+        - Never passes empty strings to the analyzer
+        """
+        from wing_stress_analyzer import DEFAULT_INPUTS
+
         bool_keys = {"dcell_enabled","geodetic_enabled","distribute_wing_weight",
                      "secondary_bending","jury_strut"}
-        for k, v in self._vars.items():
-            raw = v.get()
+
+        # Start from cache — this is the user's actual configuration
+        out = dict(self._data_cache)
+
+        # Fill any keys absent from cache with defaults (new features not yet saved)
+        for k, v in DEFAULT_INPUTS.items():
+            if k not in out:
+                out[k] = v
+
+        # Overlay live var values
+        for k, var in self._vars.items():
+            raw = var.get()
             if k in bool_keys:
-                out[k] = bool(raw) if isinstance(raw, bool) else (str(raw).lower() in ("1","true","yes"))
+                out[k] = bool(raw) if isinstance(raw, bool) else (str(raw).strip().lower() in ("1","true","yes"))
             else:
-                try:    out[k] = float(raw)
-                except: out[k] = raw
-        # Normalize load share: user may enter 55 meaning 55%; convert to 0.55
+                raw_str = str(raw).strip()
+                if raw_str != "":
+                    try:    out[k] = float(raw_str)
+                    except: out[k] = raw_str
+                # if empty: keep cache/default value
+
+        # Normalize load share
         lsf = out.get("front_spar_load_share", 0.55)
-        if isinstance(lsf, (int, float)) and lsf > 1.0:
+        if isinstance(lsf, (int,float)) and lsf > 1.0:
             out["front_spar_load_share"] = lsf / 100.0
-        # Num spars always 2
+
         out["num_spars"] = 2
         return out
 
@@ -1394,16 +1403,13 @@ class WingStressGUI:
         ax2.set(title="Shear [lb]", xlabel="Span [in]")
         ax2.grid(True,alpha=0.3)
 
-        ax3.plot(x, a.pos["M_front"], color="#085097", lw=2, label="Frt +g")
-        ax3.plot(x, a.pos["M_rear"], color="#B9BCC2", lw=1.5, label="Rr +g")
-        ax3.plot(x, a.neg["M_front"], color="#D2B75F", lw=1.5, linestyle="--", label="Frt -g")
-        ax3.plot(x, a.neg["M_rear"], color="#E5C87A", lw=1, linestyle="--", label="Rr -g")
-        ax3.set(title="Spar Moment [lb·in]", xlabel="Span [in]")
-        ax3.legend(fontsize=7); ax3.grid(True,alpha=0.3)
+        ax3.plot(x, a.pos["M"], color="#085097", lw=2)
+        ax3.plot(x, a.neg["M"], color="#D2B75F", lw=1.5, linestyle="--")
+        ax3.set(title="Moment [lb·in]", xlabel="Span [in]")
+        ax3.grid(True,alpha=0.3)
 
         ax4.plot(x, a.pos["z_front"], color="#085097", lw=2,   label="Frt +g (up)")
         ax4.plot(x, a.pos["z_rear"],  color="#B9BCC2", lw=1.5, label="Rr +g (up)")
-        ax4.plot(x, a.pos["z_delta"], color="#6E9B5A", lw=1.2, linestyle=":", label="Rr-Frt Δ +g")
         ax4.plot(x, a.neg["z_front"], color="#D2B75F", lw=1.5, linestyle="--", label="Frt -g (down)")
         ax4.plot(x, a.neg["z_rear"],  color="#E5C87A", lw=1,   linestyle="--", label="Rr -g (down)")
         ax4.axhline(y=0, color="k", lw=0.5, alpha=0.4)
@@ -1466,40 +1472,131 @@ class WingStressGUI:
     def _load_data(self, data: dict):
         """
         Load a flat key-value dict into the GUI.
-        Stores everything in _data_cache first (so save always has all keys),
-        then sets whatever vars are currently registered,
-        then refreshes spar frames (which rebuilds vars for the correct spar type),
-        then sets those newly created vars from the cache.
+        - Uses file data as the authority for all keys present in the file
+        - Falls back to DEFAULT_INPUTS ONLY for keys missing from the file
+          (handles new features added after the file was saved)
+        - Normalises booleans, floats and strings before setting vars
+        - Refreshes spar/config frames in the correct order
         """
-        # 1. Store full data in cache
-        self._data_cache = dict(data)
+        from wing_stress_analyzer import DEFAULT_INPUTS
 
-        # 2. Set spar type vars first so _refresh_spar builds the right fields
-        for k in ("front_spar_type", "rear_spar_type", "config",
-                  "wing_structure_type", "dcell_enabled", "geodetic_enabled"):
-            if k in data and k in self._vars:
-                self._vars[k].set(str(data[k]))
+        bool_keys = {"dcell_enabled","geodetic_enabled","distribute_wing_weight",
+                     "secondary_bending","jury_strut"}
 
-        # 3. Refresh frames — this destroys and rebuilds buildup fields,
-        #    creating fresh StringVars registered in self._vars
+        # 1. Start from defaults for any keys NOT in the file (new features etc.)
+        #    Then overlay with file data — file wins for every key it contains
+        merged = {}
+        for k, v in DEFAULT_INPUTS.items():
+            if k not in data:
+                merged[k] = v   # only use default for missing keys
+
+        # 2. Process file data with type normalisation
+        for k, v in data.items():
+            if k in bool_keys:
+                if isinstance(v, bool):
+                    merged[k] = v
+                else:
+                    merged[k] = str(v).strip().lower() in ("1","true","yes")
+            elif isinstance(v, str):
+                v_stripped = v.strip()
+                if v_stripped == "":
+                    # Empty string in file — use default if available, else skip
+                    if k in DEFAULT_INPUTS:
+                        merged[k] = DEFAULT_INPUTS[k]
+                else:
+                    try:    merged[k] = float(v_stripped)
+                    except: merged[k] = v_stripped
+            else:
+                merged[k] = v
+
+        # 3. Normalize load share: file may store as 55 (%) or 0.55
+        lsf = merged.get("front_spar_load_share", 0.55)
+        if isinstance(lsf, (int,float)) and lsf > 1.0:
+            merged["front_spar_load_share"] = lsf / 100.0
+
+        # 4. Store full merged data in cache
+        self._data_cache = dict(merged)
+
+        # 5. Set spar type / config vars FIRST so _refresh builds the right fields
+        for k in ("front_spar_type","rear_spar_type","config",
+                  "wing_structure_type","dcell_enabled","geodetic_enabled"):
+            if k in merged and k in self._vars:
+                self._vars[k].set(str(merged[k]))
+
+        # 6. Refresh frames — rebuilds buildup/tube/config fields
         self._refresh_spar("front")
         self._refresh_spar("rear")
         self._refresh_dcell()
         self._refresh_structure()
         self._refresh_config()
 
-        # 4. Now set ALL registered vars from the cache
-        for k, v in data.items():
-            if k in self._vars:
-                self._vars[k].set(str(v))
+        # 7. Set ALL registered vars from merged data
+        skip_display = {"front_spar_h_total_disp","rear_spar_h_total_disp"}
+        for k, var in self._vars.items():
+            if k in skip_display:
+                continue
+            if k in merged:
+                val = merged[k]
+                if isinstance(val, float):
+                    # Clean formatting: 0.9 not 0.9000000000000001
+                    var.set(f"{val:g}" if val == int(val) else f"{val}")
+                elif isinstance(val, bool):
+                    var.set(str(val))
+                else:
+                    var.set(str(val))
 
-        # 5. Update derived displays
+        # 8. Update all derived displays
         self._update_h_total("front_spar")
         self._update_h_total("rear_spar")
         self._update_geodetic_info()
         self._update_strut_info()
         self._update_q()
         self._update_dcell_area()
+
+    def _write_file(self, path):
+        """
+        Save all inputs to a .aerobeam JSON file.
+        - Starts from cache (preserves all keys including non-visible spar fields)
+        - Overlays with current live var values
+        - Coerces types properly: booleans as bool, numerics as float
+        - Skips display-only keys and empty strings
+        - Does NOT inject DEFAULT_INPUTS values — file reflects actual user inputs
+        """
+        bool_keys = {"dcell_enabled","geodetic_enabled","distribute_wing_weight",
+                     "secondary_bending","jury_strut"}
+        skip_keys = {"front_spar_h_total_disp","rear_spar_h_total_disp"}
+
+        # Start from cache (has all keys including hidden spar fields)
+        data = dict(self._data_cache)
+
+        # Overlay with current live var values
+        for k, var in self._vars.items():
+            if k in skip_keys:
+                continue
+            raw = var.get()
+            if k in bool_keys:
+                data[k] = bool(raw) if isinstance(raw, bool) else (str(raw).strip().lower() in ("1","true","yes"))
+            else:
+                raw_str = str(raw).strip()
+                if raw_str != "":
+                    try:    data[k] = float(raw_str)
+                    except: data[k] = raw_str
+                # if empty: keep whatever is in cache from last load
+
+        # Save airfoil name as string (not float-coerced)
+        if "airfoil" in self._vars:
+            data["airfoil"] = self._vars["airfoil"].get()
+
+        # Normalize load share to 0-1
+        lsf = data.get("front_spar_load_share", 0.55)
+        if isinstance(lsf, (int,float)) and lsf > 1.0:
+            data["front_spar_load_share"] = lsf / 100.0
+
+        data["num_spars"] = 2
+
+        with open(path, "w") as fh:
+            json.dump(data, fh, indent=2, default=str)
+        self._set_status(f"Saved {path}", C_GREEN)
 
     def _open(self):
         path = filedialog.askopenfilename(
@@ -1529,18 +1626,6 @@ class WingStressGUI:
             self._write_file(path)
             self.current_file = path
             self.root.title(f"{APP_TITLE}  —  {os.path.basename(path)}")
-
-    def _write_file(self, path):
-        # Start with cached data (contains keys not currently registered as vars)
-        data = dict(self._data_cache)
-        # Overlay with current live var values
-        data.update({k: v.get() for k, v in self._vars.items()})
-        # Remove display-only keys that should not be saved
-        for skip in ("front_spar_h_total_disp", "rear_spar_h_total_disp"):
-            data.pop(skip, None)
-        with open(path, "w") as fh:
-            json.dump(data, fh, indent=2)
-        self._set_status(f"Saved {path}", C_GREEN)
 
     # ── Export ────────────────────────────────────────────────────────────────
 
