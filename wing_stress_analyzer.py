@@ -62,21 +62,21 @@ PDF_GOLD  = "#8B6914"   # dark gold — headers (readable on white)
 # ─── DEFAULT INPUTS ──────────────────────────────────────────────────────────
 
 DEFAULT_INPUTS: Dict[str, Any] = {
-    "b": 320.0, "r": 22.0, "num_points": 201,
-    "root_chord": 54.0, "tip_chord": 24.0, "taper_start_bl": 0.0, "rib_spacing": 12.0,
+    "b": 306.0, "r": 11.0, "num_points": 201,
+    "root_chord": 54.0, "tip_chord": 54.0, "taper_start_bl": 0.0, "rib_spacing": 12.0,
     "lift_distribution_type": "schrenk",
     "num_spars": 2,
-    "front_spar_percent": 0.15, "rear_spar_percent": 0.65,
+    "front_spar_percent": 0.30, "rear_spar_percent": 0.65,
     "front_spar_load_share": 0.55,
     "wing_structure_type": "fabric_tube",
     "front_spar_type": "Round Tube",
-    "front_spar_od": 3.0, "front_spar_wall": 0.065,
+    "front_spar_od": 2.5, "front_spar_wall": 0.065,
     "front_spar_mat": "6061-T6",
     "rear_spar_type": "Round Tube",
-    "rear_spar_od": 2.0, "rear_spar_wall": 0.065,
+    "rear_spar_od": 2.5, "rear_spar_wall": 0.065,
     "rear_spar_mat": "6061-T6",
     "dcell_enabled": False,
-    "dcell_skin_mat": "Birch Plywood", "dcell_skin_thick": 0.0625,
+    "dcell_skin_mat": "6061-T6", "dcell_skin_thick": 0.025,
     "geodetic_enabled": False,
     "geodetic_mat": "Sitka Spruce", "geodetic_w": 1.0, "geodetic_t": 0.125,
     "geodetic_strips_per_bay": 2, "geodetic_angle": 45.0,
@@ -90,15 +90,15 @@ DEFAULT_INPUTS: Dict[str, Any] = {
     "rib_b_cap":  0.75,   # rib cap width [in]
     "rib_t_cap":  0.125,  # rib cap thickness [in]
     "rib_mat":    "Birch Plywood",
-    "ng_lift": 5381.25, "n": 6.0, "n_neg": -3.0,
-    "Weight": 1750.0, "Wing_Weight": 175.0, "Tail_Down_1g": 218.75,
-    "distribute_wing_weight": False,
+    "ng_lift": 1950.0, "n": 6.0, "n_neg": -3.0,
+    "Weight": 550.0, "Wing_Weight": 50.0, "Tail_Down_1g": 50.0,
+    "distribute_wing_weight": True,
     "config": "strut_braced",
-    "strut_percent": 0.65, "strut_bl": 104.0, "strut_vert": 44.0, "strut_fuse_bl": 0.0,
+    "strut_percent": 0.65, "strut_bl": 96.0, "strut_vert": 44.0, "strut_fuse_bl": 11.0,
     "strut_mat": "4130 Chromoly (normalized)",
-    "strut_tube_od": 3.0, "strut_tube_wall": 0.065,
+    "strut_tube_od": 2.0, "strut_tube_wall": 0.065,
     "secondary_bending": False,
-    "jury_strut": False, "jury_spar_bl": 60.0,
+    "jury_strut": True, "jury_spar_bl": 48.0,
     "jury_tube_mat": "6061-T6 Aluminum",
     "jury_tube_od": 0.75,
     "jury_tube_wall": 0.035,
@@ -106,11 +106,14 @@ DEFAULT_INPUTS: Dict[str, Any] = {
     "jury_rear_link_length": 18.0,
     "jury_front_link_angle": 45.0,
     "jury_rear_link_angle": 45.0,
-    "airfoil": "NACA 4412", "Cm_ac": -0.099,  "Cm_flap": 0.0,  # delta Cm with full flaps
-    "Cl_alpha": 6.30, "x_ac_c": 0.246,
+    "airfoil": "GA 30-415", "Cm_ac": -0.064,  "Cm_flap": 0.0,  # delta Cm with full flaps
+    "Cl_alpha": 6.25, "x_ac_c": 0.249,
     "Vd_mph": 100.0, "altitude_ft": 2000.0, "Vc_mph": 80.0, "Va_mph": 60.0,
-    "airfoil_t_c": 0.12,
+    "airfoil_t_c": 0.15,
     "curvature_sign": 1.0, "make_plots": True, "export_excel": False,
+    "dcell_r_LE": "3",
+    "front_spar_angle_sel": "(Manual flat bar)",
+    "rear_spar_angle_sel": "(Manual flat bar)",
     # Buckling — default = rib_spacing (no intermediate stiffeners/nose ribs)
     "stiffener_spacing": 0.0,   # 0 = use rib_spacing
     "nose_rib_spacing":  0.0,   # 0 = use rib_spacing

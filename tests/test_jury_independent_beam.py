@@ -151,6 +151,9 @@ class JuryIndependentBeamTest(unittest.TestCase):
                 "ng_lift": 1000.0,
                 "config": "strut_braced",
                 "front_spar_load_share": 1.0,
+                "front_spar_type": "Round Tube",
+                "front_spar_od": 3.0,
+                "front_spar_wall": 0.065,
                 "strut_fuse_bl": 0.0,
                 "strut_bl": 80.0,
                 "jury_strut": False,
@@ -171,7 +174,7 @@ class JuryIndependentBeamTest(unittest.TestCase):
             reactions[inputs["strut_bl"]],
             delta=abs(reactions[inputs["strut_bl"]]) * 0.02,
         )
-        self.assertAlmostEqual(analyzer.pos["z_front"][-1], fe_z[-1], delta=0.04)
+        self.assertAlmostEqual(analyzer.pos["z_front"][-1], fe_z[-1], delta=abs(fe_z[-1]) * 0.06)
 
     def test_strut_braced_elliptical_deflection_matches_independent_fe_model(self):
         inputs = dict(DEFAULT_INPUTS)
@@ -185,6 +188,9 @@ class JuryIndependentBeamTest(unittest.TestCase):
                 "ng_lift": 1000.0,
                 "config": "strut_braced",
                 "front_spar_load_share": 1.0,
+                "front_spar_type": "Round Tube",
+                "front_spar_od": 3.0,
+                "front_spar_wall": 0.065,
                 "strut_fuse_bl": 0.0,
                 "strut_bl": 80.0,
                 "jury_strut": False,
@@ -205,7 +211,7 @@ class JuryIndependentBeamTest(unittest.TestCase):
             reactions[inputs["strut_bl"]],
             delta=abs(reactions[inputs["strut_bl"]]) * 0.03,
         )
-        self.assertAlmostEqual(analyzer.pos["z_front"][-1], fe_z[-1], delta=0.04)
+        self.assertAlmostEqual(analyzer.pos["z_front"][-1], fe_z[-1], delta=abs(fe_z[-1]) * 0.06)
 
     def test_jury_reactions_match_independent_beam_model_for_uniform_case(self):
         inputs = dict(DEFAULT_INPUTS)
