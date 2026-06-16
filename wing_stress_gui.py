@@ -556,9 +556,9 @@ class WingStressGUI:
         self._le(f,"Rib spacing (in):","rib_spacing",12.0, row=r); r+=1
 
         section_label(f,"Spar Positions", row=r); r+=1
-        self._le(f,"Front spar % chord:","front_spar_percent",0.15, row=r); r+=1
-        self._le(f,"Rear spar % chord:", "rear_spar_percent", 0.65, row=r); r+=1
-        self._le(f,"Front spar load share (0.0-1.0):","front_spar_load_share",0.55, row=r); r+=1
+        self._le(f,"Front spar x/c (0.05 = 5% chord):","front_spar_percent",0.05, row=r); r+=1
+        self._le(f,"Rear spar x/c (0.85 = 85% chord):", "rear_spar_percent", 0.85, row=r); r+=1
+        self._le(f,"Front spar load share (% or 0.0-1.0):","front_spar_load_share",0.55, row=r); r+=1
         # Re-propose spar heights when chord or spar positions change
         for _nm in ("root_chord","front_spar_percent","rear_spar_percent","airfoil_t_c"):
             if _nm in self._vars:

@@ -27,9 +27,6 @@ const inputSections = [
       {
         title: "Spar Positions",
         fields: [
-          ["front_spar_percent", "Front spar x/c location (0.05 = 5% chord)", "number", "0.01"],
-          ["rear_spar_percent", "Rear spar x/c location (0.85 = 85% chord)", "number", "0.01"],
-          ["front_spar_load_share", "Front spar load share (% or 0-1)", "number", "0.01"],
           ["num_spars", "Number of spars", "number", "1"],
         ],
       },
@@ -210,9 +207,10 @@ function sparFields(prefix) {
 }
 
 function allInputKeys() {
-  return inputSections.flatMap((section) =>
+  const schemaKeys = inputSections.flatMap((section) =>
     section.groups.flatMap((group) => group.fields.map((field) => field[0]))
   );
+  return [...new Set(["front_spar_percent", "rear_spar_percent", "front_spar_load_share", ...schemaKeys])];
 }
 
 function sparPrefixForKey(key) {
