@@ -153,16 +153,29 @@ def _series(analyzer):
 
 def safe_run_analysis(inputs: dict) -> dict:
     try:
+        print(f"=== STARTING ANALYSIS ===", file=sys.stderr)
+        print(f"Input keys: {list(inputs.keys()) if inputs else 'None'}", file=sys.stderr)
+        
         full_inputs = dict(DEFAULT_INPUTS)
         if inputs:
             full_inputs.update(inputs)
-
+        
+        # Log critical configuration
+        print(f"Spar type: {full_inputs.get('front_spar_type', 'unknown')}", file=sys.stderr)
+        print(f"Material: {full_inputs.get('front_spar_mat', 'unknown')}", file=sys.stderr)
+        print(f"Jury strut: {full_inputs.get('jury_strut', False)}", file=sys.stderr)
+        
+        print("Creating analyzer...", file=sys.stderr)
         analyzer = WingStressAnalyzer(full_inputs)
+        
+        print("Running analysis...", file=sys.stderr)
         analyzer.analyze()
-
+        
+        print("Analysis complete, generating summary...", file=sys.stderr)
         summary = analyzer.summary_text() if hasattr(analyzer, "summary_text") else "Analysis complete."
 
-        return {
+        print("Building response...", file=sys.stderr)
+        result = {
             "ok": True,
             "summary": summary,
             "metrics": {
@@ -173,13 +186,21 @@ def safe_run_analysis(inputs: dict) -> dict:
             },
             "series": _series(analyzer),
         }
+        print("=== ANALYSIS SUCCESS ===", file=sys.stderr)
+        return result
+        
     except Exception as e:
         tb = traceback.format_exc()
         print("=== ANALYSIS ERROR ===", file=sys.stderr)
+        print(f"Error type: {type(e).__name__}", file=sys.stderr)
+        print(f"Error message: {str(e)}", file=sys.stderr)
+        print("Full traceback:", file=sys.stderr)
         print(tb, file=sys.stderr)
+        print("=== END ERROR ===", file=sys.stderr)
         return {
             "ok": False,
             "error": str(e),
+            "error_type": type(e).__name__,
             "traceback": tb,
         }
 
