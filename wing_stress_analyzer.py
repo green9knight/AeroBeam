@@ -66,7 +66,7 @@ DEFAULT_INPUTS: Dict[str, Any] = {
     "root_chord": 54.0, "tip_chord": 54.0, "taper_start_bl": 0.0, "rib_spacing": 12.0,
     "lift_distribution_type": "schrenk",
     "num_spars": 2,
-    "front_spar_percent": 0.30, "rear_spar_percent": 0.65,
+    "front_spar_percent": 0.05, "rear_spar_percent": 0.85,
     "front_spar_load_share": 0.55,
     "wing_structure_type": "fabric_tube",
     "front_spar_type": "Round Tube",

@@ -8,6 +8,8 @@ class DefaultInputsTest(unittest.TestCase):
     def test_default_inputs_match_current_beta_baseline(self):
         self.assertEqual(DEFAULT_INPUTS["b"], 306.0)
         self.assertEqual(DEFAULT_INPUTS["r"], 11.0)
+        self.assertEqual(DEFAULT_INPUTS["front_spar_percent"], 0.05)
+        self.assertEqual(DEFAULT_INPUTS["rear_spar_percent"], 0.85)
         self.assertEqual(DEFAULT_INPUTS["front_spar_od"], 2.5)
         self.assertEqual(DEFAULT_INPUTS["rear_spar_od"], 2.5)
         self.assertEqual(DEFAULT_INPUTS["strut_bl"], 96.0)
