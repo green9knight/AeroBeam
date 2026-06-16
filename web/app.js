@@ -344,6 +344,22 @@ function rememberBetaPassword() {
   if (password) sessionStorage.setItem("aerobeamBetaPassword", password);
 }
 
+function showPasswordRequired(message = "Enter beta password to run analysis.") {
+  const passwordField = document.getElementById("betaPassword");
+  if (passwordField) {
+    passwordField.classList.add("input-error");
+    passwordField.focus();
+    passwordField.select();
+  }
+  document.getElementById("summary").textContent =
+    `${message}\n\nEnter the beta password in the field near the top of the input panel, then click Run Analysis again.`;
+  setStatus("Enter beta password", "error");
+}
+
+async function parseJsonResponse(response) {
+  return response.json().catch(() => ({}));
+}
+
 function syncFormFromInputs() {
   for (const key of allInputKeys()) {
     const el = document.querySelector(`[data-key="${key}"]`);
@@ -990,7 +1006,11 @@ async function runAnalysis() {
       headers: authHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({ inputs: state.inputs, betaPassword: betaPassword() }),
     });
-    const payload = await response.json();
+    const payload = await parseJsonResponse(response);
+    if (response.status === 401) {
+      showPasswordRequired(payload.error || "Enter beta password to run analysis.");
+      return;
+    }
     if (!payload.ok) throw new Error(`${payload.error}\n${payload.traceback || ""}`);
     if (runId !== state.runId) return;
 
@@ -1019,8 +1039,13 @@ async function downloadReport() {
       headers: authHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({ inputs: state.inputs, betaPassword: betaPassword() }),
     });
+    if (response.status === 401) {
+      const payload = await parseJsonResponse(response);
+      showPasswordRequired(payload.error || "Enter beta password to generate PDF report.");
+      return;
+    }
     if (!response.ok) {
-      const payload = await response.json().catch(() => ({}));
+      const payload = await parseJsonResponse(response);
       throw new Error(payload.error || `Report failed with HTTP ${response.status}`);
     }
     const blob = await response.blob();
@@ -1084,6 +1109,9 @@ async function init() {
   ensureSchemaDefaults();
   const savedPassword = sessionStorage.getItem("aerobeamBetaPassword") || "";
   if (savedPassword) document.getElementById("betaPassword").value = savedPassword;
+  document.getElementById("betaPassword").addEventListener("input", (event) => {
+    event.target.classList.remove("input-error");
+  });
 
   renderInputTabs();
   syncFormFromInputs();
