@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """
-AeroBeam Web Backend - Robust Version with Strong Error Handling
-Run with: python3 web_app_robust.py
+AeroBeam Web Backend - Render Ready Version
+Includes:
+- Proper 0.0.0.0 binding + dynamic PORT
+- /healthz endpoint for Render health checks
+- Strong error handling (prevents silent crashes)
 """
 
 from __future__ import annotations
@@ -18,11 +21,6 @@ os.environ.setdefault("MPLBACKEND", "Agg")
 import numpy as np
 
 from wing_stress_analyzer import DEFAULT_INPUTS, WingStressAnalyzer
-from spar_sections import (
-    MATERIAL_DB, STRUT_MATERIALS, ALUMINUM_ANGLES, ANGLE_DESCRIPTIONS,
-    spar_type_names, aluminum_mat_names, wood_mat_names, all_mat_names, strut_mat_names,
-)
-from airfoil_database import AIRFOIL_DB
 
 ROOT = Path(__file__).resolve().parent
 WEB_ROOT = ROOT / "web"
@@ -31,24 +29,9 @@ PORT = int(os.environ.get("PORT", "8000"))
 BETA_PASSWORD = os.environ.get("AEROBEAM_BETA_PASSWORD", "").strip()
 
 
-def _jsonable(value):
-    if isinstance(value, np.ndarray):
-        return [_jsonable(item) for item in value.tolist()]
-    if isinstance(value, (np.floating, np.integer)):
-        return value.item()
-    if isinstance(value, dict):
-        return {str(key): _jsonable(item) for key, item in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [_jsonable(item) for item in value]
-    if isinstance(value, float) and not np.isfinite(value):
-        return None
-    return value
-
-
 def safe_run_analysis(inputs: dict) -> dict:
-    """Run analysis with full error protection. Never crashes the server."""
+    """Run analysis safely. Never crashes the server."""
     try:
-        # Merge with defaults for safety
         full_inputs = dict(DEFAULT_INPUTS)
         if inputs:
             full_inputs.update(inputs)
@@ -56,10 +39,9 @@ def safe_run_analysis(inputs: dict) -> dict:
         analyzer = WingStressAnalyzer(full_inputs)
         analyzer.analyze()
 
-        # Build response
         summary = analyzer.summary_text() if hasattr(analyzer, "summary_text") else "Analysis complete."
 
-        result = {
+        return {
             "ok": True,
             "summary": summary,
             "metrics": {
@@ -69,11 +51,9 @@ def safe_run_analysis(inputs: dict) -> dict:
                 "z_delta_max": getattr(analyzer, "max_z_delta", None),
             },
         }
-        return result
-
     except Exception as e:
         tb = traceback.format_exc()
-        print("=== ANALYSIS CRASH ===", file=sys.stderr)
+        print("=== ANALYSIS ERROR ===", file=sys.stderr)
         print(tb, file=sys.stderr)
         return {
             "ok": False,
@@ -94,14 +74,23 @@ class AeroBeamHandler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.end_headers()
 
     def do_GET(self):
         parsed = urlparse(self.path)
         path = parsed.path
 
+        # === Health check for Render ===
+        if path == "/healthz":
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain")
+            self.end_headers()
+            self.wfile.write(b"ok")
+            return
+
         if path == "/api/defaults":
+            from spar_sections import spar_type_names, all_mat_names, strut_mat_names
             self._send_json({
                 "ok": True,
                 "defaults": DEFAULT_INPUTS,
@@ -111,8 +100,8 @@ class AeroBeamHandler(BaseHTTPRequestHandler):
             })
             return
 
-        # Serve static files from web/ folder
-        if path == "/" or path == "/index.html":
+        # Serve static frontend files
+        if path in ("/", "/index.html"):
             self._serve_file("index.html")
             return
         if path.startswith("/"):
@@ -134,10 +123,9 @@ class AeroBeamHandler(BaseHTTPRequestHandler):
             self._send_json({"ok": False, "error": "Invalid JSON"}, 400)
             return
 
-        # Beta password check (simple)
+        # Simple beta password check
         if BETA_PASSWORD:
-            provided = data.get("betaPassword", "")
-            if provided != BETA_PASSWORD:
+            if data.get("betaPassword", "") != BETA_PASSWORD:
                 self._send_json({"ok": False, "error": "Invalid beta password"}, 401)
                 return
 
@@ -161,8 +149,6 @@ class AeroBeamHandler(BaseHTTPRequestHandler):
             content_type = "application/javascript"
         elif filename.endswith(".css"):
             content_type = "text/css"
-        elif filename.endswith(".json"):
-            content_type = "application/json"
 
         self.send_response(200)
         self.send_header("Content-Type", content_type)
@@ -171,14 +157,12 @@ class AeroBeamHandler(BaseHTTPRequestHandler):
             self.wfile.write(f.read())
 
     def log_message(self, format, *args):
-        # Reduce noise
         pass
 
 
 def run_server():
     server = ThreadingHTTPServer((HOST, PORT), AeroBeamHandler)
-    print(f"AeroBeam Web Server running on http://{HOST}:{PORT}")
-    print(f"Beta password required: {'YES' if BETA_PASSWORD else 'NO'}")
+    print(f"AeroBeam running on http://{HOST}:{PORT}")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
