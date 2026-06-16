@@ -343,6 +343,76 @@ function markInputsChanged() {
   }
 }
 
+const geometryPreviewKeys = new Set([
+  "b",
+  "r",
+  "root_chord",
+  "tip_chord",
+  "taper_start_bl",
+  "front_spar_percent",
+  "rear_spar_percent",
+  "strut_bl",
+  "strut_fuse_bl",
+  "strut_vert",
+  "jury_strut",
+  "jury_spar_bl",
+  "config",
+  "dcell_enabled",
+]);
+
+function numericInput(key, fallback = 0) {
+  const value = Number(state.inputs[key]);
+  return Number.isFinite(value) ? value : fallback;
+}
+
+function fractionInput(key, fallback = 0) {
+  const value = numericInput(key, fallback);
+  return Math.abs(value) > 1 ? value / 100 : value;
+}
+
+function buildGeometryPreview() {
+  const span = numericInput("b", state.defaults.b || 0);
+  const bHalf = span / 2.0;
+  const rootChord = numericInput("root_chord", state.defaults.root_chord || 1);
+  const tipChord = numericInput("tip_chord", state.defaults.tip_chord || rootChord);
+  const taperStart = Math.max(0, Math.min(numericInput("taper_start_bl", 0), bHalf || 0));
+  const count = 101;
+  const x = Array.from({ length: count }, (_, index) => (bHalf * index) / (count - 1));
+  const chord = x.map((station) => {
+    if (bHalf <= 0 || station <= taperStart) return rootChord;
+    return rootChord + (tipChord - rootChord) * ((station - taperStart) / Math.max(bHalf - taperStart, 1e-9));
+  });
+  const frontPct = fractionInput("front_spar_percent", 0.05);
+  const rearPct = fractionInput("rear_spar_percent", 0.85);
+  return {
+    b_half: bHalf,
+    root_bl: numericInput("r", 0),
+    x,
+    chord,
+    front_spar: chord.map((c) => c * frontPct),
+    rear_spar: chord.map((c) => c * rearPct),
+    front_spar_percent: frontPct,
+    rear_spar_percent: rearPct,
+    strut_bl: numericInput("strut_bl", 0),
+    strut_fuse_bl: numericInput("strut_fuse_bl", 0),
+    strut_vert: numericInput("strut_vert", 0),
+    jury_enabled: parseBool(state.inputs.jury_strut),
+    jury_bl: numericInput("jury_spar_bl", 0),
+    config: state.inputs.config || "cantilever",
+    dcell_enabled: parseBool(state.inputs.dcell_enabled),
+    taper_start_bl: taperStart,
+    root_chord: rootChord,
+    tip_chord: tipChord,
+    preview: true,
+  };
+}
+
+function renderGeometryPreview() {
+  const canvas = document.getElementById("plotGeometry");
+  if (!canvas) return;
+  drawGeometry(buildGeometryPreview());
+}
+
 function authHeaders(extra = {}) {
   const password = (document.getElementById("betaPassword")?.value || "").trim();
   return password
@@ -597,6 +667,7 @@ function handleFieldChange(key) {
   if (key === "airfoil") applyAirfoilSelection();
   updateAllSparFieldVisibility({ prune: false });
   document.getElementById("jsonEditor").value = JSON.stringify(state.inputs, null, 2);
+  if (geometryPreviewKeys.has(key)) renderGeometryPreview();
   markInputsChanged();
 }
 
@@ -857,7 +928,8 @@ function drawGeometry(geometry) {
   ctx.fillRect(0, 0, w, h);
   ctx.fillStyle = "#d2b75f";
   ctx.font = "bold 15px Segoe UI, sans-serif";
-  ctx.fillText("Plan View", 18, 24);
+  const previewLabel = geometry.preview ? " (preview)" : "";
+  ctx.fillText(`Plan View${previewLabel}`, 18, 24);
   ctx.fillText("Front Elevation", 18, h / 2 + 24);
 
   const x = geometry.x || [];
@@ -865,6 +937,16 @@ function drawGeometry(geometry) {
   const front = geometry.front_spar || [];
   const rear = geometry.rear_spar || [];
   if (!x.length) return;
+  ctx.fillStyle = "#b9bcc2";
+  ctx.font = "12px Segoe UI, sans-serif";
+  ctx.fillText(
+    `Root chord ${fmt(geometry.root_chord ?? chord[0], 1)} in | Tip chord ${fmt(geometry.tip_chord ?? chord[chord.length - 1], 1)} in | Taper BL ${fmt(geometry.taper_start_bl, 0)} in`,
+    118,
+    24
+  );
+  if (Math.abs((geometry.root_chord ?? chord[0]) - (geometry.tip_chord ?? chord[chord.length - 1])) < 1e-6) {
+    ctx.fillText("constant chord: taper-start changes station marker only", 118, 40);
+  }
 
   const margin = { left: 56, right: 24, top: 42, bottom: 26 };
   const plan = {
@@ -1013,6 +1095,7 @@ async function runAnalysis() {
     syncInputsFromForm();
     // Let advanced JSON override quick fields when the editor is open/edited.
     loadJsonEditor();
+    renderGeometryPreview();
     rememberBetaPassword();
     const started = new Date();
     setStatus(`Running analysis #${runId}...`);
@@ -1094,6 +1177,7 @@ async function uploadInputs(event) {
     state.inputs = { ...state.defaults, ...loaded };
     ensureSchemaDefaults();
     syncFormFromInputs();
+    renderGeometryPreview();
     setStatus(`Loaded ${file.name}`, "ok");
     await runAnalysis();
   } catch (error) {
@@ -1151,6 +1235,7 @@ async function init() {
   document.getElementById("resetBtn").addEventListener("click", () => {
     state.inputs = JSON.parse(JSON.stringify(state.defaults));
     syncFormFromInputs();
+    renderGeometryPreview();
     setStatus("Defaults restored", "ok");
   });
   document.getElementById("downloadBtn").addEventListener("click", () => {
@@ -1165,6 +1250,7 @@ async function init() {
   });
 
   setStatus("Ready", "ok");
+  renderGeometryPreview();
   runAnalysis();
 }
 
