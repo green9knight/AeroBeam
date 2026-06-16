@@ -12,6 +12,7 @@ import matplotlib
 matplotlib.use("TkAgg")
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.figure import Figure
 import ctypes
 
 if sys.platform == "win32":
@@ -53,6 +54,64 @@ TAG_RED    = {"foreground": C_RED}
 TAG_HEAD   = {"font": ("Courier", 9, "bold"), "foreground": C_ACCENT2}
 TAG_BOLD   = {"font": ("Courier", 9, "bold"), "foreground": C_TEXT}
 TAG_FIX    = {"foreground": C_YELLOW, "font": ("Courier", 9, "italic")}
+
+# ── Plot Styling Configuration ────────────────────────────────────────────────
+PLOT_STYLE = {
+    "dark_bg": "#252930",
+    "label_color": "#e8eaf0",
+    "tick_color": "#B9BCC2",
+    "spine_color": "#6E7F87",
+    "grid_alpha": 0.3,
+    "pos_color": "#085097",      # Positive load case (blue)
+    "neg_color": "#D2B75F",      # Negative load case (gold)
+    "pos_lw": 2,
+    "neg_lw": 1.5,
+    "torsion_color": "orange",
+    "torsion_lw": 1,
+    "torsion_alpha": 0.8,
+}
+
+# Plot configuration for each subplot
+PLOT_CONFIGS = [
+    {
+        "title": "Lift [lb/in]",
+        "xlabel": "Span [in]",
+        "plots": [
+            {"key": "w", "load": "pos", "label_fn": lambda a: f"+{a.n:.0f}g"},
+            {"key": "w", "load": "neg", "negate": True, "label_fn": lambda a: f"{a.n_neg:.0f}g"},
+        ],
+        "legend": True,
+        "torsion_overlay": True,  # Show torsion on this plot
+    },
+    {
+        "title": "Shear [lb]",
+        "xlabel": "Span [in]",
+        "plots": [
+            {"key": "V", "load": "pos"},
+            {"key": "V", "load": "neg"},
+        ],
+    },
+    {
+        "title": "Moment [lb·in]",
+        "xlabel": "Span [in]",
+        "plots": [
+            {"key": "M", "load": "pos"},
+            {"key": "M", "load": "neg"},
+        ],
+    },
+    {
+        "title": "Deflection [in]  (+up / -down)",
+        "xlabel": "Span [in]",
+        "plots": [
+            {"key": "z_front", "load": "pos", "label": "Frt +g (up)"},
+            {"key": "z_rear", "load": "pos", "color": "#B9BCC2", "lw": 1.5, "label": "Rr +g (up)"},
+            {"key": "z_front", "load": "neg", "label": "Frt -g (down)"},
+            {"key": "z_rear", "load": "neg", "color": "#E5C87A", "lw": 1, "label": "Rr -g (down)"},
+        ],
+        "legend": True,
+        "zero_line": True,
+    },
+]
 
 def naca_depth(x_over_c: float, t_over_c: float, chord: float) -> float:
     """
@@ -175,6 +234,25 @@ def labeled_combo(parent, label, values, default=None, width=22, row=None, col=0
 def separator(parent, row, colspan=4):
     ttk.Separator(parent, orient="horizontal").grid(
         row=row, column=0, columnspan=colspan, sticky="ew", pady=3)
+
+
+# ─── ROW COUNTER HELPER ──────────────────────────────────────────────────────
+
+class RowCounter:
+    """Helper class to manage row increments in grid layouts."""
+    def __init__(self, start=0):
+        self.current = start
+    
+    def __call__(self):
+        """Return current row and increment."""
+        r = self.current
+        self.current += 1
+        return r
+    
+    def get(self):
+        """Return current row without incrementing."""
+        return self.current
+
 
 # ─── SPAR FRAME ──────────────────────────────────────────────────────────────
 
@@ -431,53 +509,79 @@ class WingStressGUI:
         pw.add(right, weight=2)
         self._build_right(right)
 
-    def _build_right(self, parent):
-        # ── Button row at TOP ────────────────────────────────────────────────
+    def _create_button_row(self, parent):
+        """Create and return the top button row with analysis and export controls."""
         btn_row = ttk.Frame(parent)
-        btn_row.pack(side=tk.TOP, fill=tk.X, pady=(4,2), padx=4)
+        btn_row.pack(side=tk.TOP, fill=tk.X, pady=(4, 2), padx=4)
+        
+        # Left-aligned buttons
         ttk.Button(btn_row, text="▶  ANALYZE", command=self._run_analysis,
-                   style="Accent.TButton").pack(side=tk.LEFT, padx=(4,10))
+                   style="Accent.TButton").pack(side=tk.LEFT, padx=(4, 10))
         ttk.Separator(btn_row, orient="vertical").pack(side=tk.LEFT, fill=tk.Y, pady=3, padx=4)
-        ttk.Button(btn_row, text="⟳ Reset",    command=self._populate_defaults
+        ttk.Button(btn_row, text="⟳ Reset", command=self._populate_defaults
                    ).pack(side=tk.LEFT, padx=2)
         ttk.Button(btn_row, text="✈ Geometry", command=self._plot_geometry
                    ).pack(side=tk.LEFT, padx=2)
+        
+        # Right-aligned buttons
         ttk.Separator(btn_row, orient="vertical").pack(side=tk.RIGHT, fill=tk.Y, pady=3, padx=4)
         ttk.Button(btn_row, text="⬇ Excel", command=self._export_excel,
                    style="Export.TButton").pack(side=tk.RIGHT, padx=2)
-        ttk.Button(btn_row, text="⬇ PDF",   command=self._export_pdf,
+        ttk.Button(btn_row, text="⬇ PDF", command=self._export_pdf,
                    style="Export.TButton").pack(side=tk.RIGHT, padx=2)
+        
+        return btn_row
 
-        # ── Results notebook fills remaining space ───────────────────────────
-        nb = ttk.Notebook(parent)
-        nb.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-        self._nb = nb
-
-        # Summary tab
-        sum_tab = ttk.Frame(nb)
-        nb.add(sum_tab, text="Summary")
+    def _create_summary_tab(self, notebook):
+        """Create the Summary tab with styled text widget."""
+        sum_tab = ttk.Frame(notebook)
+        notebook.add(sum_tab, text="Summary")
+        
         self._summary_text = scrolledtext.ScrolledText(
             sum_tab, font=("Courier", 9), state="disabled",
             wrap=tk.WORD, width=62)
         self._summary_text.pack(fill=tk.BOTH, expand=True)
-        self._summary_text.tag_configure("GREEN",  **TAG_GREEN)
-        self._summary_text.tag_configure("YELLOW", **TAG_YELLOW)
-        self._summary_text.tag_configure("RED",    **TAG_RED)
-        self._summary_text.tag_configure("HEAD",   **TAG_HEAD)
-        self._summary_text.tag_configure("BOLD",   **TAG_BOLD)
-        self._summary_text.tag_configure("FIX",    **TAG_FIX)
+        
+        # Configure text tags
+        tag_configs = [
+            ("GREEN", TAG_GREEN),
+            ("YELLOW", TAG_YELLOW),
+            ("RED", TAG_RED),
+            ("HEAD", TAG_HEAD),
+            ("BOLD", TAG_BOLD),
+            ("FIX", TAG_FIX),
+        ]
+        for tag_name, tag_config in tag_configs:
+            self._summary_text.tag_configure(tag_name, **tag_config)
 
-        # Plots tab
-        plot_tab = ttk.Frame(nb)
-        nb.add(plot_tab, text="Plots")
+    def _create_plots_tab(self, notebook):
+        """Create the Plots tab with matplotlib figure."""
+        plot_tab = ttk.Frame(notebook)
+        notebook.add(plot_tab, text="Plots")
+        
         # Use Figure directly — no pyplot global state contamination
-        from matplotlib.figure import Figure as _Figure
-        self._fig = _Figure(figsize=(9, 6))
+        self._fig = Figure(figsize=(9, 6))
         self._fig.patch.set_facecolor("#1e2128")
         self._axes = self._fig.subplots(2, 2)
         self._fig.tight_layout(pad=2.5)
         self._canvas_plt = FigureCanvasTkAgg(self._fig, master=plot_tab)
         self._canvas_plt.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+
+    def _create_results_notebook(self, parent):
+        """Create and return the results notebook with Summary and Plots tabs."""
+        nb = ttk.Notebook(parent)
+        nb.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+        
+        # Create tabs
+        self._create_summary_tab(nb)
+        self._create_plots_tab(nb)
+        
+        return nb
+
+    def _build_right(self, parent):
+        """Build the right panel with controls and results display."""
+        self._create_button_row(parent)
+        self._nb = self._create_results_notebook(parent)
 
 
     # ── Inputs ────────────────────────────────────────────────────────────────
@@ -881,56 +985,112 @@ class WingStressGUI:
 
         self._vars["geodetic_enabled"].trace_add("write", lambda *_: self._refresh_structure())
         self._refresh_structure()
+    # ── Tab Grid Configuration ───────────────────────────────────────────────
+
+    def _configure_tab_grid(self, frame):
+        """Standard grid configuration for input tabs."""
+        frame.columnconfigure(0, weight=0)  # Label column - fixed
+        frame.columnconfigure(1, weight=1)  # Entry column - expands
+        frame.rowconfigure(999, weight=1)   # Bottom spacer
+
+    # ── Loads Tab Helper Methods ─────────────────────────────────────────────
+
+    def _build_loads_section(self, parent, row):
+        """Build Gross Weight & Loads input section."""
+        section_label(parent, "Gross Weight & Loads", row=row())
+        
+        self._le(parent, "Gross weight (lb):", "Weight", 1750.0, row=row())
+        self._le(parent, "Wing weight (lb):", "Wing_Weight", 175.0, row=row())
+        self._le(parent, "Tail download at 1g (lb):", "Tail_Down_1g", 218.75, row=row())
+        self._le(parent, "Pos load factor (+g):", "n", 6.0, row=row())
+        self._le(parent, "Neg load factor (-g):", "n_neg", -3.0, row=row())
+        self._le(parent, "ng_lift (semi-span, lb):", "ng_lift", 5381.25, row=row())
+        
+        # Auto-compute button
+        ttk.Button(parent, text="Auto-compute ng_lift",
+                   command=self._auto_ng_lift).grid(
+                       row=row(), column=0, columnspan=2, sticky="w", padx=4, pady=3)
+        
+        self._lchk(parent, "Distribute wing weight along span",
+                   "distribute_wing_weight", False, row=row())
+
+    def _build_config_section(self, parent, row):
+        """Build Configuration dropdown section."""
+        section_label(parent, "Configuration", row=row())
+        
+        configs = ["strut_braced", "cantilever", "single_strut"]
+        self._lc(parent, "Config:", "config", configs, "strut_braced", row=row())
+        self._vars["config"].trace_add("write", lambda *_: self._refresh_config())
+
+    def _build_strut_frame(self, parent, row):
+        """Build strut configuration sub-frame."""
+        self._strut_frame = ttk.Frame(parent)
+        self._strut_frame.grid(row=row(), column=0, columnspan=4, sticky="ew")
+        
+        sf = self._strut_frame
+        self._le(sf, "Strut BL at spar (in):", "strut_bl", 104.0, row=0)
+        self._le(sf, "Strut BL at fuselage (in):", "strut_fuse_bl", 0.0, row=1)
+        self._le(sf, "Strut rise (in):", "strut_vert", 44.0, row=2)
+        self._lc(sf, "Strut material:", "strut_mat", strut_mat_names(),
+                 "4130 Chromoly (normalized)", row=3, width=28)
+        self._le(sf, "Strut OD (in):", "strut_tube_od", 3.0, row=4)
+        self._le(sf, "Strut wall (in):", "strut_tube_wall", 0.065, row=5)
+        
+        # Info label
+        self._strut_info = tk.StringVar(value="")
+        ttk.Label(sf, textvariable=self._strut_info, foreground="#444",
+                  font=("Courier", 8)).grid(
+                      row=6, column=0, columnspan=4, sticky="w", padx=4)
+        
+        # Register traces for strut parameters
+        self._register_strut_traces()
+
+    def _register_strut_traces(self):
+        """Register trace callbacks for strut parameter updates."""
+        strut_params = ["strut_bl", "strut_fuse_bl", "strut_vert",
+                        "strut_mat", "strut_tube_od", "strut_tube_wall"]
+        
+        for param_name in strut_params:
+            if param_name in self._vars:
+                # Fix closure issue by using default argument
+                self._vars[param_name].trace_add(
+                    "write", lambda *_, p=param_name: self._update_strut_info())
+
+    def _build_secondary_bending_section(self, parent, row):
+        """Build P-delta amplification section."""
+        section_label(parent, "Secondary Bending (P-delta)", row=row())
+        self._lchk(parent, "Enable P-delta amplification",
+                   "secondary_bending", False, row=row())
+
+    def _build_jury_strut_section(self, parent, row):
+        """Build jury strut configuration section."""
+        section_label(parent, "Jury Strut", row=row())
+        self._lchk(parent, "Enable jury strut", "jury_strut", False, row=row())
+        self._le(parent, "Jury spar BL (in):", "jury_spar_bl", 60.0, row=row())
+
 
     # ── Loads & Config tab ───────────────────────────────────────────────────
 
     def _build_loads_tab(self, f):
-        f.columnconfigure(0, weight=0); f.columnconfigure(1, weight=1); f.rowconfigure(999, weight=1)
-        r = 0
-        section_label(f,"Gross Weight & Loads", row=r); r+=1
-        self._le(f,"Gross weight (lb):","Weight",1750.0,row=r); r+=1
-        self._le(f,"Wing weight (lb):", "Wing_Weight",175.0,row=r); r+=1
-        self._le(f,"Tail download at 1g (lb):","Tail_Down_1g",218.75,row=r); r+=1
-        self._le(f,"Pos load factor (+g):","n",6.0,row=r); r+=1
-        self._le(f,"Neg load factor (-g):","n_neg",-3.0,row=r); r+=1
-        self._le(f,"ng_lift (semi-span, lb):","ng_lift",5381.25,row=r); r+=1
-
-        # Auto-compute ng_lift
-        ttk.Button(f, text="Auto-compute ng_lift",
-                   command=self._auto_ng_lift).grid(row=r, column=0, columnspan=2,
-                                                     sticky="w", padx=4, pady=3); r+=1
-        self._lchk(f,"Distribute wing weight along span","distribute_wing_weight",False,row=r); r+=1
-
-        section_label(f,"Configuration", row=r); r+=1
-        configs = ["strut_braced","cantilever","single_strut"]
-        self._lc(f,"Config:","config",configs,"strut_braced",row=r); r+=1
-        self._vars["config"].trace_add("write", lambda *_: self._refresh_config())
-
-        self._strut_frame = ttk.Frame(f)
-        self._strut_frame.grid(row=r, column=0, columnspan=4, sticky="ew"); r+=1
-        sf = self._strut_frame
-        self._le(sf,"Strut BL at spar (in):",  "strut_bl",      104.0, row=0)
-        self._le(sf,"Strut BL at fuselage (in):","strut_fuse_bl",   0.0, row=1)
-        self._le(sf,"Strut rise (in):",          "strut_vert",      44.0, row=2)
-        self._lc(sf,"Strut material:","strut_mat",strut_mat_names(),
-                 "4130 Chromoly (normalized)", row=3, width=28)
-        self._le(sf,"Strut OD (in):",   "strut_tube_od",  3.0, row=4)
-        self._le(sf,"Strut wall (in):", "strut_tube_wall",0.065,row=5)
-        self._strut_info = tk.StringVar(value="")
-        ttk.Label(sf,textvariable=self._strut_info,foreground="#444",
-                  font=("Courier",8)).grid(row=6,column=0,columnspan=4,sticky="w",padx=4)
-
-        for nm in ("strut_bl","strut_fuse_bl","strut_vert","strut_mat","strut_tube_od","strut_tube_wall"):
-            if nm in self._vars:
-                self._vars[nm].trace_add("write", lambda *_: self._update_strut_info())
-
-        section_label(f,"Secondary Bending (P-delta)",row=r); r+=1
-        self._lchk(f,"Enable P-delta amplification","secondary_bending",False,row=r); r+=1
-
-        section_label(f,"Jury Strut",row=r); r+=1
-        self._lchk(f,"Enable jury strut","jury_strut",False,row=r); r+=1
-        self._le(f,"Jury spar BL (in):","jury_spar_bl",60.0,row=r); r+=1
-
+        """Build the Loads & Config tab with all input sections."""
+        self._configure_tab_grid(f)
+        row = RowCounter()
+        
+        # Gross Weight & Loads section
+        self._build_loads_section(f, row)
+        
+        # Configuration section
+        self._build_config_section(f, row)
+        
+        # Strut frame
+        self._build_strut_frame(f, row)
+        
+        # Secondary Bending section
+        self._build_secondary_bending_section(f, row)
+        
+        # Jury Strut section
+        self._build_jury_strut_section(f, row)
+        
         self._refresh_config()
         self._update_strut_info()
 
@@ -1379,50 +1539,102 @@ class WingStressGUI:
 
         self._summary_text.config(state="disabled")
 
+    def _style_axis(self, ax):
+        """Apply dark theme styling to a single axis."""
+        ax.clear()
+        ax.set_facecolor(PLOT_STYLE["dark_bg"])
+        ax.tick_params(colors=PLOT_STYLE["tick_color"], labelcolor=PLOT_STYLE["label_color"])
+        ax.spines[:].set_color(PLOT_STYLE["spine_color"])
+
+    def _add_torsion_overlay(self, ax, x, torsion_data):
+        """Add torsion twist overlay to an axis (for skinned/geodetic wings)."""
+        if not torsion_data:
+            return None
+        
+        ax_twin = ax.twinx()
+        twist_deg = np.degrees(torsion_data["phi"])
+        ax_twin.plot(
+            x, twist_deg,
+            color=PLOT_STYLE["torsion_color"],
+            lw=PLOT_STYLE["torsion_lw"],
+            linestyle=":",
+            alpha=PLOT_STYLE["torsion_alpha"]
+        )
+        ax_twin.set_ylabel("Twist [°]", fontsize=7, color=PLOT_STYLE["torsion_color"])
+        ax_twin.tick_params(labelsize=7, colors=PLOT_STYLE["torsion_color"])
+        return ax_twin
+
+    def _plot_data_series(self, ax, x, config, analyzer):
+        """Plot a single data series based on configuration."""
+        for plot_spec in config["plots"]:
+            key = plot_spec["key"]
+            load = plot_spec["load"]
+            
+            # Get data
+            data = analyzer.pos[key] if load == "pos" else analyzer.neg[key]
+            if plot_spec.get("negate", False):
+                data = -data
+            
+            # Determine styling
+            color = plot_spec.get("color")
+            if not color:
+                color = PLOT_STYLE["pos_color"] if load == "pos" else PLOT_STYLE["neg_color"]
+            
+            lw = plot_spec.get("lw")
+            if not lw:
+                lw = PLOT_STYLE["pos_lw"] if load == "pos" else PLOT_STYLE["neg_lw"]
+            
+            linestyle = "--" if load == "neg" else plot_spec.get("linestyle", "-")
+            
+            # Determine label
+            label = plot_spec.get("label")
+            if not label and "label_fn" in plot_spec:
+                label = plot_spec["label_fn"](analyzer)
+            
+            # Plot
+            ax.plot(x, data, color=color, lw=lw, linestyle=linestyle, label=label)
+        
+        # Configure axis
+        ax.set(title=config["title"], xlabel=config["xlabel"])
+        ax.grid(True, alpha=PLOT_STYLE["grid_alpha"])
+        
+        if config.get("legend"):
+            ax.legend(fontsize=7)
+        
+        if config.get("zero_line"):
+            ax.axhline(y=0, color="k", lw=0.5, alpha=0.4)
+
+    def _should_show_torsion(self):
+        """Determine if torsion overlay should be shown based on wing structure."""
+        if not self.analyzer or not self.analyzer.torsion:
+            return False
+        
+        # Show torsion for skinned or geodetic wings
+        wing_type = self._vars.get("wing_structure_type", tk.StringVar()).get()
+        geodetic = self._vars.get("geodetic_enabled", tk.BooleanVar()).get()
+        
+        return wing_type == "aluminum_skin" or geodetic
+
     def _update_plots(self):
+        """Update all analysis plots with current data."""
         a = self.analyzer
-        PS = {  # reapply dark style after clear
-            "facecolor": "#252930", "labelcolor": "#e8eaf0",
-            "tick_params": {"colors": "#B9BCC2"},
-        }
-        for ax in self._axes.flatten():
-            ax.clear()
-            ax.set_facecolor("#252930")
-            ax.tick_params(colors="#B9BCC2", labelcolor="#e8eaf0")
-            ax.spines[:].set_color("#6E7F87")
-        ax1,ax2,ax3,ax4 = self._axes.flatten()
         x = a.x
-
-        ax1.plot(x, a.pos["w"], color="#085097", lw=2, label=f"+{a.n:.0f}g")
-        ax1.plot(x,-a.neg["w"], color="#D2B75F", lw=1.5, linestyle="--", label=f"{a.n_neg:.0f}g")
-        ax1.set(title="Lift [lb/in]", xlabel="Span [in]")
-        ax1.legend(fontsize=7); ax1.grid(True,alpha=0.3)
-
-        ax2.plot(x, a.pos["V"], color="#085097", lw=2)
-        ax2.plot(x, a.neg["V"], color="#D2B75F", lw=1.5, linestyle="--")
-        ax2.set(title="Shear [lb]", xlabel="Span [in]")
-        ax2.grid(True,alpha=0.3)
-
-        ax3.plot(x, a.pos["M"], color="#085097", lw=2)
-        ax3.plot(x, a.neg["M"], color="#D2B75F", lw=1.5, linestyle="--")
-        ax3.set(title="Moment [lb·in]", xlabel="Span [in]")
-        ax3.grid(True,alpha=0.3)
-
-        ax4.plot(x, a.pos["z_front"], color="#085097", lw=2,   label="Frt +g (up)")
-        ax4.plot(x, a.pos["z_rear"],  color="#B9BCC2", lw=1.5, label="Rr +g (up)")
-        ax4.plot(x, a.neg["z_front"], color="#D2B75F", lw=1.5, linestyle="--", label="Frt -g (down)")
-        ax4.plot(x, a.neg["z_rear"],  color="#E5C87A", lw=1,   linestyle="--", label="Rr -g (down)")
-        ax4.axhline(y=0, color="k", lw=0.5, alpha=0.4)
-        ax4.set(title="Deflection [in]  (+up / -down)", xlabel="Span [in]")
-        ax4.legend(fontsize=7); ax4.grid(True,alpha=0.3)
-
-        if a.torsion:
-            ax1_twin = ax1.twinx()
-            ax1_twin.plot(x, np.degrees(a.torsion["phi"]),
-                          "orange", lw=1, linestyle=":", alpha=0.8)
-            ax1_twin.set_ylabel("Twist [°]", fontsize=7, color="orange")
-            ax1_twin.tick_params(labelsize=7, colors="orange")
-
+        
+        # Style all axes
+        for ax in self._axes.flatten():
+            self._style_axis(ax)
+        
+        axes = self._axes.flatten()
+        
+        # Plot each configured subplot
+        for i, config in enumerate(PLOT_CONFIGS):
+            if i < len(axes):
+                self._plot_data_series(axes[i], x, config, a)
+                
+                # Add torsion overlay if configured and applicable
+                if config.get("torsion_overlay") and self._should_show_torsion():
+                    self._add_torsion_overlay(axes[i], x, a.torsion)
+        
         self._fig.tight_layout(pad=2.0)
         self._canvas_plt.draw()
         self._nb.select(1)
@@ -1562,9 +1774,10 @@ class WingStressGUI:
         - Skips display-only keys and empty strings
         - Does NOT inject DEFAULT_INPUTS values — file reflects actual user inputs
         """
-        bool_keys = {"dcell_enabled","geodetic_enabled","distribute_wing_weight",
-                     "secondary_bending","jury_strut"}
-        skip_keys = {"front_spar_h_total_disp","rear_spar_h_total_disp"}
+        bool_keys = {"dcell_enabled", "geodetic_enabled", "distribute_wing_weight",
+                     "secondary_bending", "jury_strut"}
+        skip_keys = {"front_spar_h_total_disp", "rear_spar_h_total_disp"}
+        string_keys = {"airfoil"}
 
         # Start from cache (has all keys including hidden spar fields)
         data = dict(self._data_cache)
@@ -1573,29 +1786,53 @@ class WingStressGUI:
         for k, var in self._vars.items():
             if k in skip_keys:
                 continue
-            raw = var.get()
-            if k in bool_keys:
-                data[k] = bool(raw) if isinstance(raw, bool) else (str(raw).strip().lower() in ("1","true","yes"))
-            else:
-                raw_str = str(raw).strip()
-                if raw_str != "":
-                    try:    data[k] = float(raw_str)
-                    except: data[k] = raw_str
-                # if empty: keep whatever is in cache from last load
 
-        # Save airfoil name as string (not float-coerced)
-        if "airfoil" in self._vars:
-            data["airfoil"] = self._vars["airfoil"].get()
+            raw = var.get()
+            coerced = self._coerce_value(k, raw, bool_keys, string_keys)
+
+            if coerced is not None:
+                data[k] = coerced
+            # else: keep whatever is in cache from last load
 
         # Normalize load share to 0-1
-        lsf = data.get("front_spar_load_share", 0.55)
-        if isinstance(lsf, (int,float)) and lsf > 1.0:
-            data["front_spar_load_share"] = lsf / 100.0
+        self._normalize_load_share(data)
 
         data["num_spars"] = 2
 
         with open(path, "w") as fh:
             json.dump(data, fh, indent=2, default=str)
+
+    def _coerce_to_bool(self, value):
+        """Convert value to boolean, handling string representations."""
+        if isinstance(value, bool):
+            return value
+        return str(value).strip().lower() in ("1", "true", "yes")
+
+    def _coerce_value(self, key, raw_value, bool_keys, string_keys):
+        """
+        Coerce value to appropriate type based on key.
+        Returns None if value should be skipped (empty string for non-string keys).
+        """
+        if key in bool_keys:
+            return self._coerce_to_bool(raw_value)
+
+        if key in string_keys:
+            return str(raw_value)
+
+        raw_str = str(raw_value).strip()
+        if raw_str == "":
+            return None  # Signal to skip - keep cache value
+
+        try:
+            return float(raw_str)
+        except (ValueError, TypeError):
+            return raw_str
+
+    def _normalize_load_share(self, data):
+        """Normalize front_spar_load_share from percentage to 0-1 range if needed."""
+        lsf = data.get("front_spar_load_share", 0.55)
+        if isinstance(lsf, (int, float)) and lsf > 1.0:
+            data["front_spar_load_share"] = lsf / 100.0
         self._set_status(f"Saved {path}", C_GREEN)
 
     def _open(self):

@@ -24,6 +24,68 @@ HOST = os.environ.get("HOST", "0.0.0.0")
 PORT = int(os.environ.get("PORT", "8000"))
 BETA_PASSWORD = os.environ.get("AEROBEAM_BETA_PASSWORD", "").strip()
 
+# Cache for /api/defaults response
+_defaults_cache = None
+
+
+def _build_defaults_response():
+    """Build the defaults API response once and cache it."""
+    from spar_sections import (
+        spar_type_names, all_mat_names, strut_mat_names,
+        ALUMINUM_ANGLES, ANGLE_DESCRIPTIONS
+    )
+    from common_tube_spars import COMMON_TUBE_SIZES
+    from airfoil_database import airfoil_names, AIRFOIL_DB
+    from method_status import METHOD_STATUS
+    
+    # Build angle data
+    angle_data = {
+        angle.description: {
+            "L1": angle.L1,
+            "L2": angle.L2,
+            "t": angle.t,
+            "area": angle.area,
+            "b_equiv": angle.b_equiv,
+            "t_equiv": angle.t_equiv,
+        }
+        for angle in ALUMINUM_ANGLES
+    }
+    
+    # Build tube spar data
+    tube_spars = [str(tube) for tube in COMMON_TUBE_SIZES]
+    
+    # Build airfoil data
+    airfoil_data = {
+        name: {
+            "family": data.get("family", ""),
+            "t_c": data.get("t_c", 0),
+            "Cm_ac": data.get("Cm_ac", 0),
+        }
+        for name, data in AIRFOIL_DB.items()
+    }
+    
+    return {
+        "ok": True,
+        "defaults": DEFAULT_INPUTS,
+        "sparTypes": spar_type_names(),
+        "materials": all_mat_names(),
+        "strutMaterials": strut_mat_names(),
+        "angles": ANGLE_DESCRIPTIONS,
+        "angleData": angle_data,
+        "tubeSpars": tube_spars,
+        "airfoils": airfoil_names(),
+        "airfoilData": airfoil_data,
+        "methodStatus": METHOD_STATUS,
+    }
+
+
+def _get_defaults_response():
+    """Get cached defaults response, building it if necessary."""
+    global _defaults_cache
+    if _defaults_cache is None:
+        _defaults_cache = _build_defaults_response()
+    return _defaults_cache
+
 
 def _jsonable(value):
     if isinstance(value, np.ndarray):
@@ -137,35 +199,45 @@ class AeroBeamHandler(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.end_headers()
 
+    def _handle_healthz(self):
+        """Handle /healthz endpoint."""
+        self.send_response(200)
+        self.send_header("Content-Type", "text/plain")
+        self.end_headers()
+        self.wfile.write(b"ok")
+
+    def _handle_defaults(self):
+        """Handle /api/defaults endpoint."""
+        self._send_json(_get_defaults_response())
+
+    def _handle_index(self):
+        """Handle index page."""
+        self._serve_file("index.html")
+
     def do_GET(self):
         parsed = urlparse(self.path)
         path = parsed.path
 
-        if path == "/healthz":
-            self.send_response(200)
-            self.send_header("Content-Type", "text/plain")
-            self.end_headers()
-            self.wfile.write(b"ok")
+        # Route dispatch table
+        routes = {
+            "/healthz": self._handle_healthz,
+            "/api/defaults": self._handle_defaults,
+            "/": self._handle_index,
+            "/index.html": self._handle_index,
+        }
+
+        # Try exact match first
+        handler = routes.get(path)
+        if handler:
+            handler()
             return
 
-        if path == "/api/defaults":
-            from spar_sections import spar_type_names, all_mat_names, strut_mat_names
-            self._send_json({
-                "ok": True,
-                "defaults": DEFAULT_INPUTS,
-                "sparTypes": spar_type_names(),
-                "materials": all_mat_names(),
-                "strutMaterials": strut_mat_names(),
-            })
-            return
-
-        if path in ("/", "/index.html"):
-            self._serve_file("index.html")
-            return
+        # Fall back to static file serving
         if path.startswith("/"):
             self._serve_file(path.lstrip("/"))
             return
 
+        # 404 for anything else
         self._send_json({"ok": False, "error": "Not found"}, 404)
 
     def do_POST(self):
@@ -195,17 +267,29 @@ class AeroBeamHandler(BaseHTTPRequestHandler):
         self._send_json({"ok": False, "error": "Unknown endpoint"}, 404)
 
     def _serve_file(self, filename: str):
+        """Serve a static file from the web directory."""
         filepath = WEB_ROOT / filename
         if not filepath.exists() or not filepath.is_file():
             self.send_response(404)
             self.end_headers()
             return
 
-        content_type = "text/html"
-        if filename.endswith(".js"):
-            content_type = "application/javascript"
-        elif filename.endswith(".css"):
-            content_type = "text/css"
+        # MIME type mapping
+        mime_types = {
+            ".html": "text/html",
+            ".js": "application/javascript",
+            ".css": "text/css",
+            ".ico": "image/x-icon",
+            ".png": "image/png",
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".svg": "image/svg+xml",
+            ".json": "application/json",
+            ".txt": "text/plain",
+        }
+
+        suffix = filepath.suffix.lower()
+        content_type = mime_types.get(suffix, "application/octet-stream")
 
         self.send_response(200)
         self.send_header("Content-Type", content_type)
