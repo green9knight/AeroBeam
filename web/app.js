@@ -297,6 +297,31 @@ function setStatus(message, kind = "") {
   el.className = `status ${kind}`;
 }
 
+function summaryClass(line) {
+  if (line.includes("*** BUCKLING: FAIL") || line.includes("*** FAIL") || line.includes("✗")) {
+    return "summary-fail";
+  }
+  if (line.includes("✓")) return "summary-pass";
+  if (line.includes("⚠") || line.includes("!! ") || line.includes("WARN")) return "summary-warn";
+  if (line.includes("PASS") && line.includes("BUCKLING")) return "summary-pass";
+  if (line.includes(">>>")) return "summary-fix";
+  if (line.startsWith("══") || line.startsWith("--") || line.startsWith("──")) return "summary-head";
+  if (line.startsWith("  [") && line.trim().endsWith("]")) return "summary-info";
+  return "";
+}
+
+function renderSummary(text) {
+  const target = document.getElementById("summary");
+  target.innerHTML = "";
+  const lines = String(text ?? "").split("\n");
+  for (const line of lines) {
+    const row = document.createElement("div");
+    row.className = `summary-line ${summaryClass(line)}`.trim();
+    row.textContent = line || " ";
+    target.appendChild(row);
+  }
+}
+
 function renderMethodStatus(statusMap) {
   const target = document.getElementById("methodStatusList");
   if (!target) return;
@@ -351,8 +376,7 @@ function showPasswordRequired(message = "Enter beta password to run analysis.") 
     passwordField.focus();
     passwordField.select();
   }
-  document.getElementById("summary").textContent =
-    `${message}\n\nEnter the beta password in the field near the top of the input panel, then click Run Analysis again.`;
+  renderSummary(`${message}\n\nEnter the beta password in the field near the top of the input panel, then click Run Analysis again.`);
   setStatus("Enter beta password", "error");
 }
 
@@ -992,7 +1016,7 @@ async function runAnalysis() {
     rememberBetaPassword();
     const started = new Date();
     setStatus(`Running analysis #${runId}...`);
-    document.getElementById("summary").textContent = `Running analysis #${runId}...\nStarted ${started.toLocaleTimeString()}`;
+    renderSummary(`Running analysis #${runId}...\nStarted ${started.toLocaleTimeString()}`);
     updateCards({
       sigma_max_front: null,
       sigma_max_rear: null,
@@ -1015,13 +1039,12 @@ async function runAnalysis() {
     if (runId !== state.runId) return;
 
     const finished = new Date();
-    document.getElementById("summary").textContent =
-      `Analysis #${runId} complete — ${finished.toLocaleTimeString()}\n\n${payload.summary}`;
+    renderSummary(`Analysis #${runId} complete — ${finished.toLocaleTimeString()}\n\n${payload.summary}`);
     updateCards(payload.metrics);
     renderPlots(payload);
     setStatus(`Analysis #${runId} complete`, "ok");
   } catch (error) {
-    document.getElementById("summary").textContent = error.stack || String(error);
+    renderSummary(error.stack || String(error));
     setStatus("Analysis failed", "error");
   } finally {
     if (runId === state.runId) setRunButtonRunning(false);
@@ -1057,7 +1080,7 @@ async function downloadReport() {
     URL.revokeObjectURL(url);
     setStatus("PDF report ready", "ok");
   } catch (error) {
-    document.getElementById("summary").textContent = error.stack || String(error);
+    renderSummary(error.stack || String(error));
     setStatus("PDF report failed", "error");
   }
 }
@@ -1074,7 +1097,7 @@ async function uploadInputs(event) {
     setStatus(`Loaded ${file.name}`, "ok");
     await runAnalysis();
   } catch (error) {
-    document.getElementById("summary").textContent = error.stack || String(error);
+    renderSummary(error.stack || String(error));
     setStatus("Input upload failed", "error");
   } finally {
     event.target.value = "";
@@ -1150,6 +1173,6 @@ window.addEventListener("resize", () => {
 });
 
 init().catch((error) => {
-  document.getElementById("summary").textContent = error.stack || String(error);
+  renderSummary(error.stack || String(error));
   setStatus("Startup failed", "error");
 });

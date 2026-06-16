@@ -390,7 +390,7 @@ canvas {
   padding: 1rem;
 }
 
-pre {
+.summary-text {
   margin: 0;
   max-height: 30rem;
   overflow: auto;
@@ -399,6 +399,41 @@ pre {
   font-family: "Cascadia Mono", "Consolas", monospace;
   font-size: 0.84rem;
   line-height: 1.4;
+}
+
+.summary-line {
+  min-height: 1.1em;
+}
+
+.summary-pass {
+  color: var(--green);
+  font-weight: 700;
+}
+
+.summary-fail {
+  color: var(--red);
+  font-weight: 800;
+}
+
+.summary-warn {
+  color: var(--gold-light);
+  font-weight: 700;
+}
+
+.summary-head {
+  color: var(--gold);
+  font-weight: 800;
+}
+
+.summary-fix {
+  color: var(--gold-light);
+  font-style: italic;
+  font-weight: 700;
+}
+
+.summary-info {
+  color: var(--blue);
+  font-weight: 700;
 }
 
 @media (max-width: 1050px) {
