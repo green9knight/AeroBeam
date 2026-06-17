@@ -115,12 +115,43 @@ body {
   line-height: 1.35;
 }
 
+.disclaimer-banner {
+  margin-bottom: 1rem;
+  padding: 1rem 1.1rem;
+  border: 2px solid #c0392b;
+  border-radius: 10px;
+  background: rgba(192, 57, 43, 0.18);
+  color: #ffcccc;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  box-shadow: 0 2px 8px rgba(192, 57, 43, 0.3);
+}
+
+.disclaimer-banner strong {
+  color: #ff6b6b;
+}
+
 .method-status-details {
   margin: 0 0 0.9rem;
-  padding: 0.65rem 0.75rem;
+  padding: 0.75rem 0.85rem;
   border: 1px solid rgba(185, 188, 194, 0.45);
   border-radius: 10px;
   background: rgba(76, 83, 95, 0.55);
+}
+
+.method-status-details[open] {
+  background: rgba(76, 83, 95, 0.75);
+}
+
+.method-status-details summary {
+  cursor: pointer;
+  user-select: none;
+  font-weight: 600;
+  color: var(--gold-light);
+}
+
+.method-status-details summary:hover {
+  color: var(--gold);
 }
 
 .method-status-list {

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-AeroBeam Web Backend - Render Ready (Complete)
-Fixes: binding, health check, and missing plot data for frontend
+AeroBeam Web Backend - Production Ready
+Includes: input validation, sanitized errors, security headers, and method warnings
 """
 
 from __future__ import annotations
@@ -17,6 +17,7 @@ os.environ.setdefault("MPLBACKEND", "Agg")
 import numpy as np
 
 from wing_stress_analyzer import DEFAULT_INPUTS, WingStressAnalyzer
+from input_validation import validate_inputs, ValidationError, sanitize_error_message
 
 ROOT = Path(__file__).resolve().parent
 WEB_ROOT = ROOT / "web"
@@ -168,6 +169,24 @@ def safe_run_analysis(inputs: dict) -> dict:
         if inputs:
             full_inputs.update(inputs)
         
+        # Validate inputs
+        print("Validating inputs...", file=sys.stderr)
+        try:
+            validated_inputs, warnings = validate_inputs(full_inputs)
+            full_inputs = validated_inputs
+            
+            if warnings:
+                print(f"Validation warnings: {len(warnings)}", file=sys.stderr)
+                for w in warnings:
+                    print(f"  - {w.field}: {w.message}", file=sys.stderr)
+        except ValidationError as ve:
+            print(f"Validation failed: {ve}", file=sys.stderr)
+            return {
+                "ok": False,
+                "error": str(ve),
+                "error_type": "ValidationError",
+            }
+        
         # Log critical configuration
         print(f"Spar type: {full_inputs.get('front_spar_type', 'unknown')}", file=sys.stderr)
         print(f"Material: {full_inputs.get('front_spar_mat', 'unknown')}", file=sys.stderr)
@@ -193,10 +212,19 @@ def safe_run_analysis(inputs: dict) -> dict:
                 "z_delta_max": getattr(analyzer, "max_z_delta", None),
             },
             "series": _series(analyzer),
+            "warnings": [{"field": w.field, "message": w.message} for w in warnings] if warnings else [],
         }
         print("=== ANALYSIS SUCCESS ===", file=sys.stderr)
         return result
         
+    except ValidationError as ve:
+        # User-friendly validation errors
+        print(f"Validation error: {ve}", file=sys.stderr)
+        return {
+            "ok": False,
+            "error": str(ve),
+            "error_type": "ValidationError",
+        }
     except Exception as e:
         tb = traceback.format_exc()
         print("=== ANALYSIS ERROR ===", file=sys.stderr)
@@ -205,11 +233,13 @@ def safe_run_analysis(inputs: dict) -> dict:
         print("Full traceback:", file=sys.stderr)
         print(tb, file=sys.stderr)
         print("=== END ERROR ===", file=sys.stderr)
+        
+        # Return sanitized error to user, full trace to logs
+        user_message = sanitize_error_message(e)
         return {
             "ok": False,
-            "error": str(e),
+            "error": user_message,
             "error_type": type(e).__name__,
-            "traceback": tb,
         }
 
 
@@ -218,6 +248,11 @@ class AeroBeamHandler(BaseHTTPRequestHandler):
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Access-Control-Allow-Origin", "*")
+        # Security headers
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Frame-Options", "DENY")
+        self.send_header("X-XSS-Protection", "1; mode=block")
+        self.send_header("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'")
         self.end_headers()
         self.wfile.write(json.dumps(data, default=str).encode("utf-8"))
 
@@ -226,6 +261,9 @@ class AeroBeamHandler(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        # Security headers
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Frame-Options", "DENY")
         self.end_headers()
 
     def _handle_healthz(self):
