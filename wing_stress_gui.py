@@ -1672,6 +1672,8 @@ class WingStressGUI:
             self._update_plots()
             self._nb.select(0)
             self.status_var.set("Analysis complete.")
+            # Auto-show wing geometry after successful analysis
+            self.root.after(100, self._plot_geometry)
         except Exception:
             tb = traceback.format_exc()
             messagebox.showerror("Analysis Error", tb)
