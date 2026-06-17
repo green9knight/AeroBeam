@@ -888,7 +888,11 @@ function renderPlots(payload) {
   window.lastPayload = payload;
   const s = payload.series;
   const x = s.x;
-  drawGeometry(s.geometry);
+  // Use server geometry if available and complete, otherwise use preview geometry
+  const geometry = (s.geometry && s.geometry.x && s.geometry.x.length > 0)
+    ? s.geometry
+    : buildGeometryPreview();
+  drawGeometry(geometry);
   drawPlot("plotLift", "Lift Distribution", x, [
     { label: "+g", values: s.positive.w, color: "#085097" },
     { label: "-g", values: s.negative.w, color: "#d2b75f", dash: [6, 4] },
