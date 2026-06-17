@@ -355,6 +355,51 @@ class AeroBeamHandler(BaseHTTPRequestHandler):
                 result = safe_run_analysis(inputs)
                 self._send_json(result)
                 return
+            
+            if path == "/api/report":
+                inputs = data.get("inputs", {})
+                try:
+                    # Run analysis first
+                    full_inputs = dict(DEFAULT_INPUTS)
+                    if inputs:
+                        full_inputs.update(inputs)
+                    
+                    from input_validation import validate_inputs
+                    validated_inputs, _ = validate_inputs(full_inputs)
+                    
+                    analyzer = WingStressAnalyzer(validated_inputs)
+                    analyzer.analyze()
+                    
+                    # Generate PDF to temporary file
+                    import tempfile
+                    with tempfile.NamedTemporaryFile(mode='wb', suffix='.pdf', delete=False) as tmp:
+                        tmp_path = tmp.name
+                    
+                    analyzer.export_pdf(tmp_path)
+                    
+                    # Read PDF and send as response
+                    with open(tmp_path, 'rb') as f:
+                        pdf_data = f.read()
+                    
+                    # Clean up temp file
+                    import os
+                    os.unlink(tmp_path)
+                    
+                    # Send PDF response
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/pdf")
+                    self.send_header("Content-Disposition", "attachment; filename=aerobeam-report.pdf")
+                    self.send_header("Content-Length", str(len(pdf_data)))
+                    self.send_header("Access-Control-Allow-Origin", "*")
+                    self.end_headers()
+                    self.wfile.write(pdf_data)
+                    return
+                    
+                except Exception as e:
+                    print(f"PDF generation error: {e}", file=sys.stderr)
+                    print(traceback.format_exc(), file=sys.stderr)
+                    self._send_json({"ok": False, "error": f"PDF generation failed: {str(e)}"}, 500)
+                    return
 
             self._send_json({"ok": False, "error": "Unknown endpoint"}, 404)
             

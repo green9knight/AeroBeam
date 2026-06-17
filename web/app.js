@@ -462,7 +462,13 @@ function syncFormFromInputs() {
       el.checked = parseBool(state.inputs[key]);
       state.inputs[key] = el.checked;
     } else {
-      el.value = state.inputs[key] ?? "";
+      const value = state.inputs[key] ?? "";
+      el.value = value;
+      // For select elements, verify the value was set correctly
+      // If not, the option might not exist, so keep the state value
+      if (el.tagName === "SELECT" && el.value !== value && value !== "") {
+        console.warn(`Select option not found for ${key}: "${value}". Available options:`, Array.from(el.options).map(o => o.value));
+      }
     }
   }
   updateAllSparFieldVisibility({ prune: false });
