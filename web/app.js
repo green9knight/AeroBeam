@@ -39,7 +39,7 @@ const inputSections = [
       {
         title: "Airfoil",
         fields: [
-          ["airfoil", "Airfoil name", "text"],
+          ["airfoil", "Airfoil name", "select", "airfoils"],
           ["airfoil_t_c", "Thickness t/c", "number", "0.001"],
           ["Cm_ac", "Cm aerodynamic moment", "number", "0.001"],
           ["Cm_flap", "Flap delta Cm", "number", "0.001"],
@@ -556,6 +556,7 @@ function optionsFor(choice) {
   if (choice === "sparTypes") return state.options.sparTypes || [];
   if (choice === "tubeSpars") return ["(Manual)", ...(state.options.tubeSpars || []).map((tube) => tube.description)];
   if (choice === "angles") return state.options.angles || [];
+  if (choice === "airfoils") return state.options.airfoils || [];
   return [];
 }
 
@@ -588,7 +589,6 @@ function createField(field) {
     input = document.createElement("input");
     input.type = type || "text";
     if (meta && type === "number") input.step = meta;
-    if (key === "airfoil") input.setAttribute("list", "airfoilOptions");
   }
 
   input.dataset.key = key;
@@ -1203,15 +1203,6 @@ async function init() {
     airfoils: payload.airfoils || [],
     airfoilData: payload.airfoilData || {},
   };
-  const airfoilList = document.getElementById("airfoilOptions");
-  if (airfoilList) {
-    airfoilList.innerHTML = "";
-    for (const name of state.options.airfoils || []) {
-      const option = document.createElement("option");
-      option.value = name;
-      airfoilList.appendChild(option);
-    }
-  }
   renderMethodStatus(payload.methodStatus || {});
   ensureSchemaDefaults();
   const savedPassword = sessionStorage.getItem("aerobeamBetaPassword") || "";
