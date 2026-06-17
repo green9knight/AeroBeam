@@ -928,63 +928,162 @@ class WingStressGUI:
     # ── Wing Structure tab ───────────────────────────────────────────────────
 
     def _build_structure_tab(self, f):
-        f.columnconfigure(0, weight=0); f.columnconfigure(1, weight=1); f.rowconfigure(999, weight=1)
-        r = 0
-        section_label(f,"Wing Structure Type", row=r); r+=1
-        struct_types = ["fabric_tube","fabric_buildup","aluminum_skin"]
-        struct_labels = ["Fabric / Tube ladder", "Fabric / Built-up + D-cell + optional geodetic",
-                         "Aluminum stressed skin"]
-        self._lc(f,"Structure type:","wing_structure_type",
-                 struct_types,"fabric_tube",row=r); r+=1
+        """Build the Wing Structure tab with data-driven field configuration."""
+        f.columnconfigure(0, weight=0)
+        f.columnconfigure(1, weight=1)
+        f.rowconfigure(999, weight=1)
+        
+        row = RowCounter()
+        
+        # Structure type selection
+        self._build_structure_type_section(f, row)
+        
+        # Geodetic lattice box (fabric_buildup only)
+        self._build_geodetic_section(f, row)
+        
+        # Aluminum skin (aluminum_skin only)
+        self._build_skin_section(f, row)
+        
+        # Wood knockdown factor
+        self._build_wood_knockdown_section(f, row)
+        
+        # Rib structure
+        self._build_rib_section(f, row)
+        
+        # Register all trace callbacks
+        self._register_structure_traces()
+        
+        self._refresh_structure()
+
+    def _build_structure_type_section(self, f, row):
+        """Build structure type selection section."""
+        section_label(f, "Wing Structure Type", row=row())
+        
+        struct_types = ["fabric_tube", "fabric_buildup", "aluminum_skin"]
+        struct_labels = [
+            "Fabric / Tube ladder",
+            "Fabric / Built-up + D-cell + optional geodetic",
+            "Aluminum stressed skin"
+        ]  # Reserved for future UI enhancements
+        
+        self._lc(f, "Structure type:", "wing_structure_type",
+                 struct_types, "fabric_tube", row=row())
+
+    def _build_geodetic_section(self, f, row):
+        """Build geodetic lattice box configuration section."""
+        section_label(f, "Geodetic Lattice Box (fabric_buildup only)", row=row())
+        self._lchk(f, "Enable geodetic box", "geodetic_enabled", False, row=row())
+        
+        # Geodetic fields frame
+        self._geodetic_frame = ttk.Frame(f)
+        self._geodetic_frame.grid(row=row(), column=0, columnspan=4, sticky="ew")
+        
+        # Field definitions: (widget_type, label, var_name, default, *extra_args)
+        geodetic_fields = [
+            ("combo", "Strip material:", "geodetic_mat", wood_mat_names(), "Sitka Spruce"),
+            ("entry", "Strip width (in):", "geodetic_w", 1.0),
+            ("entry", "Strip thickness (in):", "geodetic_t", 0.125),
+            ("entry", "Strips per bay (per dir):", "geodetic_strips_per_bay", 2),
+            ("entry", "Strip angle (deg):", "geodetic_angle", 45.0),
+        ]
+        
+        self._build_subsection_fields(self._geodetic_frame, geodetic_fields)
+        
+        # Info label
+        self._geodetic_info = tk.StringVar(value="")
+        ttk.Label(self._geodetic_frame, textvariable=self._geodetic_info,
+                  foreground=C_TEXT_DIM, font=("Courier", 8)).grid(
+                  row=len(geodetic_fields), column=0, columnspan=4, sticky="w", padx=4)
+
+    def _build_skin_section(self, f, row):
+        """Build aluminum skin configuration section."""
+        section_label(f, "Aluminum Skin (aluminum_skin only)", row=row())
+        
+        # Skin fields frame
+        self._skin_frame = ttk.Frame(f)
+        self._skin_frame.grid(row=row(), column=0, columnspan=4, sticky="ew")
+        
+        # Field definitions
+        skin_fields = [
+            ("combo", "Top skin material:", "skin_top_mat", aluminum_mat_names(), "6061-T6"),
+            ("entry", "Top skin thickness (in):", "skin_top_thick", 0.025),
+            ("combo", "Bot skin material:", "skin_bot_mat", aluminum_mat_names(), "6061-T6"),
+            ("entry", "Bot skin thickness (in):", "skin_bot_thick", 0.025),
+        ]
+        
+        self._build_subsection_fields(self._skin_frame, skin_fields)
+        
+        # Info label
+        self._skin_info = tk.StringVar(value="")
+        ttk.Label(self._skin_frame, textvariable=self._skin_info,
+                  foreground=C_TEXT_DIM, font=("Courier", 8)).grid(
+                  row=len(skin_fields), column=0, columnspan=4, sticky="w", padx=4)
+
+    def _build_wood_knockdown_section(self, f, row):
+        """Build wood knockdown factor section."""
+        section_label(f, "Wood Knockdown Factor", row=row())
+        self._le(f, "Knockdown factor (0.75 = AC 43.13):", "wood_knockdown", 0.75, row=row())
+
+    def _build_rib_section(self, f, row):
+        """Build rib structure configuration section."""
+        section_label(f, "Rib Structure (torsion transfer between spars)", row=row())
+        
+        # Rib field definitions
+        rib_fields = [
+            ("entry", "Rib web height (in):", "rib_h_web", 3.0),
+            ("entry", "Rib web thickness (in):", "rib_t_web", 0.125),
+            ("entry", "Rib cap width (in):", "rib_b_cap", 0.75),
+            ("entry", "Rib cap thickness (in):", "rib_t_cap", 0.125),
+            ("combo", "Rib material:", "rib_mat", wood_mat_names(), "Birch Plywood"),
+        ]
+        
+        for widget_type, label, var_name, *args in rib_fields:
+            if widget_type == "entry":
+                self._le(f, label, var_name, args[0], row=row())
+            elif widget_type == "combo":
+                self._lc(f, label, var_name, args[0], args[1], row=row())
+        
+        # Info label
+        self._rib_info = tk.StringVar(value="")
+        ttk.Label(f, textvariable=self._rib_info, foreground=C_TEXT_DIM,
+                  font=("Courier", 8)).grid(
+                  row=row(), column=0, columnspan=4, sticky="w", padx=4)
+
+    def _build_subsection_fields(self, parent, field_definitions):
+        """
+        Build a set of fields in a subsection frame from field definitions.
+        
+        Args:
+            parent: Parent frame widget
+            field_definitions: List of tuples (widget_type, label, var_name, *args)
+                - widget_type: "entry" or "combo"
+                - label: Field label text
+                - var_name: Variable name for self._vars
+                - args: Default value and optional extra args (e.g., combo values)
+        """
+        for idx, field_def in enumerate(field_definitions):
+            widget_type, label, var_name = field_def[:3]
+            args = field_def[3:]
+            
+            if widget_type == "entry":
+                self._le(parent, label, var_name, args[0], row=idx)
+            elif widget_type == "combo":
+                # args = [values_list, default_value]
+                self._lc(parent, label, var_name, args[0], args[1], row=idx)
+
+    def _register_structure_traces(self):
+        """Register all trace callbacks for structure tab variables."""
+        # Structure type changes trigger full refresh
         self._vars["wing_structure_type"].trace_add("write",
                                                      lambda *_: self._refresh_structure())
-
-        section_label(f,"Geodetic Lattice Box (fabric_buildup only)", row=r); r+=1
-        self._lchk(f,"Enable geodetic box","geodetic_enabled",False,row=r); r+=1
-        self._geodetic_frame = ttk.Frame(f)
-        self._geodetic_frame.grid(row=r, column=0, columnspan=4, sticky="ew"); r+=1
-        gf = self._geodetic_frame
-        self._lc(gf,"Strip material:","geodetic_mat",wood_mat_names(),"Sitka Spruce",row=0)
-        self._le(gf,"Strip width (in):","geodetic_w",1.0,row=1)
-        self._le(gf,"Strip thickness (in):","geodetic_t",0.125,row=2)
-        self._le(gf,"Strips per bay (per dir):","geodetic_strips_per_bay",2,row=3)
-        self._le(gf,"Strip angle (deg):","geodetic_angle",45.0,row=4)
-        self._geodetic_info = tk.StringVar(value="")
-        ttk.Label(gf,textvariable=self._geodetic_info,foreground="#444",
-                  font=("Courier",8)).grid(row=5,column=0,columnspan=4,sticky="w",padx=4)
-
-        # Traces to update strip spacing info
-        for nm in ("rib_spacing","geodetic_strips_per_bay","geodetic_enabled"):
-            if nm in self._vars:
-                self._vars[nm].trace_add("write", lambda *_: self._update_geodetic_info())
-
-        section_label(f,"Aluminum Skin (aluminum_skin only)", row=r); r+=1
-        self._skin_frame = ttk.Frame(f)
-        self._skin_frame.grid(row=r, column=0, columnspan=4, sticky="ew"); r+=1
-        sf = self._skin_frame
-        self._lc(sf,"Top skin material:","skin_top_mat",aluminum_mat_names(),"6061-T6",row=0)
-        self._le(sf,"Top skin thickness (in):","skin_top_thick",0.025,row=1)
-        self._lc(sf,"Bot skin material:","skin_bot_mat",aluminum_mat_names(),"6061-T6",row=2)
-        self._le(sf,"Bot skin thickness (in):","skin_bot_thick",0.025,row=3)
-        self._skin_info = tk.StringVar(value="")
-        ttk.Label(sf,textvariable=self._skin_info,foreground="#444",
-                  font=("Courier",8)).grid(row=4,column=0,columnspan=4,sticky="w",padx=4)
-
-        section_label(f,"Wood Knockdown Factor",row=r); r+=1
-        self._le(f,"Knockdown factor (0.75 = AC 43.13):","wood_knockdown",0.75,row=r); r+=1
-
-        section_label(f,"Rib Structure (torsion transfer between spars)", row=r); r+=1
-        self._le(f,"Rib web height (in):","rib_h_web",3.0,row=r); r+=1
-        self._le(f,"Rib web thickness (in):","rib_t_web",0.125,row=r); r+=1
-        self._le(f,"Rib cap width (in):","rib_b_cap",0.75,row=r); r+=1
-        self._le(f,"Rib cap thickness (in):","rib_t_cap",0.125,row=r); r+=1
-        self._lc(f,"Rib material:","rib_mat",wood_mat_names(),"Birch Plywood",row=r); r+=1
-        self._rib_info = tk.StringVar(value="")
-        ttk.Label(f,textvariable=self._rib_info,foreground=C_TEXT_DIM,
-                  font=("Courier",8)).grid(row=r,column=0,columnspan=4,sticky="w",padx=4); r+=1
-
-        self._vars["geodetic_enabled"].trace_add("write", lambda *_: self._refresh_structure())
-        self._refresh_structure()
+        self._vars["geodetic_enabled"].trace_add("write",
+                                                  lambda *_: self._refresh_structure())
+        
+        # Geodetic info updates
+        for var_name in ("rib_spacing", "geodetic_strips_per_bay", "geodetic_enabled"):
+            if var_name in self._vars:
+                self._vars[var_name].trace_add("write",
+                                                lambda *_: self._update_geodetic_info())
     # ── Tab Grid Configuration ───────────────────────────────────────────────
 
     def _configure_tab_grid(self, frame):
