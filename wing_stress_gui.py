@@ -272,66 +272,122 @@ class SparFrame(ttk.LabelFrame):
         self.vars    = {}
         self._build(defaults)
 
+    # Field definitions: (var_name, label, default_value)
+    _TUBE_FIELDS = [
+        ("od", "OD (in):", 2.0),
+        ("wall", "Wall (in):", 0.065),
+    ]
+    
+    _BUILDUP_ENTRY_FIELDS = [
+        ("b_top", "b_top (in):", 1.5),
+        ("t_top", "t_top (in):", 0.75),
+        ("b_bot", "b_bot (in):", 1.5),
+        ("t_bot", "t_bot (in):", 0.75),
+        ("h_web", "h_web (in):", 4.5),
+        ("t_web", "t_web (in):", 0.125),
+        ("web_spacing", "Web spacing:", 1.0),
+        ("b_outer", "b_outer (in):", 2.0),
+        ("h_outer", "h_outer (in):", 5.0),
+        ("t_cap", "t_cap (in):", 0.75),
+        ("width", "Width (in):", 2.0),
+        ("height", "Height (in):", 4.0),
+    ]
+
     def _build(self, d):
-        p = self.prefix; f = self
-        row = [0]
-        def R(): r=row[0]; row[0]+=1; return r
-
-        # Spar type
-        self.vars["type"] = labeled_combo(f, "Spar type:", self.SPAR_TYPES,
-                                          d.get(f"{p}_type","Round Tube"), row=R())
+        """Build the spar configuration UI with all input fields."""
+        p = self.prefix
+        f = self
+        row = 0
+        
+        # Spar type selector
+        self.vars["type"] = labeled_combo(
+            f, "Spar type:", self.SPAR_TYPES,
+            d.get(f"{p}_type", "Round Tube"), row=row
+        )
         self.vars["type"].trace_add("write", lambda *_: self._refresh_fields())
-
-        # Round tube
+        row += 1
+        
+        # Build tube fields frame
         self._tube_frame = ttk.Frame(f)
-        self._tube_frame.grid(row=R(), column=0, columnspan=4, sticky="ew")
-        tf = self._tube_frame
-        self.vars["od"]   = labeled_entry(tf,"OD (in):", d.get(f"{p}_od",2.0),  row=0)
-        self.vars["wall"] = labeled_entry(tf,"Wall (in):", d.get(f"{p}_wall",0.065), row=1)
-        self.vars["mat"]  = labeled_combo(tf,"Material:", self.METAL_MATS,
-                                           d.get(f"{p}_mat","6061-T6"), row=2)
-        # Tube quick-select
-        tube_descs = ["(Manual)"] + [str(t) for t in COMMON_TUBE_SIZES]
-        self._tube_select_var = tk.StringVar(value="(Manual)")
-        ttk.Label(tf, text="Quick-select:").grid(row=3,column=0,sticky="e",padx=4,pady=2)
-        ttk.Combobox(tf, textvariable=self._tube_select_var,
-                     values=tube_descs, width=28, state="readonly").grid(
-                         row=3, column=1, sticky="w", padx=4, pady=2)
-        self._tube_select_var.trace_add("write", self._on_tube_select)
-
-        # Built-up spar fields (hidden by default)
+        self._tube_frame.grid(row=row, column=0, columnspan=4, sticky="ew")
+        self._build_tube_fields(d)
+        row += 1
+        
+        # Build built-up spar fields frame
         self._buildup_frame = ttk.Frame(f)
-        self._buildup_frame.grid(row=R(), column=0, columnspan=4, sticky="ew")
-        bf = self._buildup_frame
-        self.vars["cap_mat"]    = labeled_combo(bf,"Cap material:",self.WOOD_MATS,
-                                                d.get(f"{p}_cap_mat","Sitka Spruce"),row=0)
-        self.vars["web_mat"]    = labeled_combo(bf,"Web material:",self.ALL_MATS,
-                                                d.get(f"{p}_web_mat","Birch Plywood"),row=1)
-        self.vars["b_top"]      = labeled_entry(bf,"b_top (in):", d.get(f"{p}_b_top",1.5), row=2)
-        self.vars["t_top"]      = labeled_entry(bf,"t_top (in):", d.get(f"{p}_t_top",0.75), row=3)
-        self.vars["b_bot"]      = labeled_entry(bf,"b_bot (in):", d.get(f"{p}_b_bot",1.5), row=4)
-        self.vars["t_bot"]      = labeled_entry(bf,"t_bot (in):", d.get(f"{p}_t_bot",0.75), row=5)
-        self.vars["h_web"]      = labeled_entry(bf,"h_web (in):", d.get(f"{p}_h_web",4.5),  row=6)
-        self.vars["t_web"]      = labeled_entry(bf,"t_web (in):", d.get(f"{p}_t_web",0.125),row=7)
-        self.vars["web_spacing"]= labeled_entry(bf,"Web spacing:", d.get(f"{p}_web_spacing",1.0),row=8)
-        self.vars["b_outer"]    = labeled_entry(bf,"b_outer (in):",d.get(f"{p}_b_outer",2.0),row=9)
-        self.vars["h_outer"]    = labeled_entry(bf,"h_outer (in):",d.get(f"{p}_h_outer",5.0),row=10)
-        self.vars["t_cap"]      = labeled_entry(bf,"t_cap (in):", d.get(f"{p}_t_cap",0.75), row=11)
-        self.vars["width"]      = labeled_entry(bf,"Width (in):", d.get(f"{p}_width",2.0),  row=12)
-        self.vars["height"]     = labeled_entry(bf,"Height (in):",d.get(f"{p}_height",4.0), row=13)
-
+        self._buildup_frame.grid(row=row, column=0, columnspan=4, sticky="ew")
+        self._build_buildup_fields(d)
+        row += 1
+        
         # Live properties display
         self._props_var = tk.StringVar(value="")
         ttk.Label(f, textvariable=self._props_var, foreground="#444",
                   font=("Courier", 8), justify="left").grid(
-                      row=R(), column=0, columnspan=4, sticky="w", padx=6, pady=2)
-
-        # Attach traces for live update
-        for v in self.vars.values():
-            v.trace_add("write", lambda *_: self._update_props())
-
+                      row=row, column=0, columnspan=4, sticky="w", padx=6, pady=2)
+        
+        # Attach traces for live update (with proper variable binding)
+        for var in self.vars.values():
+            var.trace_add("write", lambda *_, v=var: self._update_props())
+        
         self._refresh_fields()
         self._update_props()
+    
+    def _build_tube_fields(self, d):
+        """Build round tube input fields."""
+        p = self.prefix
+        tf = self._tube_frame
+        field_row = 0
+        
+        # Create entry fields from definition
+        for var_name, label, default in self._TUBE_FIELDS:
+            self.vars[var_name] = labeled_entry(
+                tf, label, d.get(f"{p}_{var_name}", default), row=field_row
+            )
+            field_row += 1
+        
+        # Material combo
+        self.vars["mat"] = labeled_combo(
+            tf, "Material:", self.METAL_MATS,
+            d.get(f"{p}_mat", "6061-T6"), row=field_row
+        )
+        field_row += 1
+        
+        # Tube quick-select
+        tube_descs = ["(Manual)"] + [str(t) for t in COMMON_TUBE_SIZES]
+        self._tube_select_var = tk.StringVar(value="(Manual)")
+        ttk.Label(tf, text="Quick-select:").grid(
+            row=field_row, column=0, sticky="e", padx=4, pady=2
+        )
+        ttk.Combobox(tf, textvariable=self._tube_select_var,
+                     values=tube_descs, width=28, state="readonly").grid(
+                         row=field_row, column=1, sticky="w", padx=4, pady=2)
+        self._tube_select_var.trace_add("write", self._on_tube_select)
+    
+    def _build_buildup_fields(self, d):
+        """Build built-up spar input fields."""
+        p = self.prefix
+        bf = self._buildup_frame
+        field_row = 0
+        
+        # Material combos
+        self.vars["cap_mat"] = labeled_combo(
+            bf, "Cap material:", self.WOOD_MATS,
+            d.get(f"{p}_cap_mat", "Sitka Spruce"), row=field_row
+        )
+        field_row += 1
+        
+        self.vars["web_mat"] = labeled_combo(
+            bf, "Web material:", self.ALL_MATS,
+            d.get(f"{p}_web_mat", "Birch Plywood"), row=field_row
+        )
+        field_row += 1
+        
+        # Create entry fields from definition
+        for var_name, label, default in self._BUILDUP_ENTRY_FIELDS:
+            self.vars[var_name] = labeled_entry(
+                bf, label, d.get(f"{p}_{var_name}", default), row=field_row
+            )
+            field_row += 1
 
     def _refresh_fields(self):
         t = self.vars["type"].get()
