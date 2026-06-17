@@ -1,13 +1,9 @@
 services:
   - type: web
-    name: aerobeam-beta
+    name: aerobeam
     runtime: python
-    plan: free
-    buildCommand: python -m pip install -r requirements.txt
-    startCommand: python web_app.py
-    healthCheckPath: /healthz
+    buildCommand: pip install -r requirements.txt
+    startCommand: streamlit run streamlit_app.py --server.port $PORT --server.address 0.0.0.0 --server.headless true
     envVars:
-      - key: HOST
-        value: 0.0.0.0
-      - key: AEROBEAM_BETA_PASSWORD
-        sync: false
+      - key: PYTHON_VERSION
+        value: 3.11.0
