@@ -856,17 +856,21 @@ class WingStressGUI:
                                        "I-Beam","C-Channel","Double I-Beam")
 
         r = 0
-        # Cap material
-        if not is_rect:
+        if is_rect:
+            # Plain Rectangular uses a single material (solid section, no web)
+            rect_mats = all_mat_names()
+            self._lc(f, "Material:", f"{prefix}_mat", rect_mats, "Sitka Spruce", row=r); r += 1
+        else:
+            # Cap material
             cap_mats = aluminum_mat_names() if is_alum else all_mat_names()
             cap_default = "6061-T6" if is_alum else "Sitka Spruce"
             self._lc(f,"Cap material:",f"{prefix}_cap_mat",cap_mats,cap_default,row=r); r+=1
 
-        # Web material (not for Routed or Plain Rect)
-        if has_web and spar_type != "Routed (Monolithic)":
-            web_mats = aluminum_mat_names() if is_alum else all_mat_names()
-            web_default = "6061-T6" if is_alum else "Birch Plywood"
-            self._lc(f,"Web (shear) material:",f"{prefix}_web_mat",web_mats,web_default,row=r); r+=1
+            # Web material (not for Routed or Plain Rect)
+            if has_web and spar_type != "Routed (Monolithic)":
+                web_mats = aluminum_mat_names() if is_alum else all_mat_names()
+                web_default = "6061-T6" if is_alum else "Birch Plywood"
+                self._lc(f,"Web (shear) material:",f"{prefix}_web_mat",web_mats,web_default,row=r); r+=1
 
         if is_ibeam:
             # Aluminum angle quick-select (before manual cap fields)
