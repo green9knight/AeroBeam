@@ -236,56 +236,81 @@ class AeroBeamHandler(BaseHTTPRequestHandler):
         self._serve_file("index.html")
 
     def do_GET(self):
-        parsed = urlparse(self.path)
-        path = parsed.path
-
-        # Route dispatch table
-        routes = {
-            "/healthz": self._handle_healthz,
-            "/api/defaults": self._handle_defaults,
-            "/": self._handle_index,
-            "/index.html": self._handle_index,
-        }
-
-        # Try exact match first
-        handler = routes.get(path)
-        if handler:
-            handler()
-            return
-
-        # Fall back to static file serving
-        if path.startswith("/"):
-            self._serve_file(path.lstrip("/"))
-            return
-
-        # 404 for anything else
-        self._send_json({"ok": False, "error": "Not found"}, 404)
-
-    def do_POST(self):
-        parsed = urlparse(self.path)
-        path = parsed.path
-
-        content_length = int(self.headers.get("Content-Length", 0))
-        body = self.rfile.read(content_length).decode("utf-8") if content_length > 0 else "{}"
-
         try:
-            data = json.loads(body) if body.strip() else {}
-        except json.JSONDecodeError:
-            self._send_json({"ok": False, "error": "Invalid JSON"}, 400)
-            return
+            parsed = urlparse(self.path)
+            path = parsed.path
 
-        if BETA_PASSWORD:
-            if data.get("betaPassword", "") != BETA_PASSWORD:
-                self._send_json({"ok": False, "error": "Invalid beta password"}, 401)
+            # Route dispatch table
+            routes = {
+                "/healthz": self._handle_healthz,
+                "/api/defaults": self._handle_defaults,
+                "/": self._handle_index,
+                "/index.html": self._handle_index,
+            }
+
+            # Try exact match first
+            handler = routes.get(path)
+            if handler:
+                handler()
                 return
 
-        if path == "/api/analyze":
-            inputs = data.get("inputs", {})
-            result = safe_run_analysis(inputs)
-            self._send_json(result)
-            return
+            # Fall back to static file serving
+            if path.startswith("/"):
+                self._serve_file(path.lstrip("/"))
+                return
 
-        self._send_json({"ok": False, "error": "Unknown endpoint"}, 404)
+            # 404 for anything else
+            self._send_json({"ok": False, "error": "Not found"}, 404)
+            
+        except Exception as e:
+            print(f"=== UNHANDLED EXCEPTION IN do_GET ===", file=sys.stderr)
+            print(f"Path: {self.path}", file=sys.stderr)
+            print(f"Error: {e}", file=sys.stderr)
+            print(traceback.format_exc(), file=sys.stderr)
+            print(f"=== END UNHANDLED EXCEPTION ===", file=sys.stderr)
+            try:
+                self.send_response(500)
+                self.end_headers()
+            except:
+                pass  # Connection might be broken
+
+    def do_POST(self):
+        try:
+            parsed = urlparse(self.path)
+            path = parsed.path
+
+            content_length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_length).decode("utf-8") if content_length > 0 else "{}"
+
+            try:
+                data = json.loads(body) if body.strip() else {}
+            except json.JSONDecodeError as e:
+                print(f"JSON decode error: {e}", file=sys.stderr)
+                self._send_json({"ok": False, "error": "Invalid JSON"}, 400)
+                return
+
+            if BETA_PASSWORD:
+                if data.get("betaPassword", "") != BETA_PASSWORD:
+                    self._send_json({"ok": False, "error": "Invalid beta password"}, 401)
+                    return
+
+            if path == "/api/analyze":
+                inputs = data.get("inputs", {})
+                result = safe_run_analysis(inputs)
+                self._send_json(result)
+                return
+
+            self._send_json({"ok": False, "error": "Unknown endpoint"}, 404)
+            
+        except Exception as e:
+            print(f"=== UNHANDLED EXCEPTION IN do_POST ===", file=sys.stderr)
+            print(f"Error: {e}", file=sys.stderr)
+            print(traceback.format_exc(), file=sys.stderr)
+            print(f"=== END UNHANDLED EXCEPTION ===", file=sys.stderr)
+            try:
+                self._send_json({"ok": False, "error": f"Server error: {str(e)}"}, 500)
+            except:
+                pass  # Connection might be broken
 
     def _serve_file(self, filename: str):
         """Serve a static file from the web directory."""
@@ -319,7 +344,18 @@ class AeroBeamHandler(BaseHTTPRequestHandler):
             self.wfile.write(f.read())
 
     def log_message(self, format, *args):
-        pass
+        """Log HTTP requests to stderr."""
+        sys.stderr.write("%s - - [%s] %s\n" %
+                        (self.address_string(),
+                         self.log_date_time_string(),
+                         format % args))
+    
+    def log_error(self, format, *args):
+        """Log errors to stderr."""
+        sys.stderr.write("ERROR: %s - - [%s] %s\n" %
+                        (self.address_string(),
+                         self.log_date_time_string(),
+                         format % args))
 
 
 def run_server():
