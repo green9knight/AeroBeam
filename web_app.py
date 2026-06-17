@@ -52,7 +52,15 @@ def _build_defaults_response():
     }
     
     # Build tube spar data
-    tube_spars = [str(tube) for tube in COMMON_TUBE_SIZES]
+    tube_spars = [
+        {
+            "description": str(tube),
+            "od": tube.od,
+            "wall": tube.wall,
+            "I": tube.I,
+        }
+        for tube in COMMON_TUBE_SIZES
+    ]
     
     # Build airfoil data
     airfoil_data = {
