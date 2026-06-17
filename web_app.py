@@ -156,6 +156,16 @@ def _series(analyzer):
             "rear_spar": getattr(analyzer, "rear_pct", 0) * analyzer.chord_x,
             "front_spar_percent": getattr(analyzer, "front_pct", 0),
             "rear_spar_percent": getattr(analyzer, "rear_pct", 0),
+            "strut_bl": getattr(analyzer, "strut_bl", 0),
+            "strut_fuse_bl": getattr(analyzer, "strut_fuse_bl", 0),
+            "strut_vert": getattr(analyzer, "strut_vert", 0),
+            "jury_enabled": getattr(analyzer, "jury_strut", False),
+            "jury_bl": getattr(analyzer, "jury_spar_bl", 0),
+            "config": getattr(analyzer, "config", "cantilever"),
+            "dcell_enabled": getattr(analyzer, "dcell_enabled", False),
+            "taper_start_bl": getattr(analyzer, "taper_start_bl", 0),
+            "root_chord": getattr(analyzer, "root_chord", 0),
+            "tip_chord": getattr(analyzer, "tip_chord", 0),
         }
     })
 
