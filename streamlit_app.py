@@ -6,6 +6,10 @@ import streamlit as st
 import numpy as np
 import json, io, math
 
+st.logo(
+    icon_image="AeroBeam.ico",
+)
+
 st.set_page_config(
     page_title="AeroBeam v1.2",
     page_icon="AeroBeam.ico",
@@ -41,7 +45,6 @@ def g(key, default=None):
     return st.session_state.inp.get(key, DEFAULT_INPUTS.get(key, default))
 
 # ── Header ────────────────────────────────────────────────────────────────────
-page_icon="AeroBeam.ico"
 st.markdown(
     f'<div style="background:{PC_BLUE};padding:12px 20px;border-radius:6px;margin-bottom:12px">'
     f'<span style="color:#D2B75F;font-size:1.6em;font-weight:700">AeroBeam v1.2</span>'
