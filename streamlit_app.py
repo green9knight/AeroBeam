@@ -8,7 +8,7 @@ import json, io, math
 
 st.set_page_config(
     page_title="AeroBeam v1.2",
-    page_icon="✈️",
+    page_icon="AeroBeam.ico",
     layout="wide"
 )
 
