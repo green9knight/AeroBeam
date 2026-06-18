@@ -5,10 +5,3 @@ enableXsrfProtection = false
 
 [browser]
 gatherUsageStats = true
-
-[theme]
-base = "light" # or "dark"
-backgroundColor = "#191414"
-secondaryBackgroundColor = "#1DB954"
-textColor = "#000000"
-primaryColor = "#1ED760"
