@@ -377,10 +377,35 @@ class WingStressAnalyzer:
     # ── Integration ──────────────────────────────────────────────────────────
 
     def _shear_moment(self, w):
-        V = np.zeros(self.N); M = np.zeros(self.N)
+        V = np.zeros(self.N)
+        M = np.zeros(self.N)
+
+        # Basic integration from tip to root
         for i in range(self.N-2, -1, -1):
-            V[i] = V[i+1] + w[i]*self.dx
-            M[i] = M[i+1] + V[i]*self.dx
+            V[i] = V[i+1] + w[i] * self.dx
+            M[i] = M[i+1] + V[i] * self.dx
+
+        # === Strut reaction handling (strut-braced only, no jury effect) ===
+        config = getattr(self, "config", "cantilever")
+        if config in ("strut_braced", "single_strut"):
+            strut_bl = getattr(self, "strut_bl", self.b_half * 0.65)
+            strut_reaction = getattr(self, "strut_reaction", 0.0)
+
+            if strut_reaction <= 0:
+                # Calculate strut reaction from statics
+                moment_root = np.sum(w * self.x * self.dx)
+                arm = max(strut_bl - getattr(self, "r", 0.0), 1e-6)
+                strut_reaction = moment_root / arm
+                self.strut_reaction = strut_reaction
+
+            # Apply concentrated reaction at strut location
+            strut_idx = np.argmin(np.abs(self.x - strut_bl))
+            V[:strut_idx] += strut_reaction
+
+            # Re-integrate moment after the force application
+            for i in range(strut_idx - 1, -1, -1):
+                M[i] = M[i + 1] + V[i] * self.dx
+
         return V, M
 
     def _deflect_cantilever(self, M, EI):
