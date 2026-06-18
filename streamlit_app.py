@@ -1,5 +1,6 @@
 """
-AeroBeam v1.2 - Working Version with Libraries
+AeroBeam v1.2 - Full Version with Libraries
+Airfoil + Expanded Tube (0.5"-6") + Angle (0.5"-3") libraries
 """
 
 import streamlit as st
@@ -51,7 +52,7 @@ with st.sidebar:
                     st.error("PDF method not found")
                     pdf_data = None
                 if pdf_data:
-                    st.download_button("⬇ Download PDF", pdf_data, "AeroBeam_Report.pdf", "application/pdf")
+                    st.download_button("⬇ Download PDF Report", pdf_data, "AeroBeam_Report.pdf", "application/pdf")
             except Exception as e:
                 st.error(f"PDF failed: {e}")
 
@@ -64,7 +65,7 @@ with st.sidebar:
         st.rerun()
     if st.button("Save Project", key="save_btn"):
         buf = io.BytesIO(json.dumps(st.session_state.inp, indent=2).encode())
-        st.download_button("Download .aerobeam", buf, "project.aerobeam", key="dl_btn")
+        st.download_button("Download .aerobeam", buf, "project.aerobeam", key="download_btn")
 
 tabs = st.tabs([
     "Wing Geometry", "Flight & Airfoil", "Loads & Config",
@@ -86,7 +87,7 @@ with tabs[0]:
         st.session_state.inp["rear_spar_percent"] = st.number_input("Rear Spar % Chord", value=float(g("rear_spar_percent")), step=0.01, key="rear_spar_percent")
         st.session_state.inp["front_spar_load_share"] = st.number_input("Front Spar Load Share", value=float(g("front_spar_load_share")), step=0.05, key="front_spar_load_share")
 
-# Flight & Airfoil (with lookup)
+# Flight & Airfoil
 with tabs[1]:
     st.subheader("Flight & Airfoil")
     fams = ["(All)"] + airfoil_families()
@@ -97,9 +98,14 @@ with tabs[1]:
         all_names = [n for n in all_names if AIRFOIL_DB.get(n, {}).get("family") == fam]
     if search:
         all_names = [n for n in all_names if search.lower() in n.lower()]
-    cur = g("airfoil", "NACA 4412")
-    idx = all_names.index(cur) if cur in all_names else 0
-    selected = st.selectbox("Airfoil", all_names[:200], index=min(idx, len(all_names)-1), key="af_sel")
+    all_names = all_names[:300]
+    if len(all_names) == 0:
+        st.warning("No airfoils found. Clear search or change family.")
+        selected = g("airfoil", "NACA 4412")
+    else:
+        cur = g("airfoil", "NACA 4412")
+        idx = all_names.index(cur) if cur in all_names else 0
+        selected = st.selectbox("Airfoil", all_names, index=idx, key="af_sel")
     if st.button("Apply Airfoil Data"):
         af = get_airfoil(selected)
         if af:
@@ -109,7 +115,6 @@ with tabs[1]:
             st.session_state.inp["airfoil_t_c"] = af.get("t_c", 0.12)
             st.success(f"Applied {selected}")
             st.rerun()
-
     st.session_state.inp["Cm_ac"] = st.number_input("Cm_ac", value=float(g("Cm_ac")), format="%.4f", key="cm_ac")
     st.session_state.inp["Cl_alpha"] = st.number_input("Cl_alpha", value=float(g("Cl_alpha")), key="cl_alpha")
     st.session_state.inp["airfoil_t_c"] = st.number_input("t/c", value=float(g("airfoil_t_c")), format="%.4f", key="tc")
@@ -123,25 +128,71 @@ with tabs[2]:
     st.session_state.inp["config"] = st.selectbox("Configuration", ["strut_braced", "cantilever", "single_strut"], index=0, key="config")
     st.session_state.inp["jury_strut"] = st.checkbox("Enable Jury Strut", value=bool(g("jury_strut", False)), key="jury_strut")
 
-# Front Spar (basic tube + angle)
+# Front Spar (Expanded Libraries)
 with tabs[3]:
     st.subheader("Front Spar")
-    st.session_state.inp["front_spar_type"] = st.selectbox("Spar Type", ["Round Tube", "Plain Rectangular", "I-Beam", "Angle Cap"], index=0, key="front_type")
-    if st.session_state.inp["front_spar_type"] == "Round Tube":
-        st.session_state.inp["front_spar_od"] = st.number_input("OD (in)", value=float(g("front_spar_od", 2.5)), key="front_od")
-        st.session_state.inp["front_spar_wall"] = st.number_input("Wall (in)", value=float(g("front_spar_wall", 0.065)), key="front_wall")
-    elif st.session_state.inp["front_spar_type"] == "Angle Cap":
-        st.session_state.inp["front_angle_size"] = st.text_input("Angle Size (e.g. 1x1x1/8)", value=g("front_angle_size", "1x1x1/8"), key="front_angle")
+    spar_type = st.selectbox("Spar Type", ["Round Tube", "Plain Rectangular", "I-Beam", "Angle Cap"], index=0, key="front_type")
+    st.session_state.inp["front_spar_type"] = spar_type
+    if spar_type == "Round Tube":
+        tube_options = ["0.500 x 0.035", "0.500 x 0.049", "0.500 x 0.058",
+                        "0.750 x 0.035", "0.750 x 0.049", "0.750 x 0.058", "0.750 x 0.065",
+                        "1.000 x 0.035", "1.000 x 0.049", "1.000 x 0.058", "1.000 x 0.065",
+                        "1.250 x 0.049", "1.250 x 0.058", "1.250 x 0.065", "1.250 x 0.083",
+                        "1.500 x 0.049", "1.500 x 0.058", "1.500 x 0.065", "1.500 x 0.083",
+                        "1.750 x 0.049", "1.750 x 0.058", "1.750 x 0.065", "1.750 x 0.083",
+                        "2.000 x 0.049", "2.000 x 0.058", "2.000 x 0.065", "2.000 x 0.083",
+                        "2.500 x 0.058", "2.500 x 0.065", "2.500 x 0.083",
+                        "3.000 x 0.065", "3.000 x 0.083", "3.000 x 0.095",
+                        "4.000 x 0.065", "4.000 x 0.083", "4.000 x 0.095",
+                        "5.000 x 0.083", "5.000 x 0.095", "6.000 x 0.083", "6.000 x 0.095"]
+        selected = st.selectbox("Tube Size (OD x Wall)", tube_options, key="front_tube")
+        try:
+            od, wall = selected.split(" x ")
+            st.session_state.inp["front_spar_od"] = float(od)
+            st.session_state.inp["front_spar_wall"] = float(wall)
+        except:
+            pass
+    elif spar_type == "Angle Cap":
+        angle_options = ["1/2 x 1/2 x 1/16", "3/4 x 3/4 x 1/16", "3/4 x 3/4 x 3/32", "3/4 x 3/4 x 1/8",
+                         "1 x 1 x 1/16", "1 x 1 x 3/32", "1 x 1 x 1/8", "1 x 1 x 3/16",
+                         "1-1/4 x 1-1/4 x 1/16", "1-1/4 x 1-1/4 x 3/32", "1-1/4 x 1-1/4 x 1/8",
+                         "1-1/2 x 1-1/2 x 1/16", "1-1/2 x 1-1/2 x 3/32", "1-1/2 x 1-1/2 x 1/8",
+                         "2 x 2 x 1/8", "2 x 2 x 3/16", "2-1/2 x 2-1/2 x 1/8", "3 x 3 x 1/8"]
+        selected = st.selectbox("Aluminum Angle Size", angle_options, key="front_angle")
+        st.session_state.inp["front_angle_size"] = selected
 
-# Rear Spar
+# Rear Spar (Expanded Libraries)
 with tabs[4]:
     st.subheader("Rear Spar")
-    st.session_state.inp["rear_spar_type"] = st.selectbox("Spar Type", ["Round Tube", "Plain Rectangular", "Angle Cap"], index=0, key="rear_type")
-    if st.session_state.inp["rear_spar_type"] == "Round Tube":
-        st.session_state.inp["rear_spar_od"] = st.number_input("OD (in)", value=float(g("rear_spar_od", 2.0)), key="rear_od")
-        st.session_state.inp["rear_spar_wall"] = st.number_input("Wall (in)", value=float(g("rear_spar_wall", 0.065)), key="rear_wall")
-    elif st.session_state.inp["rear_spar_type"] == "Angle Cap":
-        st.session_state.inp["rear_angle_size"] = st.text_input("Angle Size", value=g("rear_angle_size", "1x1x1/8"), key="rear_angle")
+    spar_type = st.selectbox("Spar Type", ["Round Tube", "Plain Rectangular", "Angle Cap"], index=0, key="rear_type")
+    st.session_state.inp["rear_spar_type"] = spar_type
+    if spar_type == "Round Tube":
+        tube_options = ["0.500 x 0.035", "0.500 x 0.049", "0.500 x 0.058",
+                        "0.750 x 0.035", "0.750 x 0.049", "0.750 x 0.058", "0.750 x 0.065",
+                        "1.000 x 0.035", "1.000 x 0.049", "1.000 x 0.058", "1.000 x 0.065",
+                        "1.250 x 0.049", "1.250 x 0.058", "1.250 x 0.065", "1.250 x 0.083",
+                        "1.500 x 0.049", "1.500 x 0.058", "1.500 x 0.065", "1.500 x 0.083",
+                        "1.750 x 0.049", "1.750 x 0.058", "1.750 x 0.065", "1.750 x 0.083",
+                        "2.000 x 0.049", "2.000 x 0.058", "2.000 x 0.065", "2.000 x 0.083",
+                        "2.500 x 0.058", "2.500 x 0.065", "2.500 x 0.083",
+                        "3.000 x 0.065", "3.000 x 0.083", "3.000 x 0.095",
+                        "4.000 x 0.065", "4.000 x 0.083", "4.000 x 0.095",
+                        "5.000 x 0.083", "5.000 x 0.095", "6.000 x 0.083", "6.000 x 0.095"]
+        selected = st.selectbox("Tube Size (OD x Wall)", tube_options, key="rear_tube")
+        try:
+            od, wall = selected.split(" x ")
+            st.session_state.inp["rear_spar_od"] = float(od)
+            st.session_state.inp["rear_spar_wall"] = float(wall)
+        except:
+            pass
+    elif spar_type == "Angle Cap":
+        angle_options = ["1/2 x 1/2 x 1/16", "3/4 x 3/4 x 1/16", "3/4 x 3/4 x 3/32", "3/4 x 3/4 x 1/8",
+                         "1 x 1 x 1/16", "1 x 1 x 3/32", "1 x 1 x 1/8", "1 x 1 x 3/16",
+                         "1-1/4 x 1-1/4 x 1/16", "1-1/4 x 1-1/4 x 3/32", "1-1/4 x 1-1/4 x 1/8",
+                         "1-1/2 x 1-1/2 x 1/16", "1-1/2 x 1-1/2 x 3/32", "1-1/2 x 1-1/2 x 1/8",
+                         "2 x 2 x 1/8", "2 x 2 x 3/16", "2-1/2 x 2-1/2 x 1/8", "3 x 3 x 1/8"]
+        selected = st.selectbox("Aluminum Angle Size", angle_options, key="rear_angle")
+        st.session_state.inp["rear_angle_size"] = selected
 
 # Wing Structure
 with tabs[5]:
@@ -172,48 +223,41 @@ with tabs[8]:
         a = st.session_state.result
         x = a.x
         fig = plt.figure(figsize=(16, 14))
-
         ax1 = fig.add_subplot(3, 2, 1)
         ax1.plot(x, a.pos.get("w", []))
         ax1.set_title("Lift Distribution (lb/in)")
         ax1.grid(True, alpha=0.3)
-
         ax2 = fig.add_subplot(3, 2, 2)
         ax2.plot(x, a.pos.get("V", []), label="+g")
         ax2.plot(x, a.neg.get("V", []), label="-g", linestyle="--")
         ax2.set_title("Shear (lb)")
         ax2.legend()
         ax2.grid(True, alpha=0.3)
-
         ax3 = fig.add_subplot(3, 2, 3)
         ax3.plot(x, a.pos.get("z_front", []), label="Front")
         ax3.plot(x, a.pos.get("z_rear", []), label="Rear")
         ax3.set_title("Deflection (in)")
         ax3.legend()
         ax3.grid(True, alpha=0.3)
-
         ax4 = fig.add_subplot(3, 2, 4)
         ax4.plot(x, a.pos.get("M", []), label="+g")
         ax4.plot(x, a.neg.get("M", []), label="-g", linestyle="--")
         ax4.set_title("Moment (lb·in)")
         ax4.legend()
         ax4.grid(True, alpha=0.3)
-
         try:
             ax5 = fig.add_subplot(3, 2, 5)
             a.draw_geometry(ax5, ax5)
             ax5.set_title("Wing Geometry - Front View")
-
             ax6 = fig.add_subplot(3, 2, 6)
             a.draw_geometry(ax6, ax6)
             ax6.set_title("Wing Geometry - Top View")
         except:
             pass
-
         plt.tight_layout()
         st.pyplot(fig)
         plt.close(fig)
     else:
         st.info("Run analysis to see plots.")
 
-st.caption("AeroBeam v1.2 • Working version")
+st.caption("AeroBeam v1.2 • Full libraries included")
