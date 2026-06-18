@@ -1,16 +1,46 @@
 """
-styles.py - Anthropic/Claude style theme for AeroBeam
+styles.py
+Targeted CSS improvements following modern Streamlit theming practices.
+Does NOT affect matplotlib or PDF output.
 """
 
 import streamlit as st
 
-def apply_anthropic_theme():
+def apply_modern_theme():
     css = """
     <style>
-    .stApp { background-color: #0F0F0F; color: #EAEAEA; }
-    section[data-testid="stSidebar"] { background-color: #1A1A1A; border-right: 1px solid #333; }
-    .stButton > button { background-color: #3B82F6; color: white; border-radius: 6px; }
-    .stTabs [aria-selected="true"] { border-bottom: 2px solid #3B82F6; color: #EAEAEA; }
+    /* Improve overall spacing and card look */
+    .block-container {
+        padding-top: 1.5rem;
+        padding-bottom: 2rem;
+    }
+
+    /* Make input fields and selects cleaner */
+    .stTextInput, .stNumberInput, .stSelectbox, .stSlider {
+        margin-bottom: 0.6rem;
+    }
+
+    /* Better tab styling */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 4px;
+    }
+
+    .stTabs [data-baseweb="tab"] {
+        padding: 8px 16px;
+        border-radius: 6px 6px 0 0;
+    }
+
+    /* Make buttons more modern */
+    .stButton > button {
+        border-radius: 6px;
+        padding: 0.5rem 1.1rem;
+        font-weight: 500;
+    }
+
+    /* Warning box improvement */
+    .stAlert {
+        border-radius: 8px;
+    }
     </style>
     """
     st.markdown(css, unsafe_allow_html=True)
