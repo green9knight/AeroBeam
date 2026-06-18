@@ -936,7 +936,11 @@ class WingStressAnalyzer:
 
         # Deflection — front spar (uses strut-corrected M)
         Mf = M*self.lsf
-        if self.config in ("strut_braced","single_strut"):
+
+        # Force cantilever deflection if we want to ignore jury strut effect on plots
+        ignore_jury_for_deflection = getattr(self, "jury", False)
+
+        if self.config in ("strut_braced","single_strut") and not ignore_jury_for_deflection:
             th_f, z_f = self._deflect_strut(Mf, self._EI_f, si)
         else:
             th_f, z_f = self._deflect_cantilever(Mf, self._EI_f)
@@ -975,9 +979,11 @@ class WingStressAnalyzer:
 
         elif self.config in ("cantilever", "single_strut") and self.num_spars == 2:
             point_couplings = []
-            jury_k = self._jury_coupling_stiffness()
-            if self.jury and jury_k > 0.0:
-                point_couplings.append((self.jury_bl, jury_k))
+            # Only add jury coupling if we are NOT ignoring jury for deflection plots
+            if getattr(self, "jury", False) and not getattr(self, "_ignore_jury_for_deflection", True):
+                jury_k = self._jury_coupling_stiffness()
+                if jury_k > 0.0:
+                    point_couplings.append((self.jury_bl, jury_k))
             th_r, z_r, Mr = self._elastic_coupled_rear_response(w_rear, z_f, k_transfer, point_couplings)
             _, z_r_free, _ = self._elastic_coupled_rear_response(w_rear, z_f, 0.0, [])
             free_delta = float(np.max(np.abs(z_r_free - z_f)))
