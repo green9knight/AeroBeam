@@ -43,7 +43,7 @@ def g(key, default=None):
 # ── Header ────────────────────────────────────────────────────────────────────
 st.markdown(
     f'<div style="background:{PC_BLUE};padding:12px 20px;border-radius:6px;margin-bottom:12px">'
-    f'<span style="color:#D2B75F;font-size:1.6em;font-weight:700">"AeroBeam.ico" AeroBeam v1.2</span>'
+    f'<span style="color:#D2B75F;font-size:1.6em;font-weight:700">page_icon="AeroBeam.ico" AeroBeam v1.2</span>'
     f'<span style="color:#B9BCC2;font-size:0.9em;margin-left:16px">'
     f'Wing Bending · Shear · Buckling · Torsion</span></div>',
     unsafe_allow_html=True
