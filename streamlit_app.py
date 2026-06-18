@@ -6,16 +6,6 @@ import streamlit as st
 import numpy as np
 import json, io, math
 
-st.logo(
-    icon_image="AeroBeam.ico",
-)
-
-st.set_page_config(
-    page_title="AeroBeam v1.2",
-    page_icon="AeroBeam.ico",
-    layout="wide"
-)
-
 # ── Import backend ────────────────────────────────────────────────────────────
 try:
     from wing_stress_analyzer import WingStressAnalyzer, DEFAULT_INPUTS, dynamic_pressure_psi
