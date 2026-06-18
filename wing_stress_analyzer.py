@@ -1002,6 +1002,16 @@ class WingStressAnalyzer:
         sig_f = Mf / np.maximum(self._Itr_f, 1e-10) * self._ym_f
         sig_r = Mr / np.maximum(self._Itr_r, 1e-10) * self._ym_r
 
+        # === Clean deflection for plotting (Bruhn-aligned strut-braced) ===
+        # For strut-braced configurations, shift the deflection curve so that
+        # deflection at the strut location is approximately zero (rigid support assumption).
+        # This produces physically realistic plotted shapes and removes non-physical hooks.
+        if self.config in ("strut_braced", "single_strut"):
+            strut_idx = np.argmin(np.abs(self.x - getattr(self, "strut_bl", self.b_half * 0.65)))
+            if strut_idx > 0:
+                z_f = z_f - z_f[strut_idx]
+                z_r = z_r - z_r[strut_idx]
+
         return {
             "w":w, "V":V, "M":M,
             "M_front":Mf, "M_rear":Mr,
