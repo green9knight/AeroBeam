@@ -41,9 +41,10 @@ def g(key, default=None):
     return st.session_state.inp.get(key, DEFAULT_INPUTS.get(key, default))
 
 # ── Header ────────────────────────────────────────────────────────────────────
+page_icon="AeroBeam.ico"
 st.markdown(
     f'<div style="background:{PC_BLUE};padding:12px 20px;border-radius:6px;margin-bottom:12px">'
-    page_icon="AeroBeam.ico" f'<span style="color:#D2B75F;font-size:1.6em;font-weight:700">AeroBeam v1.2</span>'
+    f'<span style="color:#D2B75F;font-size:1.6em;font-weight:700">AeroBeam v1.2</span>'
     f'<span style="color:#B9BCC2;font-size:0.9em;margin-left:16px">'
     f'Wing Bending · Shear · Buckling · Torsion</span></div>',
     unsafe_allow_html=True
