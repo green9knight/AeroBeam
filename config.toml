@@ -5,6 +5,7 @@ enableXsrfProtection = false
 
 [browser]
 gatherUsageStats = true
+
 [theme]
 base = "light" # or "dark"
 backgroundColor = "#191414"
