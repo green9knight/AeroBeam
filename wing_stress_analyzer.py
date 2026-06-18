@@ -817,61 +817,23 @@ class WingStressAnalyzer:
         return out
 
     def _support_reactions(self, M_total: np.ndarray, EI: np.ndarray) -> dict:
-        """Return vertical reactions for main strut and optional load-bearing jury.
+        """Return vertical reactions for main strut and jury.
 
-        Without a valid jury BL, this reduces to the existing statics relation
-        ``R_strut = M_root / strut_bl``. With a valid jury station between the
-        fuselage and main strut attach, the jury and main strut reactions are
-        solved with:
-
-        1. root moment relief: R_j*j + R_s*s = M_root
-        2. compatibility: after root-slope adjustment, z(jury) and z(strut)
-           are both zero.
+        The jury strut is a BUCKLING BRACE only — it does NOT provide a
+        vertical reaction on the spar and does NOT affect spar bending
+        moment or deflection. Industry practice: jury loads are excluded
+        from spar stress/deflection. The jury only reduces the Euler
+        effective length (handled in _strut_effective_buckling_length).
         """
-
-        strut_bl = max(self.strut_bl, 1.0)
+        strut_bl   = max(self.strut_bl, 1.0)
         strut_unit = self._reaction_moment(strut_bl)
-
-        if not self.jury or not (self.strut_fuse_bl < self.jury_bl < self.strut_bl):
-            R_strut = M_total[0] / strut_bl
-            return {
-                "strut": R_strut,
-                "jury": 0.0,
-                "moment": R_strut * strut_unit,
-            }
-
-        jury_bl = self.jury_bl
-        jury_unit = self._reaction_moment(jury_bl)
-        ji = int(np.argmin(np.abs(self.x - jury_bl)))
-        si = self._strut_idx()
-
-        def compatibility(moment: np.ndarray) -> float:
-            _, z = self._deflect_cantilever(moment, EI)
-            return z[ji] - z[si] * (self.x[ji] / max(self.x[si], 1e-9))
-
-        rhs = np.array([M_total[0], compatibility(M_total)])
-        matrix = np.array([
-            [jury_bl, strut_bl],
-            [compatibility(jury_unit), compatibility(strut_unit)],
-        ])
-
-        try:
-            R_jury, R_strut = np.linalg.solve(matrix, rhs)
-        except np.linalg.LinAlgError:
-            R_jury = 0.0
-            R_strut = M_total[0] / strut_bl
-
-        # A reversed reaction would mean this geometry/stiffness does not make
-        # the jury act as an upward support. Fall back to buckling-only behavior.
-        if R_jury < 0.0 or R_strut < 0.0:
-            R_jury = 0.0
-            R_strut = M_total[0] / strut_bl
-
+        R_strut    = M_total[0] / strut_bl
         return {
-            "strut": float(R_strut),
-            "jury": float(R_jury),
-            "moment": R_jury * jury_unit + R_strut * strut_unit,
+            "strut":  float(R_strut),
+            "jury":   0.0,
+            "moment": R_strut * strut_unit,
         }
+
 
     def _strut_forces(self, M_total, Fv_override: Optional[float] = None):
         """M_total = moment array BEFORE strut subtraction."""
@@ -937,10 +899,11 @@ class WingStressAnalyzer:
         # Deflection — front spar (uses strut-corrected M)
         Mf = M*self.lsf
 
-        # Force cantilever deflection if we want to ignore jury strut effect on plots
-        ignore_jury_for_deflection = getattr(self, "jury", False)
-
-        if self.config in ("strut_braced","single_strut") and not ignore_jury_for_deflection:
+        # Jury strut is an Euler buckling brace on the main strut ONLY.
+        # It does NOT provide a vertical reaction on the spar and therefore
+        # does NOT change spar bending moment or deflection. Always use
+        # the standard strut-braced deflection when config is strut_braced/single_strut.
+        if self.config in ("strut_braced","single_strut"):
             th_f, z_f = self._deflect_strut(Mf, self._EI_f, si)
         else:
             th_f, z_f = self._deflect_cantilever(Mf, self._EI_f)
@@ -979,11 +942,8 @@ class WingStressAnalyzer:
 
         elif self.config in ("cantilever", "single_strut") and self.num_spars == 2:
             point_couplings = []
-            # Only add jury coupling if we are NOT ignoring jury for deflection plots
-            if getattr(self, "jury", False) and not getattr(self, "_ignore_jury_for_deflection", True):
-                jury_k = self._jury_coupling_stiffness()
-                if jury_k > 0.0:
-                    point_couplings.append((self.jury_bl, jury_k))
+            # Jury strut does NOT couple the rear spar — it is a buckling brace only.
+            # No point_couplings from jury strut.
             th_r, z_r, Mr = self._elastic_coupled_rear_response(w_rear, z_f, k_transfer, point_couplings)
             _, z_r_free, _ = self._elastic_coupled_rear_response(w_rear, z_f, 0.0, [])
             free_delta = float(np.max(np.abs(z_r_free - z_f)))
@@ -1001,16 +961,6 @@ class WingStressAnalyzer:
 
         sig_f = Mf / np.maximum(self._Itr_f, 1e-10) * self._ym_f
         sig_r = Mr / np.maximum(self._Itr_r, 1e-10) * self._ym_r
-
-        # === Clean deflection for plotting (Bruhn-aligned strut-braced) ===
-        # For strut-braced configurations, shift the deflection curve so that
-        # deflection at the strut location is approximately zero (rigid support assumption).
-        # This produces physically realistic plotted shapes and removes non-physical hooks.
-        if self.config in ("strut_braced", "single_strut"):
-            strut_idx = np.argmin(np.abs(self.x - getattr(self, "strut_bl", self.b_half * 0.65)))
-            if strut_idx > 0:
-                z_f = z_f - z_f[strut_idx]
-                z_r = z_r - z_r[strut_idx]
 
         return {
             "w":w, "V":V, "M":M,
