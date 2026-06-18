@@ -1,12 +1,14 @@
 """
-AeroBeam v1.2 - Full Version with Libraries
-Airfoil + Expanded Tube (0.5"-6") + Angle (0.5"-3") libraries
+AeroBeam v1.2 - Full Version
+Includes custom filename for PDF reports
 """
 
 import streamlit as st
 import json
 import io
 import matplotlib.pyplot as plt
+import tempfile
+import os
 from styles import apply_modern_theme
 
 st.set_page_config(page_title="AeroBeam v1.2", page_icon="AeroBeam.ico", layout="wide")
@@ -34,6 +36,7 @@ st.caption("Wing Bending · Shear · Buckling · Torsion")
 # Sidebar
 with st.sidebar:
     st.header("Controls")
+
     if st.button("▶ Run Analysis", type="primary", use_container_width=True, key="run_btn"):
         try:
             analyzer = WingStressAnalyzer(dict(st.session_state.inp))
@@ -41,20 +44,40 @@ with st.sidebar:
             st.session_state.result = analyzer
             st.success("Analysis complete")
         except Exception as e:
-            st.error(f"Error: {e}")
+            st.error(f"Analysis error: {e}")
 
+    # === PDF Report with Custom Filename ===
     if st.session_state.result:
+        st.divider()
+        st.subheader("PDF Report")
+
+        default_name = "AeroBeam_Report.pdf"
+        custom_name = st.text_input("Filename", value=default_name, key="pdf_name")
+
         if st.button("📄 Generate PDF Report", use_container_width=True, key="pdf_btn"):
             try:
-                if hasattr(st.session_state.result, "export_pdf"):
-                    pdf_data = st.session_state.result.export_pdf()
-                else:
-                    st.error("PDF method not found")
-                    pdf_data = None
-                if pdf_data:
-                    st.download_button("⬇ Download PDF Report", pdf_data, "AeroBeam_Report.pdf", "application/pdf")
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+                    temp_path = tmp.name
+
+                st.session_state.result.export_pdf(path=temp_path)
+
+                with open(temp_path, "rb") as f:
+                    pdf_bytes = f.read()
+
+                os.unlink(temp_path)
+
+                if not custom_name.lower().endswith(".pdf"):
+                    custom_name += ".pdf"
+
+                st.download_button(
+                    label=f"⬇ Download {custom_name}",
+                    data=pdf_bytes,
+                    file_name=custom_name,
+                    mime="application/pdf",
+                    use_container_width=True
+                )
             except Exception as e:
-                st.error(f"PDF failed: {e}")
+                st.error(f"PDF generation failed: {e}")
 
     st.divider()
     st.subheader("Project")
@@ -63,10 +86,12 @@ with st.sidebar:
         data = json.load(up)
         st.session_state.inp.update(data)
         st.rerun()
+
     if st.button("Save Project", key="save_btn"):
         buf = io.BytesIO(json.dumps(st.session_state.inp, indent=2).encode())
         st.download_button("Download .aerobeam", buf, "project.aerobeam", key="download_btn")
 
+# Tabs
 tabs = st.tabs([
     "Wing Geometry", "Flight & Airfoil", "Loads & Config",
     "Front Spar", "Rear Spar", "Wing Structure", "Buckling",
@@ -100,7 +125,7 @@ with tabs[1]:
         all_names = [n for n in all_names if search.lower() in n.lower()]
     all_names = all_names[:300]
     if len(all_names) == 0:
-        st.warning("No airfoils found. Clear search or change family.")
+        st.warning("No airfoils found.")
         selected = g("airfoil", "NACA 4412")
     else:
         cur = g("airfoil", "NACA 4412")
@@ -128,7 +153,7 @@ with tabs[2]:
     st.session_state.inp["config"] = st.selectbox("Configuration", ["strut_braced", "cantilever", "single_strut"], index=0, key="config")
     st.session_state.inp["jury_strut"] = st.checkbox("Enable Jury Strut", value=bool(g("jury_strut", False)), key="jury_strut")
 
-# Front Spar (Expanded Libraries)
+# Front Spar
 with tabs[3]:
     st.subheader("Front Spar")
     spar_type = st.selectbox("Spar Type", ["Round Tube", "Plain Rectangular", "I-Beam", "Angle Cap"], index=0, key="front_type")
@@ -161,7 +186,7 @@ with tabs[3]:
         selected = st.selectbox("Aluminum Angle Size", angle_options, key="front_angle")
         st.session_state.inp["front_angle_size"] = selected
 
-# Rear Spar (Expanded Libraries)
+# Rear Spar
 with tabs[4]:
     st.subheader("Rear Spar")
     spar_type = st.selectbox("Spar Type", ["Round Tube", "Plain Rectangular", "Angle Cap"], index=0, key="rear_type")
@@ -260,4 +285,4 @@ with tabs[8]:
     else:
         st.info("Run analysis to see plots.")
 
-st.caption("AeroBeam v1.2 • Full libraries included")
+st.caption("AeroBeam v1.2 • Custom PDF filename supported")
