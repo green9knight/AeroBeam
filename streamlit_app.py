@@ -1,7 +1,6 @@
 """
-AeroBeam v1.2 - Complete App with All Fixes
-- Plots in requested order (Lift, Shear, Deflection, Moment + Geometry views)
-- PDF Report download restored
+AeroBeam v1.2 - Complete Working Version
+All tabs + correct plot layout + PDF download
 """
 
 import streamlit as st
@@ -18,7 +17,7 @@ try:
     BACKEND_OK = True
 except Exception as e:
     BACKEND_OK = False
-    st.error(f"Backend import failed: {e}")
+    st.error(f"Backend failed: {e}")
 
 if "inp" not in st.session_state:
     st.session_state.inp = dict(DEFAULT_INPUTS) if BACKEND_OK else {}
@@ -31,7 +30,7 @@ def g(key, default=None):
 st.markdown("## ✈️ AeroBeam v1.2")
 st.caption("Wing Bending · Shear · Buckling · Torsion")
 
-# Sidebar with PDF
+# Sidebar
 with st.sidebar:
     st.header("Controls")
 
@@ -44,7 +43,6 @@ with st.sidebar:
         except Exception as e:
             st.error(f"Analysis error: {e}")
 
-    # PDF Report Download (Restored)
     if st.session_state.result:
         if st.button("📄 Generate PDF Report", use_container_width=True, key="pdf_btn"):
             try:
@@ -53,7 +51,7 @@ with st.sidebar:
                 elif hasattr(st.session_state.result, "generate_pdf"):
                     pdf_data = st.session_state.result.generate_pdf()
                 else:
-                    st.error("PDF export method not found.")
+                    st.error("PDF method not found")
                     pdf_data = None
 
                 if pdf_data:
@@ -65,7 +63,7 @@ with st.sidebar:
                         use_container_width=True
                     )
             except Exception as e:
-                st.error(f"PDF generation failed: {e}")
+                st.error(f"PDF failed: {e}")
 
     st.divider()
     st.subheader("Project")
@@ -79,16 +77,14 @@ with st.sidebar:
         buf = io.BytesIO(json.dumps(st.session_state.inp, indent=2).encode())
         st.download_button("Download .aerobeam", buf, "project.aerobeam", key="download_btn")
 
-# Tabs
+# All Tabs - FULLY RESTORED
 tabs = st.tabs([
     "Wing Geometry", "Flight & Airfoil", "Loads & Config",
     "Front Spar", "Rear Spar", "Wing Structure", "Buckling",
     "Results", "Plots"
 ])
 
-# (All input tabs remain the same as previous complete version - abbreviated here for space)
-# Wing Geometry, Flight & Airfoil, Loads & Config, Front/Rear Spar, etc. stay unchanged from last full version.
-
+# === Wing Geometry ===
 with tabs[0]:
     st.subheader("Wing Geometry")
     c1, c2 = st.columns(2)
@@ -103,6 +99,53 @@ with tabs[0]:
         st.session_state.inp["front_spar_load_share"] = st.number_input("Front Spar Load Share", value=float(g("front_spar_load_share")), step=0.05, key="front_spar_load_share")
         st.caption(f"Rear load share = {1 - float(g('front_spar_load_share')):.2f}")
 
+# === Flight & Airfoil ===
+with tabs[1]:
+    st.subheader("Flight & Airfoil")
+    st.session_state.inp["airfoil"] = st.text_input("Airfoil", value=str(g("airfoil", "NACA 4412")), key="airfoil")
+    st.session_state.inp["Cm_ac"] = st.number_input("Cm_ac", value=float(g("Cm_ac")), format="%.4f", key="cm_ac")
+    st.session_state.inp["Cl_alpha"] = st.number_input("Cl_alpha", value=float(g("Cl_alpha")), key="cl_alpha")
+    st.session_state.inp["airfoil_t_c"] = st.number_input("t/c", value=float(g("airfoil_t_c")), format="%.4f", key="airfoil_tc")
+    st.session_state.inp["Vd_mph"] = st.number_input("Dive Speed Vd (mph)", value=float(g("Vd_mph")), key="vd_mph")
+
+# === Loads & Config ===
+with tabs[2]:
+    st.subheader("Loads & Configuration")
+    st.session_state.inp["n"] = st.number_input("Load Factor (+g)", value=float(g("n")), key="n")
+    st.session_state.inp["Weight"] = st.number_input("Gross Weight (lb)", value=float(g("Weight")), key="weight")
+    st.session_state.inp["config"] = st.selectbox("Configuration", ["strut_braced", "cantilever", "single_strut"], index=0, key="config")
+    st.session_state.inp["jury_strut"] = st.checkbox("Enable Jury Strut", value=bool(g("jury_strut", False)), key="jury_strut")
+    if st.session_state.inp.get("jury_strut"):
+        st.warning("Jury strut force calculated but NOT applied to spar results.")
+
+# === Front Spar ===
+with tabs[3]:
+    st.subheader("Front Spar")
+    st.session_state.inp["front_spar_type"] = st.selectbox("Spar Type", ["Round Tube", "Plain Rectangular", "I-Beam"], index=0, key="front_type")
+    if st.session_state.inp["front_spar_type"] == "Round Tube":
+        st.session_state.inp["front_spar_od"] = st.number_input("Front Spar OD (in)", value=float(g("front_spar_od", 2.5)), key="front_od")
+        st.session_state.inp["front_spar_wall"] = st.number_input("Front Spar Wall (in)", value=float(g("front_spar_wall", 0.065)), key="front_wall")
+
+# === Rear Spar ===
+with tabs[4]:
+    st.subheader("Rear Spar")
+    st.session_state.inp["rear_spar_type"] = st.selectbox("Spar Type", ["Round Tube", "Plain Rectangular"], index=0, key="rear_type")
+    if st.session_state.inp["rear_spar_type"] == "Round Tube":
+        st.session_state.inp["rear_spar_od"] = st.number_input("Rear Spar OD (in)", value=float(g("rear_spar_od", 2.0)), key="rear_od")
+        st.session_state.inp["rear_spar_wall"] = st.number_input("Rear Spar Wall (in)", value=float(g("rear_spar_wall", 0.065)), key="rear_wall")
+
+# === Wing Structure ===
+with tabs[5]:
+    st.subheader("Wing Structure")
+    st.session_state.inp["wing_structure_type"] = st.selectbox("Structure Type", ["fabric_tube", "fabric_buildup", "aluminum_skin"], index=0, key="wing_type")
+    st.session_state.inp["dcell_enabled"] = st.checkbox("D-Cell Enabled", value=bool(g("dcell_enabled", False)), key="dcell")
+
+# === Buckling ===
+with tabs[6]:
+    st.subheader("Buckling")
+    st.session_state.inp["stiffener_spacing"] = st.number_input("Stiffener Spacing (in)", value=float(g("stiffener_spacing", 0.0)), key="stiffener")
+
+# === Results ===
 with tabs[7]:
     st.subheader("Results Summary")
     if st.session_state.result:
@@ -113,10 +156,9 @@ with tabs[7]:
     else:
         st.info("Run analysis from the sidebar.")
 
-# === Plots Tab (Requested Layout) ===
+# === Plots (Requested Layout) ===
 with tabs[8]:
     st.subheader("Plots")
-
     if st.session_state.result:
         a = st.session_state.result
         x = a.x
@@ -151,7 +193,7 @@ with tabs[8]:
         ax4.legend()
         ax4.grid(True, alpha=0.3)
 
-        # Row 3: Geometry Views
+        # Row 3: Geometry
         try:
             ax5 = fig.add_subplot(3, 2, 5)
             a.draw_geometry(ax5, ax5)
@@ -169,4 +211,4 @@ with tabs[8]:
     else:
         st.info("Run analysis to see plots.")
 
-st.caption("AeroBeam v1.2 • Bruhn-aligned analysis • Charts and PDF style preserved")
+st.caption("AeroBeam v1.2 • All fixes applied")
