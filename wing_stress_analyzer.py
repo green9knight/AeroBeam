@@ -172,6 +172,52 @@ def parse_fraction(value: Any, default: float = 0.0) -> float:
 
 # ─── SPAR FACTORY ────────────────────────────────────────────────────────────
 
+def _sanitize_spar_inputs(inputs: dict, prefix: str) -> dict:
+    """
+    Ensure spar geometry inputs are physically meaningful.
+    Replaces zero or missing values with safe defaults so the analyzer
+    never sees zero EI (which causes infinite stress and nonsense results).
+    Called automatically before build_spar.
+    """
+    i = dict(inputs)
+    t = i.get(f"{prefix}_type", "Round Tube")
+
+    if t == "Round Tube":
+        od   = float(i.get(f"{prefix}_od",   2.5))
+        wall = float(i.get(f"{prefix}_wall", 0.065))
+        if od   < 0.25:  i[f"{prefix}_od"]   = 2.5
+        if wall < 0.020: i[f"{prefix}_wall"] = 0.065
+        if wall >= i[f"{prefix}_od"] / 2:
+            i[f"{prefix}_wall"] = i[f"{prefix}_od"] * 0.05  # cap at 5% OD
+
+    elif t == "Plain Rectangular":
+        w = float(i.get(f"{prefix}_width",  2.0))
+        h = float(i.get(f"{prefix}_height", 4.0))
+        if w < 0.25: i[f"{prefix}_width"]  = 2.0
+        if h < 0.25: i[f"{prefix}_height"] = 4.0
+
+    elif t in ("I-Beam", "C-Channel", "Double I-Beam", "Routed (Monolithic)",
+               "Aluminum I-Beam", "Aluminum C-Spar"):
+        if float(i.get(f"{prefix}_h_web", 0)) < 0.1:
+            i[f"{prefix}_h_web"] = 4.5
+        if float(i.get(f"{prefix}_t_web", 0)) < 0.010:
+            i[f"{prefix}_t_web"] = 0.125
+        if float(i.get(f"{prefix}_b_top", 0)) < 0.1:
+            i[f"{prefix}_b_top"] = 1.5
+        if float(i.get(f"{prefix}_t_top", 0)) < 0.010:
+            i[f"{prefix}_t_top"] = 0.125
+
+    elif t == "Box Spar":
+        if float(i.get(f"{prefix}_b_outer", 0)) < 0.5:
+            i[f"{prefix}_b_outer"] = 2.0
+        if float(i.get(f"{prefix}_h_outer", 0)) < 0.5:
+            i[f"{prefix}_h_outer"] = 5.0
+        if float(i.get(f"{prefix}_t_web", 0)) < 0.020:
+            i[f"{prefix}_t_web"] = 0.125
+
+    return i
+
+
 def build_spar(spar_type: str, inputs: dict, prefix: str) -> CrossSection:
     def g(key, default=None):
         return inputs.get(f"{prefix}_{key}", default)
@@ -349,6 +395,10 @@ class WingStressAnalyzer:
 
         self.front_spar_type = i.get("front_spar_type", "Round Tube")
         self.rear_spar_type  = i.get("rear_spar_type",  "Round Tube")
+        # Sanitize spar dimensions before building — prevents zero-EI crashes
+        i = _sanitize_spar_inputs(i, "front_spar")
+        i = _sanitize_spar_inputs(i, "rear_spar")
+        self.inp = i  # update with sanitized values
         self.front_spar = build_spar(self.front_spar_type, i, "front_spar")
         self.rear_spar  = build_spar(self.rear_spar_type,  i, "rear_spar") \
                           if self.num_spars == 2 else None
