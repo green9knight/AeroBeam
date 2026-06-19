@@ -14,7 +14,7 @@ from spar_sections import (
     CrossSection, RoundTube, IBeam, DoubleIBeam, BoxSpar,
     CChannel, RoutedSpar, PlainRect,
     DCellSkin, GeodeticPanel, SkinPanel, WingBox,
-    MATERIAL_DB, STRUT_MATERIALS,
+    MATERIAL_DB, STRUT_MATERIALS, resolve_material,
     two_cell_bredt, allowable_bending, allowable_shear,
     web_buckling, web_bending_buckling, skin_compression_buckling, cap_column_buckling,
     skin_effective_width,
@@ -535,18 +535,18 @@ class WingStressAnalyzer:
             h    = h0 * s
             c_b  = (self.rear_pct-self.front_pct)*self.chord_x[i]
             A1   = self.dcell.enclosed_area(h, s)
-            G1   = MATERIAL_DB[self.dcell.skin_mat]["G"]
+            G1   = MATERIAL_DB[resolve_material(self.dcell.skin_mat)]["G"]
             ds1  = self.dcell.ds_over_t_own(h, s)
             dss  = self.dcell.ds_over_t_web(h, s)
 
             if self.geodetic is not None:
                 A2  = self.geodetic.enclosed_area(c_b, h)
-                G2  = MATERIAL_DB[self.geodetic.mat_name]["G"]
+                G2  = MATERIAL_DB[resolve_material(self.geodetic.mat_name)]["G"]
                 ds2 = self.geodetic.ds_over_t_own(c_b, h, t_wrs*s, s)
                 q1, q2, gj = two_cell_bredt(A1,A2,ds1,ds2,dss,G1,G2,1.0)
                 GJ[i]=gj; q1f[i]=q1; q2f[i]=q2
             elif getattr(self, "top_skin", None) is not None:
-                A2  = c_b * h; G2 = MATERIAL_DB[self.top_skin.mat_name]["G"]
+                A2  = c_b * h; G2 = MATERIAL_DB[resolve_material(self.top_skin.mat_name)]["G"]
                 tt  = self.top_skin.thickness; tb = self.bot_skin.thickness
                 ds2 = c_b*s/tt + c_b*s/tb + h/t_wrs
                 q1, q2, gj = two_cell_bredt(A1,A2,ds1,ds2,dss,G1,G2,1.0)
@@ -582,7 +582,7 @@ class WingStressAnalyzer:
             k_geo = 0.0
 
         if getattr(self, "top_skin", None) is not None:
-            G_skin = MATERIAL_DB[self.top_skin.mat_name]["G"]
+            G_skin = MATERIAL_DB[resolve_material(self.top_skin.mat_name)]["G"]
             k_skin = G_skin * self.top_skin.thickness / spar_gap
         else:
             k_skin = 0.0
@@ -982,7 +982,7 @@ class WingStressAnalyzer:
     # ── MS helpers ───────────────────────────────────────────────────────────
 
     def _ms(self, sig, tau, mat_name, is_compression=False):
-        m = MATERIAL_DB[mat_name]; kd = self.wood_kd
+        m = MATERIAL_DB[resolve_material(mat_name)]; kd = self.wood_kd
         if m["is_wood"]:
             Fb  = (m["Fc"] if is_compression and m["Fc"] else m["Fb"])*kd
             Fsu = m["Fsu"]
@@ -1073,7 +1073,7 @@ class WingStressAnalyzer:
             if spar is None:
                 continue
             mat = self._front_cap_mat() if label=="front" else self._rear_cap_mat()
-            m = MATERIAL_DB.get(mat, MATERIAL_DB["6061-T6"])
+            m = MATERIAL_DB.get(mat, MATERIAL_DB[resolve_material("6061-T6")])
             is_metal = not m["is_wood"]
             r = {}
 
@@ -1136,7 +1136,7 @@ class WingStressAnalyzer:
             if h_web > 0 and t_web > 0:
                 tau_web_max = V_max / max(h_web * t_eff_V, 1e-9)
                 r["tau_web"] = tau_web_max
-                Fsu = MATERIAL_DB[web_mat]["Fsu"]
+                Fsu = MATERIAL_DB[resolve_material(web_mat)]["Fsu"]
                 r["MS_web_shear"] = Fsu / max(tau_web_max, 1e-9) - 1
 
                 # 2. Web shear buckling at max shear station
@@ -1162,7 +1162,7 @@ class WingStressAnalyzer:
                     r["MS_web_combined"] = float("inf")
 
                 # Min web thickness at max shear station (for guidance)
-                Emw = MATERIAL_DB[web_mat]["E"]; nu = 0.33
+                Emw = MATERIAL_DB[resolve_material(web_mat)]["E"]; nu = 0.33
                 k_s = wb["k_s"]
                 if k_s > 0 and Emw > 0 and tau_web_max > 0:
                     t_min_web = h_web * math.sqrt(tau_web_max * 12*(1-nu**2) / (k_s * math.pi**2 * Emw))
@@ -1199,7 +1199,7 @@ class WingStressAnalyzer:
                     r["sigma_cr_dcell_skin"] = sk_dc["sigma_cr_skin"]
                     r["MS_dcell_skin_buckling"] = sk_dc["sigma_cr_skin"] / max(sigma_gov, 1e-9) - 1
                 # Minimum skin thickness guidance
-                Esk = MATERIAL_DB[self.top_skin.mat_name]["E"]; nu = 0.33
+                Esk = MATERIAL_DB[resolve_material(self.top_skin.mat_name)]["E"]; nu = 0.33
                 k_sk = 4.0
                 if sigma_gov > 0:
                     t_min_skin = b_skin * math.sqrt(sigma_gov * 12*(1-nu**2) / (k_sk * math.pi**2 * Esk))
@@ -1223,7 +1223,7 @@ class WingStressAnalyzer:
             if spar_type == "Round Tube":
                 od_v = float(self.inp.get(f"{prefix}_od", 2.0))
                 wall = float(self.inp.get(f"{prefix}_wall", 0.065))
-                E_t  = MATERIAL_DB[mat]["E"]; nu = 0.33
+                E_t  = MATERIAL_DB[resolve_material(mat)]["E"]; nu = 0.33
                 # NASA SP-8007: sigma_cr_cripple = 0.605 * E * t / r
                 # Conservative: use 0.3 factor for imperfection sensitivity
                 R_mid = (od_v - wall) / 2.0
@@ -1418,7 +1418,7 @@ class WingStressAnalyzer:
             L += ["  Both spars total      : %6.2f lb" % self.spar_weight_total]
 
         L += [f"\n── MARGIN OF SAFETY  MS = Allowable/Applied - 1  {'─'*4}"]
-        fm = MATERIAL_DB[self._front_cap_mat()]
+        fm = MATERIAL_DB[resolve_material(self._front_cap_mat())]
         L += [f"  Front σ_gov (governing bending stress): {self.sigma_max_front:>10,.0f} psi  at x={self.x_sigma_max_front:.1f}\""]
         if not fm["is_wood"]:
             L += [f"  Front MS_ult (ultimate, Ftu)    :{mf(self.ms_front['MS_ult'])}"]
@@ -1426,7 +1426,7 @@ class WingStressAnalyzer:
         else:
             L += [f"  Front MS_bend :{mf(self.ms_front['MS_bend'])}"]
         if t: L += [f"  Front MS_comb :{mf(self.ms_front['MS_comb'])}"]
-        rm = MATERIAL_DB[self._rear_cap_mat()]
+        rm = MATERIAL_DB[resolve_material(self._rear_cap_mat())]
         L += [f"  Rear  σ_gov (governing bending stress): {self.sigma_max_rear:>10,.0f} psi  at x={self.x_sigma_max_rear:.1f}\""]
         key = "MS_ult" if not rm["is_wood"] else "MS_bend"
         L += [f"  Rear  MS      :{mf(self.ms_rear[key])}"]
@@ -1458,7 +1458,7 @@ class WingStressAnalyzer:
             L += [f"  Twist φ (aeroelastic, root): {t['phi_root_deg']:>9.3f}°  (< 1° acceptable)"]
             if self.dcell:
                 td=abs(float(t["tau_dcell"][0]))
-                Fs=MATERIAL_DB[self.dcell.skin_mat]["Fsu"]
+                Fs=MATERIAL_DB[resolve_material(self.dcell.skin_mat)]["Fsu"]
                 L += [f"  D-cell τ (shear stress) root: {td:>9,.0f} psi   MS:{mf(Fs/max(td,1)-1)}"]
             if hasattr(self, "_geodetic_kappa"):
                 kap = self._geodetic_kappa
@@ -1485,7 +1485,7 @@ class WingStressAnalyzer:
                 strip_f=t.get("geodetic_strip_force", 0.0)
                 q_geo=t.get("geodetic_q", 0.0)
                 red=float(self.inp.get("geodetic_reduction_factor", 0.75))
-                Fb_s=MATERIAL_DB[self.geodetic.mat_name]["Fb"]
+                Fb_s=MATERIAL_DB[resolve_material(self.geodetic.mat_name)]["Fb"]
                 L += [f"  Geodetic τ eff: {tg:>9,.0f} psi"]
                 L += [f"  Geodetic stiffness reduction f_red={red:.2f} (connection/detail allowance)"]
                 L += [f"  ANC-18 drag-truss demand: q={q_geo:>7.1f} lb/in  strip F={strip_f:>7.1f} lb"]

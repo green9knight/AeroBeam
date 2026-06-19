@@ -130,9 +130,64 @@ STRUT_MATERIALS = {
 }
 
 
+# ── Material aliases — maps common misspellings/variants to canonical names ──
+_MAT_ALIASES: dict = {
+    # Pine variants
+    "Pine":              "White Pine",
+    "Eastern Pine":      "White Pine",
+    "Yellow Pine":       "White Pine",
+    "Ponderosa Pine":    "White Pine",
+    # Spruce variants
+    "Spruce":            "Sitka Spruce",
+    "Engelmann Spruce":  "Sitka Spruce",
+    "Norway Spruce":     "Sitka Spruce",
+    # Fir variants
+    "Fir":               "Douglas Fir",
+    "Douglas-Fir":       "Douglas Fir",
+    # Ash
+    "Ash":               "White Ash",
+    # Mahogany
+    "Mahogany":          "Honduran Mahogany",
+    # Plywood
+    "Plywood":           "Birch Plywood",
+    "Birch":             "Birch Plywood",
+    # Aluminum abbreviations
+    "6061":              "6061-T6",
+    "2024":              "2024-T3",
+    "7075":              "7075-T6",
+    "6063":              "6063-T5",
+    # Steel
+    "4130":              "4130 Chromoly (normalized)",
+    "Chromoly":          "4130 Chromoly (normalized)",
+    "Chrome-Moly":       "4130 Chromoly (normalized)",
+}
+
+def resolve_material(name: str) -> str:
+    """Resolve a material name to its canonical MATERIAL_DB key.
+    Falls back through aliases, then returns 'Sitka Spruce' with a warning
+    rather than crashing — so a bad saved file never stops analysis.
+    """
+    if name in MATERIAL_DB:
+        return name
+    if name in _MAT_ALIASES:
+        canonical = _MAT_ALIASES[name]
+        return canonical
+    # Case-insensitive search
+    nl = name.lower().strip()
+    for k in MATERIAL_DB:
+        if k.lower() == nl:
+            return k
+    for alias, canonical in _MAT_ALIASES.items():
+        if alias.lower() == nl:
+            return canonical
+    # Unknown — fall back to Sitka Spruce and warn
+    import warnings
+    warnings.warn(f"AeroBeam: unknown material '{name}' — substituting 'Sitka Spruce'", stacklevel=2)
+    return "Sitka Spruce"
+
 def mat(name: str) -> dict:
-    """Return material property dict. Raises KeyError if not found."""
-    return MATERIAL_DB[name]
+    """Return material property dict. Resolves aliases; never raises KeyError."""
+    return MATERIAL_DB[resolve_material(name)]
 
 
 def allowable_bending(mat_name: str, knockdown: float = 1.0) -> float:

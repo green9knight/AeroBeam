@@ -111,14 +111,14 @@ def tube_selector(prefix: str, label: str):
 
 # ── Header ────────────────────────────────────────────────────────────────────
 # ── Header ────────────────────────────────────────────────────────────────────
-_hc1, _hc2 = st.columns([0.06, 0.94])
+_hc1, _hc2 = st.columns([0.08, 0.92])
 with _hc1:
     if _ico:
-        st.image(_ico, width=52)
+        st.image(_ico, width=60)
     else:
         st.markdown("### ✈️")
 with _hc2:
-    st.markdown("## AeroBeam v1.2")
+    st.markdown("<div style='padding-top:8px'><h2 style='margin:0'>AeroBeam v1.2</h2></div>", unsafe_allow_html=True)
     st.caption("Wing Bending · Shear · Buckling · Torsion")
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
