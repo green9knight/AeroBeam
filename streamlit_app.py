@@ -114,7 +114,7 @@ def tube_selector(prefix: str, label: str):
 _hc1, _hc2 = st.columns([0.08, 0.92])
 with _hc1:
     if _ico:
-        st.image(_ico, width=60)
+        st.image(_ico, width=42)
     else:
         st.markdown("### ✈️")
 with _hc2:
@@ -127,7 +127,7 @@ with st.sidebar:
     if _ico:
         _sc1, _sc2 = st.columns([0.25, 0.75])
         with _sc1:
-            st.image(_ico, width=42)
+            st.image(_ico, width=60)
         with _sc2:
             st.markdown("**AeroBeam v1.2**")
     else:
