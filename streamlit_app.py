@@ -15,7 +15,15 @@ import tempfile
 import os
 from styles import apply_modern_theme
 
-st.set_page_config(page_title="AeroBeam v1.2", page_icon="✈️", layout="wide")
+try:
+    from PIL import Image as _PIL_Image
+    _ico = _PIL_Image.open("AeroBeam.ico").convert("RGBA")
+    _favicon = _ico
+except Exception:
+    _ico = None
+    _favicon = "✈️"
+
+st.set_page_config(page_title="AeroBeam v1.2", page_icon=_favicon, layout="wide")
 apply_modern_theme()
 
 try:
@@ -102,12 +110,29 @@ def tube_selector(prefix: str, label: str):
                f"I={I_val:.4f} in⁴  EI={EI_val/1e6:.2f}×10⁶ lb·in²  —  {fit}")
 
 # ── Header ────────────────────────────────────────────────────────────────────
-st.markdown("## ✈️ AeroBeam v1.2")
-st.caption("Wing Bending · Shear · Buckling · Torsion")
+# ── Header ────────────────────────────────────────────────────────────────────
+_hc1, _hc2 = st.columns([0.06, 0.94])
+with _hc1:
+    if _ico:
+        st.image(_ico, width=52)
+    else:
+        st.markdown("### ✈️")
+with _hc2:
+    st.markdown("## AeroBeam v1.2")
+    st.caption("Wing Bending · Shear · Buckling · Torsion")
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
-    st.header("Controls")
+    # Logo + title in sidebar
+    if _ico:
+        _sc1, _sc2 = st.columns([0.25, 0.75])
+        with _sc1:
+            st.image(_ico, width=42)
+        with _sc2:
+            st.markdown("**AeroBeam v1.2**")
+    else:
+        st.header("Controls")
+    st.divider()
 
     if st.button("▶ Run Analysis", type="primary", use_container_width=True, key="run_btn"):
         with st.spinner("Analysing…"):
