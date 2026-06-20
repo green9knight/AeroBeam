@@ -132,28 +132,30 @@ with st.sidebar:
 
     st.divider()
     st.subheader("Project")
-    up = st.file_uploader("Load .aerobeam", type=["aerobeam", "json"], key="uploader")
-    if up:
-        raw = json.load(up)
-        # Merge: file wins for keys it contains, defaults fill new keys
-        merged = dict(DEFAULT_INPUTS)
-        bool_keys = {"dcell_enabled","geodetic_enabled","distribute_wing_weight",
-                     "secondary_bending","jury_strut","ng_lift_manual","dist_wing_weight"}
-        for k, v in raw.items():
-            if k in bool_keys:
-                merged[k] = str(v).lower() in ("1","true","yes")
-            elif isinstance(v, str):
-                try:    merged[k] = float(v) if v.strip() else merged.get(k, v)
-                except: merged[k] = v
-            else:
-                merged[k] = v
-        # Normalize load share
-        lsf = merged.get("front_spar_load_share", 0.55)
-        if isinstance(lsf, (int,float)) and lsf > 1.0:
-            merged["front_spar_load_share"] = lsf / 100.0
-        st.session_state.inp = merged
-        st.success(f"Loaded: {up.name}")
-        st.rerun()
+    up = st.file_uploader("Load .aerobeam", type=["aerobeam","json"], key="uploader")
+    if up is not None and st.session_state.get("_last_uploaded") != up.name:
+        try:
+            raw = json.load(up)
+            merged = dict(DEFAULT_INPUTS)
+            bool_keys = {"dcell_enabled","geodetic_enabled","distribute_wing_weight",
+                         "secondary_bending","jury_strut","ng_lift_manual","dist_wing_weight"}
+            for k, v in raw.items():
+                if k in bool_keys:
+                    merged[k] = str(v).lower() in ("1","true","yes")
+                elif isinstance(v, str):
+                    try:    merged[k] = float(v) if v.strip() else merged.get(k, v)
+                    except: merged[k] = v
+                else:
+                    merged[k] = v
+            lsf = merged.get("front_spar_load_share", 0.55)
+            if isinstance(lsf, (int,float)) and lsf > 1.0:
+                merged["front_spar_load_share"] = lsf / 100.0
+            st.session_state.inp = merged
+            st.session_state._last_uploaded = up.name
+            st.session_state.result = None
+            st.success(f"Loaded: {up.name} — click Run Analysis")
+        except Exception as e:
+            st.error(f"Load failed: {e}")
         st.rerun()
 
     if st.button("💾 Save Project", key="save_btn"):
