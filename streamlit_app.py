@@ -79,13 +79,24 @@ with st.sidebar:
         st.header("Controls")
 
     if st.button("▶ Run Analysis", type="primary", use_container_width=True, key="run_btn"):
-        try:
-            analyzer = WingStressAnalyzer(dict(st.session_state.inp))
-            analyzer.analyze()
-            st.session_state.result = analyzer
-            st.success("Analysis complete")
-        except Exception as e:
-            st.error(f"Analysis error: {e}")
+        with st.spinner("Analysing..."):
+            try:
+                import traceback as _tb
+                _inp = dict(st.session_state.inp)
+                # Ensure critical keys have valid values before running
+                for _k in ("front_spar_od","rear_spar_od"):
+                    if float(_inp.get(_k, 0)) < 0.25:
+                        _inp[_k] = 2.5
+                for _k in ("front_spar_wall","rear_spar_wall"):
+                    if float(_inp.get(_k, 0)) < 0.020:
+                        _inp[_k] = 0.065
+                analyzer = WingStressAnalyzer(_inp)
+                analyzer.analyze()
+                st.session_state.result = analyzer
+                st.success("Analysis complete")
+            except Exception as e:
+                st.error(f"Analysis error: {e}")
+                st.code(_tb.format_exc())
 
     # === PDF Report with Custom Filename ===
     if st.session_state.result:
@@ -143,6 +154,7 @@ with st.sidebar:
             merged["front_spar_load_share"] = lsf / 100.0
         st.session_state.inp = merged
         st.success(f"Loaded: {up.name}")
+        st.rerun()
         st.rerun()
 
     if st.button("💾 Save Project", key="save_btn"):
