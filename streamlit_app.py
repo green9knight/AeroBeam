@@ -218,24 +218,17 @@ with tabs[3]:
     spar_type = st.selectbox("Spar Type", ["Round Tube", "Plain Rectangular", "I-Beam", "Angle Cap"], index=0, key="front_type")
     st.session_state.inp["front_spar_type"] = spar_type
     if spar_type == "Round Tube":
-        tube_options = ["0.500 x 0.035", "0.500 x 0.049", "0.500 x 0.058",
-                        "0.750 x 0.035", "0.750 x 0.049", "0.750 x 0.058", "0.750 x 0.065",
-                        "1.000 x 0.035", "1.000 x 0.049", "1.000 x 0.058", "1.000 x 0.065",
-                        "1.250 x 0.049", "1.250 x 0.058", "1.250 x 0.065", "1.250 x 0.083",
-                        "1.500 x 0.049", "1.500 x 0.058", "1.500 x 0.065", "1.500 x 0.083",
-                        "1.750 x 0.049", "1.750 x 0.058", "1.750 x 0.065", "1.750 x 0.083",
-                        "2.000 x 0.049", "2.000 x 0.058", "2.000 x 0.065", "2.000 x 0.083",
-                        "2.500 x 0.058", "2.500 x 0.065", "2.500 x 0.083",
-                        "3.000 x 0.065", "3.000 x 0.083", "3.000 x 0.095",
-                        "4.000 x 0.065", "4.000 x 0.083", "4.000 x 0.095",
-                        "5.000 x 0.083", "5.000 x 0.095", "6.000 x 0.083", "6.000 x 0.095"]
-        selected = st.selectbox("Tube Size (OD x Wall)", tube_options, key="front_tube")
-        try:
-            od, wall = selected.split(" x ")
-            st.session_state.inp["front_spar_od"] = float(od)
-            st.session_state.inp["front_spar_wall"] = float(wall)
-        except:
-            pass
+        from common_tube_spars import COMMON_TUBE_SIZES, list_tube_descriptions
+        _tl = list_tube_descriptions()
+        _co = float(g("front_spar_od", 2.5))
+        _cw = float(g("front_spar_wall", 0.065))
+        _ci = next((i for i,t in enumerate(COMMON_TUBE_SIZES) if abs(t.od-_co)<0.001 and abs(t.wall-_cw)<0.001), 0)
+        _fs = st.selectbox("Front Spar Tube", _tl, index=_ci, key="front_tube")
+        _ft = COMMON_TUBE_SIZES[_tl.index(_fs)]
+        st.session_state.inp["front_spar_od"] = _ft.od
+        st.session_state.inp["front_spar_wall"] = _ft.wall
+        st.session_state.inp["front_spar_mat"] = "6061-T6"
+        st.caption(str(_ft))
     elif spar_type == "Angle Cap":
         angle_options = ["1/2 x 1/2 x 1/16", "3/4 x 3/4 x 1/16", "3/4 x 3/4 x 3/32", "3/4 x 3/4 x 1/8",
                          "1 x 1 x 1/16", "1 x 1 x 3/32", "1 x 1 x 1/8", "1 x 1 x 3/16",
@@ -251,24 +244,17 @@ with tabs[4]:
     spar_type = st.selectbox("Spar Type", ["Round Tube", "Plain Rectangular", "Angle Cap"], index=0, key="rear_type")
     st.session_state.inp["rear_spar_type"] = spar_type
     if spar_type == "Round Tube":
-        tube_options = ["0.500 x 0.035", "0.500 x 0.049", "0.500 x 0.058",
-                        "0.750 x 0.035", "0.750 x 0.049", "0.750 x 0.058", "0.750 x 0.065",
-                        "1.000 x 0.035", "1.000 x 0.049", "1.000 x 0.058", "1.000 x 0.065",
-                        "1.250 x 0.049", "1.250 x 0.058", "1.250 x 0.065", "1.250 x 0.083",
-                        "1.500 x 0.049", "1.500 x 0.058", "1.500 x 0.065", "1.500 x 0.083",
-                        "1.750 x 0.049", "1.750 x 0.058", "1.750 x 0.065", "1.750 x 0.083",
-                        "2.000 x 0.049", "2.000 x 0.058", "2.000 x 0.065", "2.000 x 0.083",
-                        "2.500 x 0.058", "2.500 x 0.065", "2.500 x 0.083",
-                        "3.000 x 0.065", "3.000 x 0.083", "3.000 x 0.095",
-                        "4.000 x 0.065", "4.000 x 0.083", "4.000 x 0.095",
-                        "5.000 x 0.083", "5.000 x 0.095", "6.000 x 0.083", "6.000 x 0.095"]
-        selected = st.selectbox("Tube Size (OD x Wall)", tube_options, key="rear_tube")
-        try:
-            od, wall = selected.split(" x ")
-            st.session_state.inp["rear_spar_od"] = float(od)
-            st.session_state.inp["rear_spar_wall"] = float(wall)
-        except:
-            pass
+        from common_tube_spars import COMMON_TUBE_SIZES, list_tube_descriptions
+        _tlr = list_tube_descriptions()
+        _cor = float(g("rear_spar_od", 2.5))
+        _cwr = float(g("rear_spar_wall", 0.065))
+        _cir = next((i for i,t in enumerate(COMMON_TUBE_SIZES) if abs(t.od-_cor)<0.001 and abs(t.wall-_cwr)<0.001), 0)
+        _rs = st.selectbox("Rear Spar Tube", _tlr, index=_cir, key="rear_tube")
+        _rt = COMMON_TUBE_SIZES[_tlr.index(_rs)]
+        st.session_state.inp["rear_spar_od"] = _rt.od
+        st.session_state.inp["rear_spar_wall"] = _rt.wall
+        st.session_state.inp["rear_spar_mat"] = "6061-T6"
+        st.caption(str(_rt))
     elif spar_type == "Angle Cap":
         angle_options = ["1/2 x 1/2 x 1/16", "3/4 x 3/4 x 1/16", "3/4 x 3/4 x 3/32", "3/4 x 3/4 x 1/8",
                          "1 x 1 x 1/16", "1 x 1 x 3/32", "1 x 1 x 1/8", "1 x 1 x 3/16",
