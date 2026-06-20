@@ -47,7 +47,7 @@ if _ico:
     st.markdown(
         f'''<div style="display:flex;align-items:center;gap:14px;margin-bottom:6px">
         <img src="data:image/png;base64,{_b64}"
-             style="height:56px;width:auto;flex-shrink:0;vertical-align:middle"/>
+             style="height:44px;width:auto;flex-shrink:0;object-fit:contain"/>
         <div>
             <div style="font-size:1.6rem;font-weight:700;line-height:1.2">AeroBeam v1.2</div>
             <div style="font-size:0.85rem;color:#888;margin-top:2px">Wing Bending · Shear · Buckling · Torsion</div>
@@ -152,8 +152,8 @@ with st.sidebar:
 
 # Tabs
 tabs = st.tabs([
-    "Wing Geometry", "Flight & Airfoil", "Loads & Config",
-    "Front Spar", "Rear Spar", "Wing Structure", "Buckling",
+    "Wing Geometry", "Wing Structure", "Flight & Airfoil", "Loads & Config",
+    "Front Spar", "Rear Spar", "Buckling",
     "Results", "Plots"
 ])
 
@@ -172,7 +172,7 @@ with tabs[0]:
         st.session_state.inp["front_spar_load_share"] = st.number_input("Front Spar Load Share", value=float(g("front_spar_load_share")), step=0.05, key="front_spar_load_share")
 
 # Flight & Airfoil
-with tabs[1]:
+with tabs[2]:
     st.subheader("Flight & Airfoil")
     fams = ["(All)"] + airfoil_families()
     fam = st.selectbox("Family", fams, key="af_fam")
@@ -205,7 +205,7 @@ with tabs[1]:
     st.session_state.inp["Vd_mph"] = st.number_input("Dive Speed Vd (mph)", value=float(g("Vd_mph")), key="vd")
 
 # Loads & Config
-with tabs[2]:
+with tabs[3]:
     st.subheader("Loads & Configuration")
     st.session_state.inp["n"] = st.number_input("Load Factor (+g)", value=float(g("n")), key="n")
     st.session_state.inp["Weight"] = st.number_input("Gross Weight (lb)", value=float(g("Weight")), key="weight")
@@ -214,7 +214,7 @@ with tabs[2]:
 
 
 # Front Spar
-with tabs[3]:
+with tabs[4]:
     st.subheader("Front Spar")
 
     try:
@@ -307,7 +307,7 @@ with tabs[3]:
 
 
 # Rear Spar
-with tabs[4]:
+with tabs[5]:
     st.subheader("Rear Spar")
 
     try:
@@ -395,10 +395,80 @@ with tabs[4]:
         st.caption(f"Total depth = {total_hr:.3f} in")
 
 # Wing Structure
-with tabs[5]:
+with tabs[1]:
     st.subheader("Wing Structure")
-    st.session_state.inp["wing_structure_type"] = st.selectbox("Structure Type", ["fabric_tube", "fabric_buildup", "aluminum_skin"], index=0, key="wing_type")
-    st.session_state.inp["dcell_enabled"] = st.checkbox("D-Cell Enabled", value=bool(g("dcell_enabled", False)), key="dcell")
+
+    try:
+        from spar_sections import MATERIAL_DB
+        _WS_ALL   = list(MATERIAL_DB.keys())
+        _WS_WOOD  = [k for k,v in MATERIAL_DB.items() if v.get("is_wood")]
+        _WS_METAL = [k for k,v in MATERIAL_DB.items() if not v.get("is_wood")]
+    except:
+        _WS_ALL = _WS_WOOD = _WS_METAL = ["6061-T6","Sitka Spruce","Birch Plywood"]
+
+    _ws_types = ["fabric_tube","fabric_buildup","aluminum_skin"]
+    _ws_cur   = g("wing_structure_type","fabric_tube")
+    st.session_state.inp["wing_structure_type"] = st.selectbox(
+        "Structure Type", _ws_types,
+        index=_ws_types.index(_ws_cur) if _ws_cur in _ws_types else 0,
+        key="wing_type")
+
+    st.markdown("**D-Cell (Nose Box)**")
+    st.session_state.inp["dcell_enabled"] = st.checkbox(
+        "D-Cell enabled", value=bool(g("dcell_enabled", False)), key="dcell")
+    if g("dcell_enabled"):
+        _dc_mat = g("dcell_skin_mat","Birch Plywood")
+        st.session_state.inp["dcell_skin_mat"] = st.selectbox(
+            "D-Cell Skin Material", _WS_ALL,
+            index=_WS_ALL.index(_dc_mat) if _dc_mat in _WS_ALL else 0, key="dcsm")
+        st.session_state.inp["dcell_skin_thick"] = st.number_input(
+            "D-Cell Skin Thickness (in)", value=float(g("dcell_skin_thick",0.0625)),
+            format="%.4f", key="dcst")
+
+    st.markdown("**Geodetic Bracing**")
+    st.session_state.inp["geodetic_enabled"] = st.checkbox(
+        "Geodetic enabled", value=bool(g("geodetic_enabled", False)), key="ge")
+    if g("geodetic_enabled"):
+        _geo_mat = g("geodetic_mat","Sitka Spruce")
+        st.session_state.inp["geodetic_mat"] = st.selectbox(
+            "Geodetic Strip Material", _WS_WOOD if _WS_WOOD else _WS_ALL,
+            index=(_WS_WOOD.index(_geo_mat) if _geo_mat in _WS_WOOD else 0), key="gm")
+        c1ws, c2ws = st.columns(2)
+        with c1ws:
+            st.session_state.inp["geodetic_w"] = st.number_input(
+                "Strip Width (in)", value=float(g("geodetic_w",1.0)), format="%.3f", key="gw")
+            st.session_state.inp["geodetic_t"] = st.number_input(
+                "Strip Thickness (in)", value=float(g("geodetic_t",0.125)), format="%.4f", key="gt")
+        with c2ws:
+            st.session_state.inp["geodetic_strips_per_bay"] = st.number_input(
+                "Strips per Bay", value=int(g("geodetic_strips_per_bay",2)), min_value=1, key="gspb")
+            st.session_state.inp["geodetic_angle"] = st.number_input(
+                "Angle (deg)", value=float(g("geodetic_angle",45.0)), step=5.0, key="ga")
+
+    if g("wing_structure_type") == "aluminum_skin":
+        st.markdown("**Aluminum Skin**")
+        c1ws, c2ws = st.columns(2)
+        with c1ws:
+            _stm = g("skin_top_mat","6061-T6")
+            st.session_state.inp["skin_top_mat"] = st.selectbox(
+                "Top Skin Material", _WS_METAL,
+                index=_WS_METAL.index(_stm) if _stm in _WS_METAL else 0, key="stm")
+            st.session_state.inp["skin_top_thick"] = st.number_input(
+                "Top Skin Thickness (in)", value=float(g("skin_top_thick",0.025)),
+                format="%.4f", key="stt")
+        with c2ws:
+            _sbm = g("skin_bot_mat","6061-T6")
+            st.session_state.inp["skin_bot_mat"] = st.selectbox(
+                "Bottom Skin Material", _WS_METAL,
+                index=_WS_METAL.index(_sbm) if _sbm in _WS_METAL else 0, key="sbm")
+            st.session_state.inp["skin_bot_thick"] = st.number_input(
+                "Bottom Skin Thickness (in)", value=float(g("skin_bot_thick",0.025)),
+                format="%.4f", key="sbt")
+
+    st.markdown("**Wood Knockdown**")
+    st.session_state.inp["wood_knockdown"] = st.number_input(
+        "Wood Knockdown Factor (0.75 = AC 43.13-1B)",
+        value=float(g("wood_knockdown",0.75)), format="%.3f", key="wkd")
 
 # Buckling
 with tabs[6]:
