@@ -82,14 +82,13 @@ with st.sidebar:
         with st.spinner("Analysing..."):
             try:
                 import traceback as _tb
+                # Take a snapshot of inp at click time - this is what gets analysed
                 _inp = dict(st.session_state.inp)
-                # Ensure critical keys have valid values before running
-                for _k in ("front_spar_od","rear_spar_od"):
-                    if float(_inp.get(_k, 0)) < 0.25:
-                        _inp[_k] = 2.5
-                for _k in ("front_spar_wall","rear_spar_wall"):
-                    if float(_inp.get(_k, 0)) < 0.020:
-                        _inp[_k] = 0.065
+                from wing_stress_analyzer import _sanitize_spar_inputs
+                _inp = _sanitize_spar_inputs(_inp, "front_spar")
+                _inp = _sanitize_spar_inputs(_inp, "rear_spar")
+                # Store the sanitized snapshot so results match what was run
+                st.session_state.last_run_inp = dict(_inp)
                 analyzer = WingStressAnalyzer(_inp)
                 analyzer.analyze()
                 st.session_state.result = analyzer
@@ -252,11 +251,20 @@ with tabs[4]:
         _cw = float(g("front_spar_wall", 0.065))
         _ci = next((i for i,t in enumerate(COMMON_TUBE_SIZES)
                     if abs(t.od-_co)<0.001 and abs(t.wall-_cw)<0.001), 0)
-        _fs = st.selectbox("Front Spar Tube", _tl, index=_ci, key="front_tube")
+        def _on_front_tube():
+            _sel = st.session_state["front_tube"]
+            _t   = COMMON_TUBE_SIZES[list_tube_descriptions().index(_sel)]
+            st.session_state.inp["front_spar_od"]   = _t.od
+            st.session_state.inp["front_spar_wall"] = _t.wall
+            st.session_state.inp["front_spar_mat"]  = "6061-T6"
+        _fs = st.selectbox("Front Spar Tube", _tl, index=_ci,
+                           key="front_tube", on_change=_on_front_tube)
         _ft = COMMON_TUBE_SIZES[_tl.index(_fs)]
-        st.session_state.inp["front_spar_od"]   = _ft.od
-        st.session_state.inp["front_spar_wall"] = _ft.wall
-        st.session_state.inp["front_spar_mat"]  = "6061-T6"
+        # Only set if not already matching (prevents overwrite on rerun)
+        if abs(st.session_state.inp.get("front_spar_od",0) - _ft.od) > 0.001:
+            st.session_state.inp["front_spar_od"]   = _ft.od
+            st.session_state.inp["front_spar_wall"] = _ft.wall
+            st.session_state.inp["front_spar_mat"]  = "6061-T6"
         st.caption(str(_ft))
 
     elif _fst == "Plain Rectangular":
@@ -343,11 +351,19 @@ with tabs[5]:
         _cwr = float(g("rear_spar_wall", 0.065))
         _cir = next((i for i,t in enumerate(COMMON_TUBE_SIZES)
                      if abs(t.od-_cor)<0.001 and abs(t.wall-_cwr)<0.001), 0)
-        _rss = st.selectbox("Rear Spar Tube", _tlr, index=_cir, key="rear_tube")
+        def _on_rear_tube():
+            _sel = st.session_state["rear_tube"]
+            _t   = COMMON_TUBE_SIZES[list_tube_descriptions().index(_sel)]
+            st.session_state.inp["rear_spar_od"]   = _t.od
+            st.session_state.inp["rear_spar_wall"] = _t.wall
+            st.session_state.inp["rear_spar_mat"]  = "6061-T6"
+        _rss = st.selectbox("Rear Spar Tube", _tlr, index=_cir,
+                            key="rear_tube", on_change=_on_rear_tube)
         _rt  = COMMON_TUBE_SIZES[_tlr.index(_rss)]
-        st.session_state.inp["rear_spar_od"]   = _rt.od
-        st.session_state.inp["rear_spar_wall"] = _rt.wall
-        st.session_state.inp["rear_spar_mat"]  = "6061-T6"
+        if abs(st.session_state.inp.get("rear_spar_od",0) - _rt.od) > 0.001:
+            st.session_state.inp["rear_spar_od"]   = _rt.od
+            st.session_state.inp["rear_spar_wall"] = _rt.wall
+            st.session_state.inp["rear_spar_mat"]  = "6061-T6"
         st.caption(str(_rt))
 
     elif _rst == "Plain Rectangular":
