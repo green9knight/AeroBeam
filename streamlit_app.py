@@ -316,17 +316,26 @@ with tabs[8]:
         ax4.legend()
         ax4.grid(True, alpha=0.3)
         try:
-            ax5 = fig.add_subplot(3, 2, 5)
-            a.draw_geometry(ax5, ax5)
-            ax5.set_title("Wing Geometry - Front View")
-            ax6 = fig.add_subplot(3, 2, 6)
-            a.draw_geometry(ax6, ax6)
-            ax6.set_title("Wing Geometry - Top View")
+            pass  # geometry drawn below
         except:
             pass
         plt.tight_layout()
         st.pyplot(fig)
         plt.close(fig)
+
+        st.subheader("Wing Geometry")
+        try:
+            fig_top, ax_top = plt.subplots(1, 1, figsize=(14, 4))
+            fig_side, ax_side = plt.subplots(1, 1, figsize=(14, 4))
+            a.draw_geometry(ax_top, ax_side)
+            fig_top.tight_layout()
+            fig_side.tight_layout()
+            st.pyplot(fig_top)
+            plt.close(fig_top)
+            st.pyplot(fig_side)
+            plt.close(fig_side)
+        except Exception as e:
+            st.warning(f"Geometry plot error: {e}")
     else:
         st.info("Run analysis to see plots.")
 
