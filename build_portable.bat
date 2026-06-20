@@ -1,6 +1,6 @@
 @echo off
 echo ================================================
-echo   Building AeroBeam Portable Version
+echo   Building AeroBeam v1.2.1 Portable Version
 echo ================================================
 echo.
 
@@ -40,7 +40,7 @@ if exist "AeroBeam.ico" copy /Y "AeroBeam.ico" "AeroBeam_Portable\AeroBeam.ico"
 
 echo.
 echo ================================================
-echo   SUCCESS!
+echo   SUCCESS! AeroBeam v1.2.1 Portable Build
 echo ================================================
 echo.
 echo Portable version created in: AeroBeam_Portable
