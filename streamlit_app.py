@@ -212,57 +212,187 @@ with tabs[2]:
     st.session_state.inp["config"] = st.selectbox("Configuration", ["strut_braced", "cantilever", "single_strut"], index=0, key="config")
     st.session_state.inp["jury_strut"] = st.checkbox("Enable Jury Strut", value=bool(g("jury_strut", False)), key="jury_strut")
 
+
 # Front Spar
 with tabs[3]:
     st.subheader("Front Spar")
-    spar_type = st.selectbox("Spar Type", ["Round Tube", "Plain Rectangular", "I-Beam", "Angle Cap"], index=0, key="front_type")
-    st.session_state.inp["front_spar_type"] = spar_type
-    if spar_type == "Round Tube":
+
+    try:
+        from spar_sections import MATERIAL_DB
+        _ALL_MATS  = list(MATERIAL_DB.keys())
+        _WOOD_MATS = [k for k,v in MATERIAL_DB.items() if v.get("is_wood")]
+        _METAL_MATS= [k for k,v in MATERIAL_DB.items() if not v.get("is_wood")]
+    except:
+        _ALL_MATS = _WOOD_MATS = _METAL_MATS = ["6061-T6","2024-T3","Sitka Spruce","Birch Plywood"]
+
+    _SPAR_TYPES = ["Round Tube","Plain Rectangular","I-Beam","C-Channel",
+                   "Double I-Beam","Box Spar","Aluminum I-Beam","Aluminum C-Spar"]
+    _fst = st.selectbox("Spar Type", _SPAR_TYPES,
+        index=_SPAR_TYPES.index(g("front_spar_type","Round Tube"))
+              if g("front_spar_type","Round Tube") in _SPAR_TYPES else 0,
+        key="front_type")
+    st.session_state.inp["front_spar_type"] = _fst
+
+    if _fst == "Round Tube":
         from common_tube_spars import COMMON_TUBE_SIZES, list_tube_descriptions
         _tl = list_tube_descriptions()
         _co = float(g("front_spar_od", 2.5))
         _cw = float(g("front_spar_wall", 0.065))
-        _ci = next((i for i,t in enumerate(COMMON_TUBE_SIZES) if abs(t.od-_co)<0.001 and abs(t.wall-_cw)<0.001), 0)
+        _ci = next((i for i,t in enumerate(COMMON_TUBE_SIZES)
+                    if abs(t.od-_co)<0.001 and abs(t.wall-_cw)<0.001), 0)
         _fs = st.selectbox("Front Spar Tube", _tl, index=_ci, key="front_tube")
         _ft = COMMON_TUBE_SIZES[_tl.index(_fs)]
-        st.session_state.inp["front_spar_od"] = _ft.od
+        st.session_state.inp["front_spar_od"]   = _ft.od
         st.session_state.inp["front_spar_wall"] = _ft.wall
-        st.session_state.inp["front_spar_mat"] = "6061-T6"
+        st.session_state.inp["front_spar_mat"]  = "6061-T6"
         st.caption(str(_ft))
-    elif spar_type == "Angle Cap":
-        angle_options = ["1/2 x 1/2 x 1/16", "3/4 x 3/4 x 1/16", "3/4 x 3/4 x 3/32", "3/4 x 3/4 x 1/8",
-                         "1 x 1 x 1/16", "1 x 1 x 3/32", "1 x 1 x 1/8", "1 x 1 x 3/16",
-                         "1-1/4 x 1-1/4 x 1/16", "1-1/4 x 1-1/4 x 3/32", "1-1/4 x 1-1/4 x 1/8",
-                         "1-1/2 x 1-1/2 x 1/16", "1-1/2 x 1-1/2 x 3/32", "1-1/2 x 1-1/2 x 1/8",
-                         "2 x 2 x 1/8", "2 x 2 x 3/16", "2-1/2 x 2-1/2 x 1/8", "3 x 3 x 1/8"]
-        selected = st.selectbox("Aluminum Angle Size", angle_options, key="front_angle")
-        st.session_state.inp["front_angle_size"] = selected
+
+    elif _fst == "Plain Rectangular":
+        st.session_state.inp["front_spar_width"]   = st.number_input("Width (in)", value=float(g("front_spar_width",2.0)), format="%.3f", key="f_w")
+        st.session_state.inp["front_spar_height"]  = st.number_input("Height (in)", value=float(g("front_spar_height",4.0)), format="%.3f", key="f_h")
+        _def_cm = g("front_spar_cap_mat","Sitka Spruce")
+        _cm_idx = _ALL_MATS.index(_def_cm) if _def_cm in _ALL_MATS else 0
+        st.session_state.inp["front_spar_cap_mat"] = st.selectbox("Material", _ALL_MATS, index=_cm_idx, key="f_cm")
+
+    elif _fst in ("I-Beam","C-Channel","Double I-Beam"):
+        c1f, c2f = st.columns(2)
+        with c1f:
+            st.session_state.inp["front_spar_b_top"] = st.number_input("Cap Width top (in)", value=float(g("front_spar_b_top",1.5)), format="%.3f", key="f_bt")
+            st.session_state.inp["front_spar_t_top"] = st.number_input("Cap Height top (in)", value=float(g("front_spar_t_top",0.75)), format="%.4f", key="f_tt")
+            st.session_state.inp["front_spar_b_bot"] = st.number_input("Cap Width bot (in)", value=float(g("front_spar_b_bot",1.5)), format="%.3f", key="f_bb")
+            st.session_state.inp["front_spar_t_bot"] = st.number_input("Cap Height bot (in)", value=float(g("front_spar_t_bot",0.75)), format="%.4f", key="f_tb")
+        with c2f:
+            st.session_state.inp["front_spar_h_web"] = st.number_input("Web Height (in)", value=float(g("front_spar_h_web",4.5)), format="%.3f", key="f_hw")
+            st.session_state.inp["front_spar_t_web"] = st.number_input("Web Thickness (in)", value=float(g("front_spar_t_web",0.125)), format="%.4f", key="f_tw")
+            if _fst == "Double I-Beam":
+                st.session_state.inp["front_spar_web_spacing"] = st.number_input("Web Spacing (in)", value=float(g("front_spar_web_spacing",1.0)), format="%.3f", key="f_ws")
+            _def_cm = g("front_spar_cap_mat","Sitka Spruce")
+            _cm_idx = _ALL_MATS.index(_def_cm) if _def_cm in _ALL_MATS else 0
+            st.session_state.inp["front_spar_cap_mat"] = st.selectbox("Cap Material", _ALL_MATS, index=_cm_idx, key="f_cm")
+            _def_wm = g("front_spar_web_mat","Birch Plywood")
+            _wm_idx = _ALL_MATS.index(_def_wm) if _def_wm in _ALL_MATS else 0
+            st.session_state.inp["front_spar_web_mat"] = st.selectbox("Web Material", _ALL_MATS, index=_wm_idx, key="f_wm")
+        total_h = float(g("front_spar_h_web",4.5))+float(g("front_spar_t_top",0.75))+float(g("front_spar_t_bot",0.75))
+        st.caption(f"Total depth = {total_h:.3f} in")
+
+    elif _fst == "Box Spar":
+        c1f, c2f = st.columns(2)
+        with c1f:
+            st.session_state.inp["front_spar_b_outer"] = st.number_input("Outer Width (in)", value=float(g("front_spar_b_outer",2.0)), format="%.3f", key="f_bo")
+            st.session_state.inp["front_spar_h_outer"] = st.number_input("Outer Height (in)", value=float(g("front_spar_h_outer",5.0)), format="%.3f", key="f_ho")
+            st.session_state.inp["front_spar_t_web"]   = st.number_input("Web Thickness (in)", value=float(g("front_spar_t_web",0.125)), format="%.4f", key="f_tw")
+            st.session_state.inp["front_spar_t_cap"]   = st.number_input("Cap Thickness (in)", value=float(g("front_spar_t_cap",0.75)), format="%.4f", key="f_tc")
+        with c2f:
+            _def_cm = g("front_spar_cap_mat","Sitka Spruce")
+            _cm_idx = _ALL_MATS.index(_def_cm) if _def_cm in _ALL_MATS else 0
+            st.session_state.inp["front_spar_cap_mat"] = st.selectbox("Cap Material", _ALL_MATS, index=_cm_idx, key="f_cm")
+            _def_wm = g("front_spar_web_mat","Birch Plywood")
+            _wm_idx = _ALL_MATS.index(_def_wm) if _def_wm in _ALL_MATS else 0
+            st.session_state.inp["front_spar_web_mat"] = st.selectbox("Web Material", _ALL_MATS, index=_wm_idx, key="f_wm")
+
+    elif _fst in ("Aluminum I-Beam","Aluminum C-Spar"):
+        c1f, c2f = st.columns(2)
+        with c1f:
+            st.session_state.inp["front_spar_b_top"] = st.number_input("Cap Width (in)", value=float(g("front_spar_b_top",1.5)), format="%.3f", key="f_bt")
+            st.session_state.inp["front_spar_t_top"] = st.number_input("Cap Thickness (in)", value=float(g("front_spar_t_top",0.125)), format="%.4f", key="f_tt")
+            st.session_state.inp["front_spar_h_web"] = st.number_input("Web Height (in)", value=float(g("front_spar_h_web",5.0)), format="%.3f", key="f_hw")
+            st.session_state.inp["front_spar_t_web"] = st.number_input("Web Thickness (in)", value=float(g("front_spar_t_web",0.050)), format="%.4f", key="f_tw")
+        with c2f:
+            _def_cm = g("front_spar_cap_mat","6061-T6")
+            _cm_idx = _METAL_MATS.index(_def_cm) if _def_cm in _METAL_MATS else 0
+            st.session_state.inp["front_spar_cap_mat"] = st.selectbox("Material", _METAL_MATS, index=_cm_idx, key="f_cm")
+            st.session_state.inp["front_spar_web_mat"] = st.session_state.inp["front_spar_cap_mat"]
+        total_h = float(g("front_spar_h_web",5.0))+float(g("front_spar_t_top",0.125))
+        st.caption(f"Total depth = {total_h:.3f} in")
+
 
 # Rear Spar
 with tabs[4]:
     st.subheader("Rear Spar")
-    spar_type = st.selectbox("Spar Type", ["Round Tube", "Plain Rectangular", "Angle Cap"], index=0, key="rear_type")
-    st.session_state.inp["rear_spar_type"] = spar_type
-    if spar_type == "Round Tube":
+
+    try:
+        from spar_sections import MATERIAL_DB
+        _ALL_MATS_R  = list(MATERIAL_DB.keys())
+        _METAL_MATS_R= [k for k,v in MATERIAL_DB.items() if not v.get("is_wood")]
+    except:
+        _ALL_MATS_R = _METAL_MATS_R = ["6061-T6","2024-T3","Sitka Spruce","Birch Plywood"]
+
+    _REAR_TYPES = ["Round Tube","Plain Rectangular","I-Beam","Box Spar","Aluminum I-Beam","Aluminum C-Spar"]
+    _rst = st.selectbox("Spar Type", _REAR_TYPES,
+        index=_REAR_TYPES.index(g("rear_spar_type","Round Tube"))
+              if g("rear_spar_type","Round Tube") in _REAR_TYPES else 0,
+        key="rear_type")
+    st.session_state.inp["rear_spar_type"] = _rst
+
+    if _rst == "Round Tube":
         from common_tube_spars import COMMON_TUBE_SIZES, list_tube_descriptions
         _tlr = list_tube_descriptions()
         _cor = float(g("rear_spar_od", 2.5))
         _cwr = float(g("rear_spar_wall", 0.065))
-        _cir = next((i for i,t in enumerate(COMMON_TUBE_SIZES) if abs(t.od-_cor)<0.001 and abs(t.wall-_cwr)<0.001), 0)
-        _rs = st.selectbox("Rear Spar Tube", _tlr, index=_cir, key="rear_tube")
-        _rt = COMMON_TUBE_SIZES[_tlr.index(_rs)]
-        st.session_state.inp["rear_spar_od"] = _rt.od
+        _cir = next((i for i,t in enumerate(COMMON_TUBE_SIZES)
+                     if abs(t.od-_cor)<0.001 and abs(t.wall-_cwr)<0.001), 0)
+        _rss = st.selectbox("Rear Spar Tube", _tlr, index=_cir, key="rear_tube")
+        _rt  = COMMON_TUBE_SIZES[_tlr.index(_rss)]
+        st.session_state.inp["rear_spar_od"]   = _rt.od
         st.session_state.inp["rear_spar_wall"] = _rt.wall
-        st.session_state.inp["rear_spar_mat"] = "6061-T6"
+        st.session_state.inp["rear_spar_mat"]  = "6061-T6"
         st.caption(str(_rt))
-    elif spar_type == "Angle Cap":
-        angle_options = ["1/2 x 1/2 x 1/16", "3/4 x 3/4 x 1/16", "3/4 x 3/4 x 3/32", "3/4 x 3/4 x 1/8",
-                         "1 x 1 x 1/16", "1 x 1 x 3/32", "1 x 1 x 1/8", "1 x 1 x 3/16",
-                         "1-1/4 x 1-1/4 x 1/16", "1-1/4 x 1-1/4 x 3/32", "1-1/4 x 1-1/4 x 1/8",
-                         "1-1/2 x 1-1/2 x 1/16", "1-1/2 x 1-1/2 x 3/32", "1-1/2 x 1-1/2 x 1/8",
-                         "2 x 2 x 1/8", "2 x 2 x 3/16", "2-1/2 x 2-1/2 x 1/8", "3 x 3 x 1/8"]
-        selected = st.selectbox("Aluminum Angle Size", angle_options, key="rear_angle")
-        st.session_state.inp["rear_angle_size"] = selected
+
+    elif _rst == "Plain Rectangular":
+        st.session_state.inp["rear_spar_width"]   = st.number_input("Width (in)", value=float(g("rear_spar_width",1.5)), format="%.3f", key="r_w")
+        st.session_state.inp["rear_spar_height"]  = st.number_input("Height (in)", value=float(g("rear_spar_height",3.0)), format="%.3f", key="r_h")
+        _def_rm = g("rear_spar_cap_mat","Sitka Spruce")
+        _rm_idx = _ALL_MATS_R.index(_def_rm) if _def_rm in _ALL_MATS_R else 0
+        st.session_state.inp["rear_spar_cap_mat"] = st.selectbox("Material", _ALL_MATS_R, index=_rm_idx, key="r_cm")
+
+    elif _rst == "I-Beam":
+        c1r, c2r = st.columns(2)
+        with c1r:
+            st.session_state.inp["rear_spar_b_top"] = st.number_input("Cap Width top (in)", value=float(g("rear_spar_b_top",1.0)), format="%.3f", key="r_bt")
+            st.session_state.inp["rear_spar_t_top"] = st.number_input("Cap Height top (in)", value=float(g("rear_spar_t_top",0.5)), format="%.4f", key="r_tt")
+            st.session_state.inp["rear_spar_b_bot"] = st.number_input("Cap Width bot (in)", value=float(g("rear_spar_b_bot",1.0)), format="%.3f", key="r_bb")
+            st.session_state.inp["rear_spar_t_bot"] = st.number_input("Cap Height bot (in)", value=float(g("rear_spar_t_bot",0.5)), format="%.4f", key="r_tb")
+        with c2r:
+            st.session_state.inp["rear_spar_h_web"] = st.number_input("Web Height (in)", value=float(g("rear_spar_h_web",3.0)), format="%.3f", key="r_hw")
+            st.session_state.inp["rear_spar_t_web"] = st.number_input("Web Thickness (in)", value=float(g("rear_spar_t_web",0.125)), format="%.4f", key="r_tw")
+            _def_rm = g("rear_spar_cap_mat","Sitka Spruce")
+            _rm_idx = _ALL_MATS_R.index(_def_rm) if _def_rm in _ALL_MATS_R else 0
+            st.session_state.inp["rear_spar_cap_mat"] = st.selectbox("Cap Material", _ALL_MATS_R, index=_rm_idx, key="r_cm")
+            _def_rwm = g("rear_spar_web_mat","Birch Plywood")
+            _rwm_idx = _ALL_MATS_R.index(_def_rwm) if _def_rwm in _ALL_MATS_R else 0
+            st.session_state.inp["rear_spar_web_mat"] = st.selectbox("Web Material", _ALL_MATS_R, index=_rwm_idx, key="r_wm")
+        total_hr = float(g("rear_spar_h_web",3.0))+float(g("rear_spar_t_top",0.5))+float(g("rear_spar_t_bot",0.5))
+        st.caption(f"Total depth = {total_hr:.3f} in")
+
+    elif _rst == "Box Spar":
+        c1r, c2r = st.columns(2)
+        with c1r:
+            st.session_state.inp["rear_spar_b_outer"] = st.number_input("Outer Width (in)", value=float(g("rear_spar_b_outer",1.5)), format="%.3f", key="r_bo")
+            st.session_state.inp["rear_spar_h_outer"] = st.number_input("Outer Height (in)", value=float(g("rear_spar_h_outer",3.0)), format="%.3f", key="r_ho")
+            st.session_state.inp["rear_spar_t_web"]   = st.number_input("Web Thickness (in)", value=float(g("rear_spar_t_web",0.125)), format="%.4f", key="r_tw")
+            st.session_state.inp["rear_spar_t_cap"]   = st.number_input("Cap Thickness (in)", value=float(g("rear_spar_t_cap",0.5)), format="%.4f", key="r_tc")
+        with c2r:
+            _def_rm = g("rear_spar_cap_mat","Sitka Spruce")
+            _rm_idx = _ALL_MATS_R.index(_def_rm) if _def_rm in _ALL_MATS_R else 0
+            st.session_state.inp["rear_spar_cap_mat"] = st.selectbox("Cap Material", _ALL_MATS_R, index=_rm_idx, key="r_cm")
+            _def_rwm = g("rear_spar_web_mat","Birch Plywood")
+            _rwm_idx = _ALL_MATS_R.index(_def_rwm) if _def_rwm in _ALL_MATS_R else 0
+            st.session_state.inp["rear_spar_web_mat"] = st.selectbox("Web Material", _ALL_MATS_R, index=_rwm_idx, key="r_wm")
+
+    elif _rst in ("Aluminum I-Beam","Aluminum C-Spar"):
+        c1r, c2r = st.columns(2)
+        with c1r:
+            st.session_state.inp["rear_spar_b_top"] = st.number_input("Cap Width (in)", value=float(g("rear_spar_b_top",1.0)), format="%.3f", key="r_bt")
+            st.session_state.inp["rear_spar_t_top"] = st.number_input("Cap Thickness (in)", value=float(g("rear_spar_t_top",0.083)), format="%.4f", key="r_tt")
+            st.session_state.inp["rear_spar_h_web"] = st.number_input("Web Height (in)", value=float(g("rear_spar_h_web",3.0)), format="%.3f", key="r_hw")
+            st.session_state.inp["rear_spar_t_web"] = st.number_input("Web Thickness (in)", value=float(g("rear_spar_t_web",0.040)), format="%.4f", key="r_tw")
+        with c2r:
+            _def_rm = g("rear_spar_cap_mat","6061-T6")
+            _rm_idx = _METAL_MATS_R.index(_def_rm) if _def_rm in _METAL_MATS_R else 0
+            st.session_state.inp["rear_spar_cap_mat"] = st.selectbox("Material", _METAL_MATS_R, index=_rm_idx, key="r_cm")
+            st.session_state.inp["rear_spar_web_mat"] = st.session_state.inp["rear_spar_cap_mat"]
+        total_hr = float(g("rear_spar_h_web",3.0))+float(g("rear_spar_t_top",0.083))
+        st.caption(f"Total depth = {total_hr:.3f} in")
 
 # Wing Structure
 with tabs[5]:
