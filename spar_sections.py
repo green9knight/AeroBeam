@@ -566,6 +566,12 @@ ALUMINUM_ANGLES: List[AluminumAngle] = [
     AluminumAngle(1.500, 1.500, 0.1875, '1-1/2 x 1-1/2 x 3/16'),
     AluminumAngle(2.000, 2.000, 0.1250, '2 x 2 x 1/8'),
     AluminumAngle(2.000, 2.000, 0.1875, '2 x 2 x 3/16'),
+    AluminumAngle(2.000, 2.000, 0.2500, '2 x 2 x 1/4'),
+    AluminumAngle(2.000, 2.000, 0.3750, '2 x 2 x 3/8'),
+    AluminumAngle(2.500, 2.500, 0.1250, '2-1/2 x 2-1/2 x 1/8'),
+    AluminumAngle(2.500, 2.500, 0.1875, '2-1/2 x 2-1/2 x 3/16'),
+    AluminumAngle(2.500, 2.500, 0.2500, '2-1/2 x 2-1/2 x 1/4'),
+    AluminumAngle(2.500, 2.500, 0.3750, '2-1/2 x 2-1/2 x 3/8'),
     # Unequal leg (cap x web)
     AluminumAngle(1.000, 0.750, 0.0938, '1 x 3/4 x 3/32'),
     AluminumAngle(1.250, 1.000, 0.0938, '1-1/4 x 1 x 3/32'),
@@ -695,6 +701,23 @@ class GeodeticPanel:
         A = self.A_strip * scale**2
         return A * math.sin(θ) * math.cos(θ) * 2.0 / s
 
+    def shear_stiffness_per_span(self, reduction_factor: float = 0.75,
+                                 scale: float = 1.0) -> float:
+        """Distributed elastic shear stiffness from diagonal strip axial action.
+
+        Preliminary two-spar elastic-connection estimate:
+            k_s = 2 * A * E * sin(theta) * cos(theta) / s * f_red
+
+        where ``s`` is strip spacing along the span. ``f_red`` accounts for
+        compression diagonal effectiveness, connection compliance, crossings,
+        gusset flexibility, and construction details.
+        """
+        θ = math.radians(self.angle_deg)
+        A = self.A_strip * scale**2
+        E = MATERIAL_DB[self.mat_name]["E"]
+        s = self.s_strip * scale
+        return 2.0 * A * E * math.sin(θ) * math.cos(θ) / max(s, 1e-9) * reduction_factor
+
     def enclosed_area(self, c_box: float, h_spar: float) -> float:
         """Rectangle between spars [in²] at given chord and spar height."""
         return c_box * h_spar
@@ -712,10 +735,17 @@ class GeodeticPanel:
         return (2 * c / t) + (h / tw)
 
     def strip_force(self, q2: float, scale: float = 1.0) -> float:
-        """Axial force per strip given shear flow q2 [lb/in]."""
+        """Axial force per strip from panel shear flow q2 [lb/in].
+
+        Consistent with ``t_eff = 2*A*sin(theta)*cos(theta)/s``:
+            q = sigma_strip * t_eff
+            F_strip = sigma_strip * A
+                     = q*s / (2*sin(theta)*cos(theta))
+        """
         θ = math.radians(self.angle_deg)
         s = self.s_strip * scale
-        return q2 * s / (2 * math.cos(θ))
+        denom = 2.0 * math.sin(θ) * math.cos(θ)
+        return q2 * s / max(denom, 1e-9)
 
     def strip_stress(self, q2: float, scale: float = 1.0) -> float:
         """Axial stress in each strip [psi]."""
@@ -1120,6 +1150,32 @@ def skin_compression_buckling(t_skin: float, b_panel: float,
     E  = m["E"]; nu = 0.33 if not m["is_wood"] else 0.0
     sigma_cr = k * math.pi**2 * E * (t_skin / b_panel)**2 / (12 * (1 - nu**2))
     return {"sigma_cr_skin": sigma_cr, "k": k, "b_panel": b_panel}
+
+
+def skin_effective_width(t_skin: float, b_panel: float,
+                         sigma_edge: float, mat_name: str) -> dict:
+    """
+    Post-buckled compression effective width screening calculation.
+
+    Uses common von Karman/Winter-style aircraft preliminary sizing concept:
+        b_e = 1.9 t sqrt(E / sigma_e), capped at the actual panel width.
+
+    This is a demand/capacity estimate only. It does not size stringers,
+    rivets, inter-rivet buckling, frames/ribs, crippling, or post-buckled
+    diagonal-tension shear behavior.
+    """
+    m = MATERIAL_DB[mat_name]
+    E = m["E"]
+    sigma = max(abs(sigma_edge), 1e-9)
+    b_eff_raw = 1.9 * t_skin * math.sqrt(E / sigma)
+    b_eff = min(b_panel, b_eff_raw)
+    load_per_length = sigma * b_eff * t_skin
+    return {
+        "b_eff": b_eff,
+        "b_eff_ratio": b_eff / max(b_panel, 1e-9),
+        "load_per_length": load_per_length,
+        "formula": "b_eff = min(b, 1.9*t*sqrt(E/sigma_edge))",
+    }
 
 
 def cap_column_buckling(b_cap: float, t_cap: float, rib_spacing: float,

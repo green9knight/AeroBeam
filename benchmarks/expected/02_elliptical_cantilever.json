@@ -1,0 +1,20 @@
+{
+  "description": "Elliptical lift on a cantilever semi-span. Root moment is 4 L b / (3 pi).",
+  "checks": {
+    "V_root": {
+      "value": 1000.0,
+      "rtol": 0.003,
+      "basis": "Elliptical semi-span lift integrates to total lift L"
+    },
+    "M_root": {
+      "value": 42441.31815783876,
+      "rtol": 0.01,
+      "basis": "Elliptical lift root moment M = 4 L b_half / (3 pi)"
+    },
+    "M_front_root": {
+      "value": 42441.31815783876,
+      "rtol": 0.01,
+      "basis": "Single front spar carries full root moment"
+    }
+  }
+}

@@ -17,8 +17,10 @@ from spar_sections import (
     MATERIAL_DB, STRUT_MATERIALS,
     two_cell_bredt, allowable_bending, allowable_shear,
     web_buckling, web_bending_buckling, skin_compression_buckling, cap_column_buckling,
+    skin_effective_width,
 )
 from airfoil_database import AIRFOIL_DB, get_airfoil
+from method_status import method_status_lines
 
 
 # ─── PLOT COLOUR PALETTE ─────────────────────────────────────────────────────
@@ -60,24 +62,25 @@ PDF_GOLD  = "#8B6914"   # dark gold — headers (readable on white)
 # ─── DEFAULT INPUTS ──────────────────────────────────────────────────────────
 
 DEFAULT_INPUTS: Dict[str, Any] = {
-    "b": 320.0, "r": 22.0, "num_points": 201,
-    "root_chord": 54.0, "tip_chord": 24.0, "taper_start_bl": 0.0, "rib_spacing": 12.0,
+    "b": 306.0, "r": 11.0, "num_points": 201,
+    "root_chord": 54.0, "tip_chord": 54.0, "taper_start_bl": 0.0, "rib_spacing": 12.0,
     "lift_distribution_type": "schrenk",
     "num_spars": 2,
-    "front_spar_percent": 0.15, "rear_spar_percent": 0.65,
+    "front_spar_percent": 0.05, "rear_spar_percent": 0.85,
     "front_spar_load_share": 0.55,
     "wing_structure_type": "fabric_tube",
     "front_spar_type": "Round Tube",
-    "front_spar_od": 3.0, "front_spar_wall": 0.065,
+    "front_spar_od": 2.5, "front_spar_wall": 0.065,
     "front_spar_mat": "6061-T6",
     "rear_spar_type": "Round Tube",
-    "rear_spar_od": 2.0, "rear_spar_wall": 0.065,
+    "rear_spar_od": 2.5, "rear_spar_wall": 0.065,
     "rear_spar_mat": "6061-T6",
     "dcell_enabled": False,
-    "dcell_skin_mat": "Birch Plywood", "dcell_skin_thick": 0.0625,
+    "dcell_skin_mat": "6061-T6", "dcell_skin_thick": 0.025,
     "geodetic_enabled": False,
     "geodetic_mat": "Sitka Spruce", "geodetic_w": 1.0, "geodetic_t": 0.125,
     "geodetic_strips_per_bay": 2, "geodetic_angle": 45.0,
+    "geodetic_reduction_factor": 0.75,
     "skin_top_mat": "6061-T6", "skin_top_thick": 0.025,
     "skin_bot_mat": "6061-T6", "skin_bot_thick": 0.025,
     "wood_knockdown": 0.75,
@@ -87,20 +90,30 @@ DEFAULT_INPUTS: Dict[str, Any] = {
     "rib_b_cap":  0.75,   # rib cap width [in]
     "rib_t_cap":  0.125,  # rib cap thickness [in]
     "rib_mat":    "Birch Plywood",
-    "ng_lift": 5381.25, "n": 6.0, "n_neg": -3.0,
-    "Weight": 1750.0, "Wing_Weight": 175.0, "Tail_Down_1g": 218.75,
-    "distribute_wing_weight": False,
+    "ng_lift": 1950.0, "n": 6.0, "n_neg": -3.0,
+    "Weight": 550.0, "Wing_Weight": 50.0, "Tail_Down_1g": 50.0,
+    "distribute_wing_weight": True,
     "config": "strut_braced",
-    "strut_percent": 0.65, "strut_bl": 104.0, "strut_vert": 44.0, "strut_fuse_bl": 0.0,
+    "strut_percent": 0.65, "strut_bl": 96.0, "strut_vert": 44.0, "strut_fuse_bl": 11.0,
     "strut_mat": "4130 Chromoly (normalized)",
-    "strut_tube_od": 3.0, "strut_tube_wall": 0.065,
+    "strut_tube_od": 2.0, "strut_tube_wall": 0.065,
     "secondary_bending": False,
-    "jury_strut": False, "jury_spar_bl": 60.0,
-    "airfoil": "NACA 4412", "Cm_ac": -0.099,  "Cm_flap": 0.0,  # delta Cm with full flaps
-    "Cl_alpha": 6.30, "x_ac_c": 0.246,
+    "jury_strut": True, "jury_spar_bl": 48.0,
+    "jury_tube_mat": "6061-T6 Aluminum",
+    "jury_tube_od": 0.75,
+    "jury_tube_wall": 0.035,
+    "jury_front_link_length": 18.0,
+    "jury_rear_link_length": 18.0,
+    "jury_front_link_angle": 45.0,
+    "jury_rear_link_angle": 45.0,
+    "airfoil": "GA 30-415", "Cm_ac": -0.064,  "Cm_flap": 0.0,  # delta Cm with full flaps
+    "Cl_alpha": 6.25, "x_ac_c": 0.249,
     "Vd_mph": 100.0, "altitude_ft": 2000.0, "Vc_mph": 80.0, "Va_mph": 60.0,
-    "airfoil_t_c": 0.12,
+    "airfoil_t_c": 0.15,
     "curvature_sign": 1.0, "make_plots": True, "export_excel": False,
+    "dcell_r_LE": "3",
+    "front_spar_angle_sel": "(Manual flat bar)",
+    "rear_spar_angle_sel": "(Manual flat bar)",
     # Buckling — default = rib_spacing (no intermediate stiffeners/nose ribs)
     "stiffener_spacing": 0.0,   # 0 = use rib_spacing
     "nose_rib_spacing":  0.0,   # 0 = use rib_spacing
@@ -110,6 +123,7 @@ DEFAULT_INPUTS: Dict[str, Any] = {
     "front_spar_doubler_extent": 1,     # rib bays each side of doubler station
     "rear_spar_doubler_t":       0.0,
     "rear_spar_doubler_extent":  1,
+    "bearing_allowable_psi":     12000.0,  # demand-only required bearing area
 }
 
 
@@ -125,6 +139,35 @@ def dynamic_pressure_psi(V_mph: float, alt_ft: float) -> float:
     V_fps = V_mph * 5280.0 / 3600.0
     rho   = isa_density(alt_ft)
     return 0.5 * rho * V_fps**2 / 144.0
+
+
+def parse_bool(value: Any, default: bool = False) -> bool:
+    """Parse booleans from JSON, GUI, and legacy saved project values."""
+
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return default
+    if isinstance(value, (int, float)):
+        return value != 0
+    text = str(value).strip().lower()
+    if text in {"1", "true", "yes", "y", "on"}:
+        return True
+    if text in {"0", "false", "no", "n", "off", ""}:
+        return False
+    return default
+
+
+def parse_fraction(value: Any, default: float = 0.0) -> float:
+    """Parse a fraction that may be entered as 0.30 or 30 for 30%."""
+
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return default
+    if abs(number) > 1.0:
+        number /= 100.0
+    return number
 
 
 # ─── SPAR FACTORY ────────────────────────────────────────────────────────────
@@ -207,11 +250,12 @@ class WingStressAnalyzer:
         self.front_doubler_extent = int(float(i.get("front_spar_doubler_extent", 1)))
         self.rear_doubler_t       = float(i.get("rear_spar_doubler_t", 0.0))
         self.rear_doubler_extent  = int(float(i.get("rear_spar_doubler_extent", 1)))
+        self.bearing_allowable_psi = float(i.get("bearing_allowable_psi", 12000.0))
         self.lift_type   = i["lift_distribution_type"]
         self.num_spars   = int(i["num_spars"])
-        self.front_pct   = float(i["front_spar_percent"])
-        self.rear_pct    = float(i["rear_spar_percent"])
-        self.lsf         = float(i["front_spar_load_share"])
+        self.front_pct   = parse_fraction(i["front_spar_percent"], 0.15)
+        self.rear_pct    = parse_fraction(i["rear_spar_percent"], 0.65)
+        self.lsf         = parse_fraction(i["front_spar_load_share"], 0.55)
         self.rsf         = 1.0 - self.lsf
         self.wing_struct = i.get("wing_structure_type", "fabric_tube")
         self.ng_lift     = float(i["ng_lift"])
@@ -220,7 +264,7 @@ class WingStressAnalyzer:
         self.Weight      = float(i["Weight"])
         self.Wing_Weight = float(i["Wing_Weight"])
         self.Tail_Down   = float(i["Tail_Down_1g"])
-        self.dist_relief = bool(i.get("distribute_wing_weight", False))
+        self.dist_relief = parse_bool(i.get("distribute_wing_weight", False))
         self.config      = i.get("config", "strut_braced")
         self.strut_bl    = float(i.get("strut_bl", 104.0))
         self.strut_vert  = float(i.get("strut_vert", 44.0))
@@ -228,9 +272,16 @@ class WingStressAnalyzer:
         self.strut_mat   = i.get("strut_mat", "4130 Chromoly (normalized)")
         self.strut_od    = float(i.get("strut_tube_od", 3.0))
         self.strut_wall  = float(i.get("strut_tube_wall", 0.065))
-        self.secondary   = bool(i.get("secondary_bending", False))
-        self.jury        = bool(i.get("jury_strut", False))
+        self.secondary   = parse_bool(i.get("secondary_bending", False))
+        self.jury        = parse_bool(i.get("jury_strut", False))
         self.jury_bl     = float(i.get("jury_spar_bl", 60.0))
+        self.jury_tube_mat = i.get("jury_tube_mat", "6061-T6 Aluminum")
+        self.jury_tube_od = float(i.get("jury_tube_od", 0.75))
+        self.jury_tube_wall = float(i.get("jury_tube_wall", 0.035))
+        self.jury_front_link_length = float(i.get("jury_front_link_length", 18.0))
+        self.jury_rear_link_length = float(i.get("jury_rear_link_length", 18.0))
+        self.jury_front_link_angle = float(i.get("jury_front_link_angle", 45.0))
+        self.jury_rear_link_angle = float(i.get("jury_rear_link_angle", 45.0))
         self.curvature_sign = float(i.get("curvature_sign", 1.0))
         self.wood_kd     = float(i.get("wood_knockdown", 0.75))
         self.rib_h_web = float(i.get("rib_h_web", 3.0))
@@ -251,7 +302,7 @@ class WingStressAnalyzer:
         self.t_c         = float(i.get("airfoil_t_c", 0.12))
 
         # D-cell
-        self.dcell_enabled = bool(i.get("dcell_enabled", False))
+        self.dcell_enabled = parse_bool(i.get("dcell_enabled", False))
         if self.dcell_enabled:
             c2s   = self.front_pct * self.root_chord
             t_web = float(i.get("front_spar_t_web",
@@ -264,7 +315,7 @@ class WingStressAnalyzer:
             self.dcell = None
 
         # Geodetic
-        self.geodetic_enabled = bool(i.get("geodetic_enabled", False))
+        self.geodetic_enabled = parse_bool(i.get("geodetic_enabled", False))
         if self.geodetic_enabled and self.wing_struct == "fabric_buildup":
             self.geodetic = GeodeticPanel(
                 rib_spacing=self.rib_spacing,
@@ -276,14 +327,23 @@ class WingStressAnalyzer:
         else:
             self.geodetic = None
 
-        # Aluminum skin
-        if self.wing_struct == "aluminum_skin":
-            self.top_skin = SkinPanel(float(i.get("skin_top_thick",0.025)),
-                                      i.get("skin_top_mat","6061-T6"))
-            self.bot_skin = SkinPanel(float(i.get("skin_bot_thick",0.025)),
-                                      i.get("skin_bot_mat","6061-T6"))
+        # Skin panels (aluminum or plywood/wood)
+        # Create if skin thickness is provided, regardless of wing_structure_type.
+        # This allows plywood skin to contribute to torsional transfer stiffness.
+        skin_top_thick = float(i.get("skin_top_thick", 0.0))
+        skin_bot_thick = float(i.get("skin_bot_thick", 0.0))
+        if skin_top_thick > 1e-6 or skin_bot_thick > 1e-6:
+            self.top_skin = SkinPanel(
+                skin_top_thick or 0.025,
+                i.get("skin_top_mat", "Birch Plywood")
+            )
+            self.bot_skin = SkinPanel(
+                skin_bot_thick or 0.025,
+                i.get("skin_bot_mat", "Birch Plywood")
+            )
         else:
-            self.top_skin = None; self.bot_skin = None
+            self.top_skin = None
+            self.bot_skin = None
 
         self.front_spar_type = i.get("front_spar_type", "Round Tube")
         self.rear_spar_type  = i.get("rear_spar_type",  "Round Tube")
@@ -340,6 +400,79 @@ class WingStressAnalyzer:
         alpha = -z0[si] / z1[si]
         return th0 + alpha*th1, z0 + alpha*z1
 
+    def _elastic_coupled_rear_response(self, w_rear, z_front, k_connection,
+                                       point_couplings: Optional[list] = None):
+        """Solve rear spar as a beam elastically connected to front spar.
+
+        The front spar response is already solved with the appropriate root and
+        strut supports. The rear spar is a root-fixed beam carrying the torsion
+        couple load and connected to the front spar by distributed springs.
+        This replaces the older scalar kappa blend with an actual elastic
+        compatibility solve for the rear spar.
+        """
+
+        n = self.N
+        ndof = 2 * n
+        K = np.zeros((ndof, ndof))
+        F = np.zeros(ndof)
+        element_data = []
+
+        for i in range(n - 1):
+            L = self.x[i + 1] - self.x[i]
+            EI = 0.5 * (self._EI_r[i] + self._EI_r[i + 1])
+            k = EI / L**3 * np.array([
+                [12, 6 * L, -12, 6 * L],
+                [6 * L, 4 * L**2, -6 * L, 2 * L**2],
+                [-12, -6 * L, 12, -6 * L],
+                [6 * L, 2 * L**2, -6 * L, 4 * L**2],
+            ])
+            q = 0.5 * (w_rear[i] + w_rear[i + 1])
+            f = q * L / 2.0 * np.array([1, L / 6.0, 1, -L / 6.0])
+            dofs = [2 * i, 2 * i + 1, 2 * (i + 1), 2 * (i + 1) + 1]
+            for a in range(4):
+                F[dofs[a]] += f[a]
+                for b in range(4):
+                    K[dofs[a], dofs[b]] += k[a, b]
+            element_data.append((dofs, k, f))
+
+        # Distributed elastic connection: force = k * (z_front - z_rear).
+        for i in range(n):
+            tributary = self.dx if 0 < i < n - 1 else self.dx / 2.0
+            k_node = max(k_connection, 0.0) * tributary
+            dof = 2 * i
+            K[dof, dof] += k_node
+            F[dof] += k_node * z_front[i]
+
+        # Optional discrete soft connections such as jury struts tying front
+        # and rear spars together at the jury station.
+        for station, stiffness in point_couplings or []:
+            if stiffness <= 0:
+                continue
+            idx = int(np.argmin(np.abs(self.x - station)))
+            dof = 2 * idx
+            K[dof, dof] += stiffness
+            F[dof] += stiffness * z_front[idx]
+
+        # Rear spar root fitting: fixed vertical displacement and rotation.
+        constrained = [0, 1]
+        free = [idx for idx in range(ndof) if idx not in constrained]
+        U = np.zeros(ndof)
+        U[free] = np.linalg.solve(K[np.ix_(free, free)], F[free])
+
+        z = U[0::2]
+        th = U[1::2]
+        M = np.zeros(n)
+        counts = np.zeros(n)
+        for i, (dofs, k, f) in enumerate(element_data):
+            end_forces = k @ U[dofs] - f
+            # Internal element end moments are the rotational DOF forces.
+            M[i] += end_forces[1]
+            M[i + 1] += -end_forces[3]
+            counts[i] += 1
+            counts[i + 1] += 1
+        M = np.divide(M, np.maximum(counts, 1.0))
+        return th, z, M
+
     def _strut_idx(self):
         return int(np.argmin(np.abs(self.x - self.strut_bl)))
 
@@ -387,7 +520,7 @@ class WingStressAnalyzer:
                 ds2 = self.geodetic.ds_over_t_own(c_b, h, t_wrs*s, s)
                 q1, q2, gj = two_cell_bredt(A1,A2,ds1,ds2,dss,G1,G2,1.0)
                 GJ[i]=gj; q1f[i]=q1; q2f[i]=q2
-            elif self.wing_struct=="aluminum_skin" and self.top_skin:
+            elif getattr(self, "top_skin", None) is not None:
                 A2  = c_b * h; G2 = MATERIAL_DB[self.top_skin.mat_name]["G"]
                 tt  = self.top_skin.thickness; tb = self.bot_skin.thickness
                 ds2 = c_b*s/tt + c_b*s/tb + h/t_wrs
@@ -400,18 +533,72 @@ class WingStressAnalyzer:
 
     # ── Torsion ──────────────────────────────────────────────────────────────
 
-    def _torsion(self, GJ, q1f, q2f, w_total):
-        q_psi = dynamic_pressure_psi(self.Vd_mph, self.alt_ft)
-        c = self.chord_x
-        T_aero = np.abs(self.Cm_ac)*q_psi*c**2
+    def _torsion_transfer_stiffness(self) -> dict:
+        """Return rib/geodetic/skin torsion-transfer stiffness terms.
 
-        if self.config=="single_strut" and self.num_spars==2:
-            e_rs     = (self.rear_pct-self.front_pct)*c
+        This model is used by both the case solver and the reported torsion
+        results. Keeping it in one place avoids the recurring bug where rear
+        spar coupling was based on stale or approximate stiffness values.
+        """
+
+        chord_box = (self.rear_pct - self.front_pct) * self.root_chord
+        spar_gap = max(chord_box, 1.0)
+
+        # Ribs are no longer treated as a defined structural member in the
+        # global torsion/coupling model. AeroBeam reports required rib bay
+        # reactions separately so designers can size ribs with their own
+        # construction details and standards.
+        k_rib = 0.0
+
+        if self.geodetic is not None:
+            red = float(self.inp.get("geodetic_reduction_factor", 0.75))
+            k_geo = self.geodetic.shear_stiffness_per_span(red, 1.0)
+        else:
+            k_geo = 0.0
+
+        if getattr(self, "top_skin", None) is not None:
+            G_skin = MATERIAL_DB[self.top_skin.mat_name]["G"]
+            k_skin = G_skin * self.top_skin.thickness / spar_gap
+        else:
+            k_skin = 0.0
+
+        k_total = k_rib + k_geo + k_skin
+        denom = max(k_total, 1e-12)
+
+        return {
+            "chord_box": chord_box,
+            "spar_gap": spar_gap,
+            "k_rib": k_rib,
+            "k_geo": k_geo,
+            "k_skin": k_skin,
+            "k_total": k_total,
+            "f_rib": k_rib / denom,
+            "f_geo": k_geo / denom,
+            "f_skin": k_skin / denom,
+        }
+
+    def _distributed_torsion(self, w_total, q_psi: float, *, sign: float = 1.0) -> tuple:
+        """Return aerodynamic, structural, and total distributed torque arrays.
+
+        ``w_total`` may be signed. ``sign`` controls the aerodynamic torque
+        direction for load cases; the report path uses the default positive
+        convention.
+        """
+
+        c = self.chord_x
+        T_aero = np.abs(self.Cm_ac) * q_psi * c**2 * sign
+
+        if self.config == "single_strut" and self.num_spars == 2:
+            e_rs = (self.rear_pct - self.front_pct) * c
             T_struct = self.rsf * w_total * e_rs
         else:
             T_struct = np.zeros(self.N)
 
-        T_tot = T_aero + T_struct
+        return T_aero, T_struct, T_aero + T_struct
+
+    def _torsion(self, GJ, q1f, q2f, w_total):
+        q_psi = dynamic_pressure_psi(self.Vd_mph, self.alt_ft)
+        T_aero, T_struct, T_tot = self._distributed_torsion(w_total, q_psi)
 
         # Running torque (cumulative from tip)
         T_run = np.zeros(self.N)
@@ -439,63 +626,40 @@ class WingStressAnalyzer:
                 if te>0: tau_g[i] = q2f[i]*T/te
 
         # ── Torsion transfer stiffness — load sharing between ribs, geodetic, skin ──
-        # Each mechanism carries a fraction of T proportional to its shear stiffness.
-        # Rib: k_rib = E_rib * I_rib / rib_spacing  (rib as beam across chord)
-        # Geodetic: k_geo = G_geo * t_eff * rib_spacing / chord_box
-        # D-cell/skin: k_skin contributes to GJ but not directly to rib/geodetic split
-        chord_box = (self.rear_pct - self.front_pct) * self.root_chord
-        spar_gap  = max(chord_box, 1.0)
+        transfer = self._torsion_transfer_stiffness()
+        spar_gap = transfer["spar_gap"]
+        k_rib = transfer["k_rib"]
+        k_geo = transfer["k_geo"]
+        k_skin = transfer["k_skin"]
+        k_total = transfer["k_total"]
+        f_rib = transfer["f_rib"]
+        f_geo = transfer["f_geo"]
+        f_skin = transfer["f_skin"]
 
-        # Rib section properties (simple I-beam approximation)
-        E_rib = MATERIAL_DB.get(self.rib_mat, MATERIAL_DB["Birch Plywood"])["E"]
-        G_rib = MATERIAL_DB.get(self.rib_mat, MATERIAL_DB["Birch Plywood"])["G"]
-        Fsu_rib = MATERIAL_DB.get(self.rib_mat, MATERIAL_DB["Birch Plywood"])["Fsu"]
-        Fb_rib  = MATERIAL_DB.get(self.rib_mat, MATERIAL_DB["Birch Plywood"]).get("Fb", Fsu_rib*1.5)
-        h_r = self.rib_h_web; t_r = self.rib_t_web
-        b_c = self.rib_b_cap; t_c = self.rib_t_cap
-        # Rib I (bending about chord axis, rib loaded spanwise by torsion couple):
-        I_rib_web = t_r * h_r**3 / 12
-        I_rib_cap = 2 * (b_c * t_c**3/12 + b_c*t_c*(h_r/2 + t_c/2)**2)
-        I_rib = I_rib_web + I_rib_cap
-        y_rib = h_r/2 + t_c   # distance from NA to extreme fibre
-        A_rib_web = h_r * t_r
+        # Required rib reactions if ribs are used as the transfer path. This is
+        # a demand output, not a rib sizing check.
+        local_torque = np.abs(T_tot) * self.rib_spacing
+        max_idx = int(np.argmax(local_torque))
+        rib_bay_torque = float(local_torque[max_idx])
+        rib_reaction = rib_bay_torque / max(spar_gap, 1e-9)
+        rib_reaction_station = float(self.x[max_idx])
 
-        # Rib shear stiffness per unit span: k_rib = G_rib * A_rib_web / spar_gap
-        # (rib acts as a shear beam across spar_gap; stiffness = G*A/L)
-        k_rib = G_rib * A_rib_web / spar_gap / self.rib_spacing
-
-        # Geodetic shear stiffness per unit span
+        # ANC-18-style drag-truss demand for a geodetic/diagonal strip panel:
+        # report required shear flow and strip axial force. This is a demand
+        # output only; bond/joint/attachment details and local member stability
+        # remain outside this global wing solver.
+        geodetic_q = 0.0
+        geodetic_strip_force = 0.0
+        geodetic_strip_stress = 0.0
+        geodetic_station = 0.0
         if self.geodetic is not None:
-            G_geo = MATERIAL_DB[self.geodetic.mat_name]["G"]
-            t_eff_geo = self.geodetic.t_eff(1.0)
-            k_geo = G_geo * t_eff_geo * self.rib_spacing / spar_gap / self.rib_spacing
-        else:
-            k_geo = 0.0
-
-        # Skin shear stiffness per unit span (fabric = ~0, aluminum skin = significant)
-        if self.wing_struct == "aluminum_skin" and self.top_skin is not None:
-            G_skin = MATERIAL_DB[self.top_skin.mat_name]["G"]
-            t_skin = self.top_skin.thickness
-            k_skin = G_skin * t_skin / spar_gap
-        else:
-            k_skin = 0.0  # fabric carries negligible torsion shear
-
-        k_total = k_rib + k_geo + k_skin
-        f_rib  = k_rib  / max(k_total, 1e-12)   # fraction of torsion carried by ribs
-        f_geo  = k_geo  / max(k_total, 1e-12)
-        f_skin = k_skin / max(k_total, 1e-12)
-
-        # Rib stress at root (governing station — highest T_run)
-        # Each rib carries: F_rib = T_run[0] * f_rib / rib_spacing [lb per rib]
-        # Applied as point loads at spar attach points; rib as simply-supported beam
-        F_rib_each = T_run[0] * f_rib / self.rib_spacing   # [lb per rib]
-        # Rib as simply-supported beam, point load at each end (couple):
-        # M_rib_max = F_rib * spar_gap / 4  (midspan for centre-loaded, or at load point)
-        M_rib = F_rib_each * spar_gap / 4.0
-        tau_rib = F_rib_each / max(A_rib_web, 1e-9)
-        sig_rib = M_rib * y_rib / max(I_rib, 1e-12)
-        MS_rib_shear = (Fsu_rib * self.wood_kd) / max(tau_rib, 1e-9) - 1.0
-        MS_rib_bend  = (Fb_rib  * self.wood_kd) / max(sig_rib, 1e-9) - 1.0
+            q_geo = np.abs(q2f * T_run)
+            geo_idx = int(np.argmax(q_geo))
+            geodetic_q = float(q_geo[geo_idx])
+            geo_scale = float(scales[geo_idx])
+            geodetic_strip_force = float(self.geodetic.strip_force(geodetic_q, geo_scale))
+            geodetic_strip_stress = float(self.geodetic.strip_stress(geodetic_q, geo_scale))
+            geodetic_station = float(self.x[geo_idx])
 
         # ── Cruise speed torsion check and CP positions ──────────────────────
         q_vc  = dynamic_pressure_psi(self.Vc_mph, self.alt_ft)
@@ -540,16 +704,20 @@ class WingStressAnalyzer:
                 "cp_neg":cp_neg, "cp_dive":cp_dive,
                 "f_rib":f_rib,"f_geo":f_geo,"f_skin":f_skin,
                 "k_rib":k_rib,"k_geo":k_geo,"k_total":k_total,
-                "F_rib_each":F_rib_each,"tau_rib":tau_rib,"sig_rib":sig_rib,
-                "MS_rib_shear":MS_rib_shear,"MS_rib_bend":MS_rib_bend,
-                "I_rib":I_rib,"A_rib_web":A_rib_web}
+                "rib_bay_torque":rib_bay_torque,
+                "rib_reaction_required":rib_reaction,
+                "rib_reaction_station":rib_reaction_station,
+                "geodetic_q":geodetic_q,
+                "geodetic_strip_force":geodetic_strip_force,
+                "geodetic_strip_stress":geodetic_strip_stress,
+                "geodetic_station":geodetic_station}
 
     # ── Divergence ───────────────────────────────────────────────────────────
 
     def _divergence(self, GJ_root):
         c    = self.root_chord
         x_ac = self.x_ac_c * c
-        x_sc = (0.22*c if (self.dcell or
+        x_sc = (0.22*c if (self.dcell or getattr(self, "top_skin", None) is not None or
                             self.wing_struct in ("fabric_buildup","aluminum_skin"))
                  else self.front_pct*c)
         e = x_ac - x_sc
@@ -566,19 +734,134 @@ class WingStressAnalyzer:
 
     # ── Strut forces ─────────────────────────────────────────────────────────
 
-    def _strut_forces(self, M_total):
+    def _jury_tube_area(self) -> float:
+        if self.jury_tube_wall <= 0.0 or self.jury_tube_od <= 0.0:
+            return 0.0
+        inner = max(self.jury_tube_od - 2.0 * self.jury_tube_wall, 0.0)
+        return math.pi / 4.0 * (self.jury_tube_od**2 - inner**2)
+
+    def _jury_link_vertical_stiffness(self, length: float, angle_deg: float) -> float:
+        if not self.jury or length <= 0.0:
+            return 0.0
+        mat = STRUT_MATERIALS.get(self.jury_tube_mat, STRUT_MATERIALS["6061-T6 Aluminum"])
+        axial = mat["E"] * self._jury_tube_area() / length
+        theta = math.radians(angle_deg)
+        return axial * math.sin(theta) ** 2
+
+    def _jury_coupling_stiffness(self) -> float:
+        """Equivalent front/rear vertical coupling from same-tube jury links."""
+
+        k_front = self._jury_link_vertical_stiffness(
+            self.jury_front_link_length, self.jury_front_link_angle)
+        k_rear = self._jury_link_vertical_stiffness(
+            self.jury_rear_link_length, self.jury_rear_link_angle)
+        if k_front <= 0.0 or k_rear <= 0.0:
+            return 0.0
+        # Two links connected through the common strut node behave like springs
+        # in series for relative front/rear vertical displacement.
+        return 1.0 / (1.0 / k_front + 1.0 / k_rear)
+
+    def _strut_effective_buckling_length(self, total_length: float) -> float:
+        """Return unsupported strut length for Euler buckling.
+
+        A jury strut braces the lift strut laterally at ``jury_bl``. It should
+        not change the axial load or wing reactions; it only reduces the
+        unsupported column length to the longer of the two strut segments.
+        """
+
+        if not self.jury:
+            return total_length
+
+        run = self.strut_bl - self.strut_fuse_bl
+        jury_run = self.jury_bl - self.strut_fuse_bl
+        if run <= 1e-9 or jury_run <= 0.0 or jury_run >= run:
+            return total_length
+
+        fraction = jury_run / run
+        lower = total_length * fraction
+        upper = total_length * (1.0 - fraction)
+        return max(lower, upper)
+
+    def _reaction_moment(self, reaction_bl: float) -> np.ndarray:
+        """Moment array from a unit upward reaction at ``reaction_bl``."""
+
+        out = np.zeros(self.N)
+        for k in range(self.N):
+            if self.x[k] <= reaction_bl:
+                out[k] = reaction_bl - self.x[k]
+        return out
+
+    def _support_reactions(self, M_total: np.ndarray, EI: np.ndarray) -> dict:
+        """Return vertical reactions for main strut and optional load-bearing jury.
+
+        Without a valid jury BL, this reduces to the existing statics relation
+        ``R_strut = M_root / strut_bl``. With a valid jury station between the
+        fuselage and main strut attach, the jury and main strut reactions are
+        solved with:
+
+        1. root moment relief: R_j*j + R_s*s = M_root
+        2. compatibility: after root-slope adjustment, z(jury) and z(strut)
+           are both zero.
+        """
+
+        strut_bl = max(self.strut_bl, 1.0)
+        strut_unit = self._reaction_moment(strut_bl)
+
+        if not self.jury or not (self.strut_fuse_bl < self.jury_bl < self.strut_bl):
+            R_strut = M_total[0] / strut_bl
+            return {
+                "strut": R_strut,
+                "jury": 0.0,
+                "moment": R_strut * strut_unit,
+            }
+
+        jury_bl = self.jury_bl
+        jury_unit = self._reaction_moment(jury_bl)
+        ji = int(np.argmin(np.abs(self.x - jury_bl)))
+        si = self._strut_idx()
+
+        def compatibility(moment: np.ndarray) -> float:
+            _, z = self._deflect_cantilever(moment, EI)
+            return z[ji] - z[si] * (self.x[ji] / max(self.x[si], 1e-9))
+
+        rhs = np.array([M_total[0], compatibility(M_total)])
+        matrix = np.array([
+            [jury_bl, strut_bl],
+            [compatibility(jury_unit), compatibility(strut_unit)],
+        ])
+
+        try:
+            R_jury, R_strut = np.linalg.solve(matrix, rhs)
+        except np.linalg.LinAlgError:
+            R_jury = 0.0
+            R_strut = M_total[0] / strut_bl
+
+        # A reversed reaction would mean this geometry/stiffness does not make
+        # the jury act as an upward support. Fall back to buckling-only behavior.
+        if R_jury < 0.0 or R_strut < 0.0:
+            R_jury = 0.0
+            R_strut = M_total[0] / strut_bl
+
+        return {
+            "strut": float(R_strut),
+            "jury": float(R_jury),
+            "moment": R_jury * jury_unit + R_strut * strut_unit,
+        }
+
+    def _strut_forces(self, M_total, Fv_override: Optional[float] = None):
         """M_total = moment array BEFORE strut subtraction."""
-        Fv = M_total[0] / max(self.strut_bl, 1)
+        Fv = M_total[0] / max(self.strut_bl, 1) if Fv_override is None else Fv_override
         rise = self.strut_vert
         run  = max(self.strut_bl - self.strut_fuse_bl, 1.0)  # net horizontal distance
         L    = math.sqrt(rise**2 + run**2)
+        L_eff = self._strut_effective_buckling_length(L)
         ang  = math.atan2(rise, run)
         Fa   = Fv / max(math.sin(ang), 1e-6)
         Ps   = Fa * math.cos(ang)
         od   = self.strut_od; wa = self.strut_wall; id_ = od - 2*wa
         I_st = math.pi/64 * (od**4 - id_**4)
         E_st = STRUT_MATERIALS[self.strut_mat]["E"]
-        Pe   = math.pi**2 * E_st * I_st / L**2
+        Pe   = math.pi**2 * E_st * I_st / L_eff**2
         return Fv, Fa, Ps, Pe, L
 
     # ── P-delta ──────────────────────────────────────────────────────────────
@@ -587,10 +870,10 @@ class WingStressAnalyzer:
         si   = self._strut_idx()
         EI_a = float(np.mean(EI[:si+1]))
         Pe   = math.pi**2*EI_a/max(self.strut_bl**2,1)
-        if P_comp<=0 or Pe<=0: return M, False
-        if P_comp/Pe>=1.0:     return M*10, True
+        if P_comp<=0 or Pe<=0: return M, False, 1.0
+        if P_comp/Pe>=1.0:     return M*10, True, 10.0
         amp = 1.0/(1.0-P_comp/Pe)
-        return M*amp, amp>2.0
+        return M*amp, amp>2.0, amp
 
     # ── One load case ────────────────────────────────────────────────────────
 
@@ -610,19 +893,21 @@ class WingStressAnalyzer:
 
         # Strut
         si = self._strut_idx()
-        Fv=Fa=Ps=Pe=0.0; L_strut=1.0
+        Fv=Fa=Ps=Pe=0.0; L_strut=1.0; Fv_jury=0.0; Fv_strut_attach=0.0
         if self.config in ("strut_braced","single_strut"):
-            Fv,Fa,Ps,Pe,L_strut = self._strut_forces(np.abs(M))  # always use magnitude for strut loads
-            M_strut = np.zeros(self.N)
-            for k in range(self.N):
-                if self.x[k]<=self.strut_bl:
-                    M_strut[k] = Fv*(self.strut_bl-self.x[k])
+            reactions = self._support_reactions(np.abs(M), self._EI_f)
+            Fv_jury = reactions["jury"]
+            Fv_strut_attach = reactions["strut"]
+            Fv_total = Fv_jury + Fv_strut_attach
+            Fv,Fa,Ps,Pe,L_strut = self._strut_forces(np.abs(M), Fv_override=Fv_total)
+            M_strut = reactions["moment"]
             M = M - M_strut * sign   # subtract signed strut reaction (front spar)
 
         # P-delta
         pw = False
+        pdelta_amp = 1.0
         if self.secondary and Ps>0:
-            M, pw = self._pdelta(M, Ps, self._EI_f)
+            M, pw, pdelta_amp = self._pdelta(M, Ps, self._EI_f)
 
         # Deflection — front spar (uses strut-corrected M)
         Mf = M*self.lsf
@@ -644,70 +929,63 @@ class WingStressAnalyzer:
         chord_box    = spar_spacing
 
         # Torsion-based rear spar distributed load (correct for cantilever/single_strut)
-        # V_rear(x) = T_total(x) / spar_spacing  [lb/in]
-        # T_total from _one_case context is not available here; approximate from
-        # known inputs: T ≈ |Cm| * q * c² + T_struct
-        q_dyn    = 0.5 * 0.0023769 * (self.Vd_mph * 5280/3600)**2 / 144
-        T_aero_x = abs(self.Cm_ac) * q_dyn * self.chord_x**2  # lb·in/in per station
-        w_rear   = T_aero_x / spar_spacing * sign   # signed distributed load [lb/in]
+        # V_rear(x) = T_total(x) / spar_spacing [lb/in]. Use the same signed
+        # torsion model as the report path so altitude, single-strut structural
+        # torsion, and airfoil moment stay consistent.
+        q_dyn = dynamic_pressure_psi(self.Vd_mph, self.alt_ft)
+        _, _, T_total_case = self._distributed_torsion(w, q_dyn, sign=sign)
+        w_rear = T_total_case / spar_spacing
 
-        # Geodetic coupling factor κ
-        EI_r_mean = float(np.mean(self._EI_r[self._EI_r > 0]))
-        EI_f_mean = float(np.mean(self._EI_f[self._EI_f > 0]))
-        k_rear    = 48.0 * EI_r_mean / max(self.b_half**3, 1.0)
-        # Combined transfer stiffness: ribs + geodetic + skin
-        k_geo = getattr(self, "_torsion_stiffness", 0.0)
-        if k_geo == 0.0:
-            if self.geodetic is not None:
-                G_geo = MATERIAL_DB[self.geodetic.mat_name]["G"]
-                k_geo = G_geo * self.geodetic.t_eff(1.0) * (self.rib_spacing / max(chord_box, 1.0))
-            elif self.wing_struct in ("fabric_tube", "fabric_buildup"):
-                k_geo = 0.30 * 120000 * 0.01 * (self.rib_spacing / max(chord_box, 1.0))
-        kappa = (k_geo * self.b_half) / (k_geo * self.b_half + k_rear) if k_geo > 0 else 0.0
-        kappa = float(np.clip(kappa, 0.0, 1.0))
-        self._geodetic_kappa = kappa
+        # Combined transfer stiffness from geodetic/skin elastic connection.
+        transfer = getattr(self, "_torsion_transfer", None)
+        if transfer is None:
+            transfer = self._torsion_transfer_stiffness()
+        k_transfer = transfer["k_total"]
 
         if self.config == "strut_braced" and self.num_spars == 2:
             # Both spars strutted: parallel beam model is correct
             Mr = M * self.rsf
             th_r, z_r = self._deflect_strut(Mr, self._EI_r, si)
+            self._geodetic_kappa = 0.0
 
         elif self.config in ("cantilever", "single_strut") and self.num_spars == 2:
-            # Rear spar carries torsion couple as a cantilever
-            # Plus partial bending via geodetic coupling (κ fraction of front spar shape)
-            V_r, Mr = self._shear_moment(np.abs(w_rear))
-            Mr = Mr * sign
-            th_r_tor, z_r_tor = self._deflect_cantilever(Mr, self._EI_r)
-
-            # Geodetic blending: κ=1 → tracks front, κ=0 → torsion-only cantilever
-            scale       = (EI_f_mean * self.rsf) / max(EI_r_mean * self.lsf, 1e-9)
-            z_r_coupled = z_f * scale
-            th_r_coupled= th_f * scale
-            z_r  = kappa * z_r_coupled + (1.0 - kappa) * z_r_tor
-            th_r = kappa * th_r_coupled + (1.0 - kappa) * th_r_tor
-            # Blend moment for stress: coupled moment = EI_r/EI_f * Mf, torsion moment = Mr
-            Mr_coupled = (self._EI_r / np.maximum(self._EI_f, 1e-9)) * Mf
-            Mr = kappa * Mr_coupled + (1.0 - kappa) * Mr
+            point_couplings = []
+            jury_k = self._jury_coupling_stiffness()
+            if self.jury and jury_k > 0.0:
+                point_couplings.append((self.jury_bl, jury_k))
+            th_r, z_r, Mr = self._elastic_coupled_rear_response(w_rear, z_f, k_transfer, point_couplings)
+            _, z_r_free, _ = self._elastic_coupled_rear_response(w_rear, z_f, 0.0, [])
+            free_delta = float(np.max(np.abs(z_r_free - z_f)))
+            coupled_delta = float(np.max(np.abs(z_r - z_f)))
+            if free_delta > 1e-9:
+                self._geodetic_kappa = float(np.clip(1.0 - coupled_delta / free_delta, 0.0, 1.0))
+            else:
+                self._geodetic_kappa = 1.0 if coupled_delta < 1e-9 else 0.0
 
         else:
             # Single spar or fallback
             Mr = M_cant * self.rsf
             th_r, z_r = self._deflect_cantilever(Mr, self._EI_r)
+            self._geodetic_kappa = 0.0
 
         sig_f = Mf / np.maximum(self._Itr_f, 1e-10) * self._ym_f
         sig_r = Mr / np.maximum(self._Itr_r, 1e-10) * self._ym_r
 
         return {
             "w":w, "V":V, "M":M,
+            "M_front":Mf, "M_rear":Mr,
             "z_front":z_f, "z_rear":z_r,
+            "z_delta":z_r - z_f,
             "theta_front":th_f, "theta_rear":th_r,
             "sigma_front":sig_f, "sigma_rear":sig_r,
             "sig_f_root":float(sig_f[0]), "sig_r_root":float(sig_r[0]),
             "z_max_front":float(np.max(np.abs(z_f))),
             "z_max_rear":float(np.max(np.abs(z_r))),
+            "z_delta_max":float(np.max(np.abs(z_r - z_f))),
             "Fv":Fv,"F_axial":Fa,"P_spar":Ps,"P_euler":Pe,
+            "Fv_jury":Fv_jury, "Fv_strut_attach":Fv_strut_attach,
             "V_root":float(V[0]),"M_root":float(M[0]),
-            "pdelta_warn":pw,
+            "pdelta_warn":pw, "pdelta_amp":pdelta_amp,
         }
 
     # ── MS helpers ───────────────────────────────────────────────────────────
@@ -899,8 +1177,8 @@ class WingStressAnalyzer:
                     t_min_web = h_web * math.sqrt(tau_web_max * 12*(1-nu**2) / (k_s * math.pi**2 * Emw))
                     r["t_min_web"] = t_min_web
 
-            # 4. Skin compression buckling (aluminum_skin type only)
-            if self.wing_struct == "aluminum_skin" and self.top_skin:
+            # 4. Skin compression buckling (any skin panel: aluminum or plywood)
+            if getattr(self, "top_skin", None) is not None:
                 t_sk   = self.top_skin.thickness
                 b_skin = self.rib_spacing   # box skin panel
                 sk = skin_compression_buckling(t_sk, b_skin, self.top_skin.mat_name)
@@ -913,6 +1191,15 @@ class WingStressAnalyzer:
                 # Flag as WARN (not FAIL) when skin buckles — only FAIL if sigma_cr < 0.5*sigma_gov
                 r["MS_skin_buckling"] = sk["sigma_cr_skin"] / max(sigma_gov, 1e-9) - 1
                 r["skin_buckling_acceptable"] = True  # semi-monocoque: post-buckled OK
+                eff = skin_effective_width(t_sk, b_skin, sigma_gov, self.top_skin.mat_name)
+                r["skin_b_eff"] = eff["b_eff"]
+                r["skin_b_eff_ratio"] = eff["b_eff_ratio"]
+                r["skin_eff_load_per_in"] = eff["load_per_length"]
+                skin_total_load_per_in = sigma_gov * b_skin * t_sk
+                cap_stringer_load_per_in = max(skin_total_load_per_in - eff["load_per_length"], 0.0)
+                r["skin_total_load_per_in"] = skin_total_load_per_in
+                r["cap_stringer_load_per_in"] = cap_stringer_load_per_in
+                r["cap_stringer_load_per_bay"] = cap_stringer_load_per_in * self.rib_spacing
                 # D-cell skin (nose ribs if present)
                 if self.dcell:
                     b_dc = self.nose_rib_spacing
@@ -961,13 +1248,14 @@ class WingStressAnalyzer:
     def analyze(self):
         self._spar_arrays()
         self.GJ, self.q1_frac, self.q2_frac = self._gj_arrays()
+        self._torsion_transfer = self._torsion_transfer_stiffness()
+        self._torsion_stiffness = self._torsion_transfer["k_total"]
 
         self.pos = self._one_case(self.ng_lift, +1)
         ng_neg   = abs(self.n_neg)/self.n*self.ng_lift
         self.neg = self._one_case(ng_neg, -1)
 
         self.torsion = self._torsion(self.GJ, self.q1_frac, self.q2_frac, self.pos["w"])
-        self._torsion_stiffness = self.torsion.get("k_total", 0.0) if self.torsion else 0.0
 
         self.divergence = self._divergence(float(self.GJ[0]))
 
@@ -976,17 +1264,42 @@ class WingStressAnalyzer:
         od=self.strut_od; wa=self.strut_wall; id_=od-2*wa
         A_st = math.pi/4*(od**2 - id_**2)
         L_st = math.sqrt(max(self.strut_bl - self.strut_fuse_bl, 1.0)**2 + self.strut_vert**2)
+        L_eff = self._strut_effective_buckling_length(L_st)
         sig_ax = self.pos["F_axial"]/max(A_st,1e-9)
         self.strut_summary = {
             "mat":self.strut_mat, "E":sm["E"], "Ftu":sm["Ftu"],
             "od":od,"wall":wa,"area":A_st,
             "Fv":self.pos["Fv"],"F_axial":self.pos["F_axial"],
+            "Fv_jury":self.pos.get("Fv_jury", 0.0),
+            "Fv_strut_attach":self.pos.get("Fv_strut_attach", self.pos["Fv"]),
             "P_euler":self.pos["P_euler"],
+            "length":L_st, "effective_length":L_eff,
             "sigma_axial":sig_ax,
             "MS_axial":sm["Ftu"]/max(abs(sig_ax),1e-6)-1,
             "SF_euler":self.pos["P_euler"]/max(abs(self.pos["F_axial"]),1e-6),
             "weight_half":A_st*sm["rho"]*L_st,
         }
+
+        # Local fitting / bearing load demands only. AeroBeam does not size
+        # bolts, bushings, lugs, doublers, bearing pads, or tube crush details.
+        jury_idx = int(np.argmin(np.abs(self.x - self.jury_bl))) if self.N else 0
+        self.fitting_loads = {
+            "front_root_vertical": abs(float(self.pos["V_root"] * self.lsf)),
+            "rear_root_vertical": abs(float(self.pos["V_root"] * self.rsf)) if self.num_spars == 2 else 0.0,
+            "main_strut_vertical": abs(float(self.pos.get("Fv_strut_attach", self.pos["Fv"]))),
+            "jury_vertical": abs(float(self.pos.get("Fv_jury", 0.0))),
+            "main_strut_axial": abs(float(self.pos["F_axial"])),
+            "front_spar_strut_attach_vertical": abs(float(self.pos.get("Fv_strut_attach", self.pos["Fv"]))),
+            "rear_spar_strut_attach_vertical": abs(float(self.pos.get("Fv_strut_attach", self.pos["Fv"]))) if self.config == "strut_braced" and self.num_spars == 2 else 0.0,
+            "front_spar_jury_attach_vertical": abs(float(self.pos.get("Fv_jury", 0.0))),
+            "rear_spar_jury_coupling_vertical": abs(float(self._jury_coupling_stiffness() * self.pos.get("z_delta", np.zeros(self.N))[jury_idx])) if self.jury else 0.0,
+        }
+        self.fitting_loads["bearing_allowable_psi"] = self.bearing_allowable_psi
+        for key, value in list(self.fitting_loads.items()):
+            if key.endswith("_vertical") or key.endswith("_axial"):
+                self.fitting_loads[f"{key}_bearing_area_required"] = (
+                    abs(value) / max(self.bearing_allowable_psi, 1e-9)
+                )
 
         # Spar weights
         scale_tip = self.tip_chord / self.root_chord
@@ -1045,6 +1358,7 @@ class WingStressAnalyzer:
 
         L = []
         L += ["═"*54,"  AeroBeam v1.2  ─  Results","═"*54]
+        L += method_status_lines()
         L += [f"\nAirfoil    : {self.airfoil}  Cm (pitching moment coeff)={self.Cm_ac:+.4f}"]
         L += [f"Config     : {self.config}   Structure: {self.wing_struct}"]
         L += [f"n (load factor, ultimate): +{self.n:.1f}g / {self.n_neg:.1f}g"]
@@ -1052,8 +1366,11 @@ class WingStressAnalyzer:
         L += [f"\n── BENDING (+g) {'─'*37}"]
         L += [f"  Root V (shear force)  : {p['V_root']:>10,.1f} lb"]
         L += [f"  Root M (bending moment): {p['M_root']:>10,.1f} lb·in"]
+        if self.secondary:
+            L += [f"  P-delta amplification : {p.get('pdelta_amp', 1.0):>10.3f}×  (affects moment/stress, not lift/shear)"]
         L += [f"  Front z_max (tip deflection): {p['z_max_front']:>10.3f} in  (+up)"]
         L += [f"  Rear  z_max (tip deflection): {p['z_max_rear']:>10.3f} in  (+up)"]
+        L += [f"  Rear-front Δz max (relative flex): {p['z_delta_max']:>8.3f} in"]
         L += [f"  Front σ_max (bending stress): {self.sigma_max_front:>10,.0f} psi  at x={self.x_sigma_max_front:.1f}\""]
         L += [f"  Rear  σ_max   : {self.sigma_max_rear:>10,.0f} psi  at x={self.x_sigma_max_rear:.1f}\""]
 
@@ -1065,11 +1382,39 @@ class WingStressAnalyzer:
             L += [f"\n── STRUT {'─'*44}"]
             L += [f"  {s['mat']}"]
             L += [f"  Tube: {s['od']}\" × {s['wall']}\"   A={s['area']:.4f} in²"]
+            L += [f"  Length={s['length']:.1f}\"   Euler length={s['effective_length']:.1f}\""]
             L += [f"  Fv (vertical)={s['Fv']:,.0f} lb   Fa (axial)={s['F_axial']:,.0f} lb   Pe (Euler)={s['P_euler']:,.0f} lb"]
+            if self.jury:
+                L += [f"  Vertical reactions: jury={s['Fv_jury']:,.0f} lb   main strut attach={s['Fv_strut_attach']:,.0f} lb"]
             L += [f"  SF (safety factor) Euler buckling :{mf(s['SF_euler']-1)}"]
             L += [f"  MS (margin of safety) axial       :{mf(s['MS_axial'])}"]
             L += [f"  Strut wt (½)  : {s['weight_half']:.2f} lb"]
+            if self.jury:
+                L += ["  Jury strut modeled as load-bearing support plus Euler brace."]
             if p.get("pdelta_warn"): L += ["  ⚠ P-delta amplification > 2×"]
+
+        if hasattr(self, "fitting_loads"):
+            fl = self.fitting_loads
+            L += [f"\n── LOCAL FITTING / BEARING LOAD DEMANDS {'─'*12}"]
+            L += [f"  Front root fitting vertical demand : {fl['front_root_vertical']:>9,.0f} lb"]
+            if self.num_spars == 2:
+                L += [f"  Rear  root fitting vertical demand : {fl['rear_root_vertical']:>9,.0f} lb"]
+            if self.config in ("strut_braced","single_strut"):
+                L += [f"  Main strut attach vertical demand  : {fl['main_strut_vertical']:>9,.0f} lb"]
+                L += [f"  Main strut axial fitting demand    : {fl['main_strut_axial']:>9,.0f} lb"]
+                if fl["jury_vertical"] > 0:
+                    L += [f"  Jury attach vertical demand        : {fl['jury_vertical']:>9,.0f} lb"]
+                if fl["rear_spar_jury_coupling_vertical"] > 0:
+                    L += [f"  Rear spar jury-link demand         : {fl['rear_spar_jury_coupling_vertical']:>9,.0f} lb"]
+            L += [f"  Bearing-area demand uses allowable : {fl['bearing_allowable_psi']:>9,.0f} psi"]
+            L += [f"  Req. bearing area, front root      : {fl['front_root_vertical_bearing_area_required']:>9.3f} in²"]
+            if self.num_spars == 2:
+                L += [f"  Req. bearing area, rear root       : {fl['rear_root_vertical_bearing_area_required']:>9.3f} in²"]
+            if self.config in ("strut_braced","single_strut"):
+                L += [f"  Req. bearing area, strut attach    : {fl['main_strut_vertical_bearing_area_required']:>9.3f} in²"]
+                if fl["jury_vertical"] > 0:
+                    L += [f"  Req. bearing area, jury attach     : {fl['jury_vertical_bearing_area_required']:>9.3f} in²"]
+            L += ["  Reinforce/check tube bearing, bushings, lugs, doublers, and local crush separately."]
 
 
         L += [""]
@@ -1127,6 +1472,12 @@ class WingStressAnalyzer:
             if hasattr(self, "_geodetic_kappa"):
                 kap = self._geodetic_kappa
                 L += [f"  Geodetic coupling k : {kap:.4f}  (1.0=fully coupled, 0=cantilever)"]
+                jury_k = self._jury_coupling_stiffness()
+                if self.jury and jury_k > 0:
+                    L += [f"  Jury tube front/rear coupling: k={jury_k:,.0f} lb/in at BL {self.jury_bl:.1f}\""]
+                    L += [f"  Jury links: {self.jury_tube_od:.3f}x{self.jury_tube_wall:.3f} {self.jury_tube_mat}, "
+                          f"Lf={self.jury_front_link_length:.1f}\" @ {self.jury_front_link_angle:.0f}°, "
+                          f"Lr={self.jury_rear_link_length:.1f}\" @ {self.jury_rear_link_angle:.0f}°"]
                 if kap < 0.5:
                     L += ["  ⚠ Weak coupling — rear spar closer to free cantilever"]
                 elif kap > 0.95:
@@ -1134,18 +1485,21 @@ class WingStressAnalyzer:
             if t and "f_rib" in t:
                 fr = t["f_rib"]; fg = t.get("f_geo",0); fs = t.get("f_skin",0)
                 L += [f"  Torsion share: ribs={fr*100:.0f}%  geodetic={fg*100:.0f}%  skin={fs*100:.0f}%"]
-                tau_r = t["tau_rib"]; sig_r = t["sig_rib"]
-                ms_rs = t["MS_rib_shear"]; ms_rb = t["MS_rib_bend"]
-                L += [f"  Rib root load  : {t['F_rib_each']:>8.1f} lb/rib"]
-                L += [f"  Rib web shear  : {tau_r:>8.0f} psi   MS:{mf(ms_rs)}"]
-                L += [f"  Rib cap bending: {sig_r:>8.0f} psi   MS:{mf(ms_rb)}"]
+                L += [f"  Required rib bay torque : {t['rib_bay_torque']:>8.0f} lb-in at x={t['rib_reaction_station']:.1f}\""]
+                L += [f"  Required rib attach reaction: ±{t['rib_reaction_required']:>7.1f} lb per rib bay"]
+                L += ["  Rib sizing is not performed; design ribs/attachments for this reaction."]
             if self.geodetic:
                 tg=abs(float(t["tau_geo"][0]))
-                Fs2=MATERIAL_DB[self.geodetic.mat_name]["Fsu"]
-                sig_s=self.geodetic.strip_stress(abs(self.q2_frac[0])*t["T_running"][0])
+                sig_s=t.get("geodetic_strip_stress", 0.0)
+                strip_f=t.get("geodetic_strip_force", 0.0)
+                q_geo=t.get("geodetic_q", 0.0)
+                red=float(self.inp.get("geodetic_reduction_factor", 0.75))
                 Fb_s=MATERIAL_DB[self.geodetic.mat_name]["Fb"]
                 L += [f"  Geodetic τ eff: {tg:>9,.0f} psi"]
-                L += [f"  Strip σ  root : {sig_s:>9,.0f} psi   MS:{mf(Fb_s/max(sig_s,1)-1)}"]
+                L += [f"  Geodetic stiffness reduction f_red={red:.2f} (connection/detail allowance)"]
+                L += [f"  ANC-18 drag-truss demand: q={q_geo:>7.1f} lb/in  strip F={strip_f:>7.1f} lb"]
+                L += [f"  Strip axial σ demand: {sig_s:>9,.0f} psi   MS vs Fb only:{mf(Fb_s/max(sig_s,1)-1)}"]
+                L += ["  Geodetic mesh demand only; bond/joint/attachment sizing is outside AeroBeam."]
 
         L += [f"\n── DIVERGENCE {'─'*39}"]
         if d["divergent"] and d["V_div"]<float("inf"):
@@ -1229,6 +1583,12 @@ class WingStressAnalyzer:
                     note = " (note: post-buckled OK for semi-mono)" if bk["MS_skin_buckling"] < 0 else ""
                     L += ["  Skin buckl (compression buckling) σ_cr=%6.0f psi  MS:%s%s" %
                           (bk["sigma_cr_skin"], mf(bk["MS_skin_buckling"]), note)]
+                    if "skin_b_eff" in bk:
+                        L += ["  Effective width: be=%5.2fin (%.0f%% panel), skin load=%.0f lb/in" %
+                              (bk["skin_b_eff"], bk["skin_b_eff_ratio"]*100, bk["skin_eff_load_per_in"])]
+                        L += ["  Cap/stringer compression demand: %.0f lb/in  (%.0f lb per rib bay)" %
+                              (bk["cap_stringer_load_per_in"], bk["cap_stringer_load_per_bay"])]
+                        L += ["  Stringer/rivet/fastener/frame sizing is outside AeroBeam."]
                     if bk["MS_skin_buckling"] < 0 and "t_min_skin" in bk:
                         L += ["  >>> t_skin min = %.4fin for non-buckling skin" % bk["t_min_skin"]]
                 if "sigma_cr_dcell_skin" in bk:
@@ -1261,11 +1621,14 @@ class WingStressAnalyzer:
         a[1].plot(x, self.pos["V"], "g-")
         a[1].plot(x, self.neg["V"], "g--")
         a[1].set(title="Shear [lb]")
-        a[2].plot(x, self.pos["M"], "r-")
-        a[2].plot(x, self.neg["M"], "r--")
-        a[2].set(title="Moment [lb·in]")
+        a[2].plot(x, self.pos["M_front"], "b-", label="Frt +g")
+        a[2].plot(x, self.pos["M_rear"], "c-", label="Rr +g")
+        a[2].plot(x, self.neg["M_front"], "b--", label="Frt -g")
+        a[2].plot(x, self.neg["M_rear"], "c--", label="Rr -g")
+        a[2].set(title="Spar Moment [lb·in]"); a[2].legend()
         a[3].plot(x, self.pos["z_front"], "m-",  label="Frt +g (up)")
         a[3].plot(x, self.pos["z_rear"],  "c-",  label="Rr +g (up)")
+        a[3].plot(x, self.pos["z_delta"], "g:",  label="Rr-Frt Δ +g")
         a[3].plot(x, self.neg["z_front"], "m--", label="Frt -g (down)")
         a[3].plot(x, self.neg["z_rear"],  "c--", label="Rr -g (down)")
         a[3].axhline(y=0, color="k", lw=0.5, alpha=0.4)
@@ -1443,16 +1806,22 @@ class WingStressAnalyzer:
                           linestyle="--", label="%.0fg" % self.n_neg)
             axs[0,1].set_title("Shear [lb]"); axs[0,1].legend(fontsize=8)
 
-            axs[1,0].plot(x, self.pos["M"],         color=PDF_BLUE, lw=2,
-                          label="+%.0fg" % self.n)
-            axs[1,0].plot(x, self.neg["M"],         color=PDF_GREY, lw=1.5,
-                          linestyle="--", label="%.0fg" % self.n_neg)
-            axs[1,0].set_title("Moment [lb·in]"); axs[1,0].legend(fontsize=8)
+            axs[1,0].plot(x, self.pos["M_front"],   color=PDF_BLUE, lw=2,
+                          label="Frt +%.0fg" % self.n)
+            axs[1,0].plot(x, self.pos["M_rear"],    color=PDF_NAVY, lw=1.5,
+                          label="Rr +%.0fg" % self.n)
+            axs[1,0].plot(x, self.neg["M_front"],   color=PDF_GREY, lw=1.5,
+                          linestyle="--", label="Frt %.0fg" % self.n_neg)
+            axs[1,0].plot(x, self.neg["M_rear"],    color="#888888", lw=1,
+                          linestyle=(0,(2,3)), label="Rr %.0fg" % self.n_neg)
+            axs[1,0].set_title("Spar Moment [lb·in]"); axs[1,0].legend(fontsize=8)
 
             axs[1,1].plot(x, self.pos["z_front"],   color=PDF_BLUE, lw=2,
                           label="Frt +g (up)")
             axs[1,1].plot(x, self.pos["z_rear"],    color=PDF_NAVY, lw=1.5,
                           linestyle=(0,(4,2)), label="Rr +g (up)")
+            axs[1,1].plot(x, self.pos["z_delta"],   color=PDF_GREEN, lw=1.1,
+                          linestyle=":", label="Rr-Frt Δ +g")
             axs[1,1].plot(x, self.neg["z_front"],   color=PDF_GREY, lw=1.5,
                           linestyle="--", label="Frt -g (dn)")
             axs[1,1].plot(x, self.neg["z_rear"],    color="#888888", lw=1,
