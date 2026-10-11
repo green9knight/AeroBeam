@@ -1,5 +1,5 @@
 """
-AeroBeam v1.2.1 — Spar Cross-Section Library
+AeroBeam v1.2.2 — Spar Cross-Section Library
 ===========================================
 Materials, CrossSection subclasses, D-cell, geodetic panel,
 SkinPanel, WingBox, AluminumAngle, and strut material database.
