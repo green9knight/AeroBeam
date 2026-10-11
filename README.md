@@ -6,7 +6,12 @@ AeroBeam is a preliminary design tool. Do not use the results for airworthiness
 or final structural sizing without independent verification by a qualified
 aircraft structures engineer.
 
-## Install
+## Download for Windows
+
+[AeroBeam v1.2.2 portable folder](https://github.com/green9knight/AeroBeam/releases/download/v1.2.2/AeroBeam-1.2.2-windows.zip).
+Unzip it and run `AeroBeam.exe`. Python is not required.
+
+## Install from source
 
 Python 3.11 or newer. On Windows, use the official Python installer so Tkinter
 is included.
