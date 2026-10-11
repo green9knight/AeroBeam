@@ -37,27 +37,27 @@ at least one independent structural method.
 | Cantilever deflection | `_deflect_cantilever` | integrate curvature `M/EI` from root | A/B | Standard Euler-Bernoulli beam integration. Assumes small deflection and no shear deflection. |
 | Strut-braced deflection | `_deflect_strut` | root slope correction to enforce zero deflection at strut station | B | Reasonable for an ideal vertical support point. Needs expanded independent beam benchmarks and clarity that strut axial flexibility is ignored. |
 | Main strut reaction | `_support_reactions`, no jury case | root moment relief `R = M_root / strut_bl` | A/B | Standard statics for a single vertical support. Assumes vertical component only and ideal support. |
-| Jury strut as load-bearing support | `_support_reactions`, jury case | solves main/jury reactions using root moment equilibrium plus beam compatibility | C/D | Recently added based on design intuition. It is plausible but not yet benchmarked. Needs derivation, free-body diagram, and comparison to frame/beam model before production. |
-| Jury front/rear tube-link coupling | `_jury_coupling_stiffness`, `_elastic_coupled_rear_response` | same-tube front/rear jury links projected to vertical stiffness and combined as springs in series | C | Sensitivity tool for jury systems tying both spars. Link loads, Euler buckling, joints, and details remain separate. |
+| Jury strut | `_strut_effective_buckling_length`, `_jury_brace_demand` | Bruhn column brace: pin-ended Euler length is the longer segment; brace demand is 2.5% of lift-strut compression. No spar bending relief. | A/B | Matches Bruhn's lift-strut idealization. Not a second wing support. |
+| Jury front/rear tube-link stiffness | `_jury_coupling_stiffness` | same-tube front/rear jury links projected to vertical stiffness and combined as springs in series | C | Reported only. It is not applied to spar bending. The jury remains a lift-strut column brace. |
 | Strut axial load | `_strut_forces` | vertical reaction resolved by strut angle | A/B | Standard trigonometry. Assumes all vertical reaction goes through one equivalent strut member. |
 | Strut Euler buckling | `_strut_forces`, `_strut_effective_buckling_length` | `Pe = pi^2 E I / L_eff^2`; jury uses longest segment | A/B | Standard Euler column. Boundary-condition factor K is implicitly 1.0. UI/report should state pin-ended assumption. |
 | P-delta | `_pdelta` | scalar amplification `1/(1 - P/Pe)` | B/C | Recognized column amplification form, but applied globally to bending array. Needs benchmark for strut-braced wing segment and clear limits. |
 | Cross-section EI / NA | `_composite_props`, spar classes | parallel-axis theorem with transformed section | A/B | Standard for built-up sections. Needs benchmark cases for asymmetric caps, C-spar, box spar, and tube. |
 | Round tube properties | `RoundTube` | annulus area and `I = pi/64(OD^4-ID^4)` | A | Standard. |
 | Aluminum angle equivalent cap | `AluminumAngle`, GUI conversion | equivalent flat bar area for cap input | B/C | Useful approximation. Needs explicit documentation: valid for bending area approximation, not full local angle buckling/rivet design. |
-| D-cell bending contribution | `DCellSkin` / usage | simplified rectangular enclosed-area and skin elements | C | Geometry is simplified. Needs comparison to actual airfoil/D-cell geometry. |
-| Single-cell D-cell torsion | `DCellSkin.GJ` | Bredt-Batho closed thin-wall estimate | B | Bredt-Batho is standard; geometry and material shear modulus assumptions need validation. |
+| D-cell bending contribution | `DCellSkin` / usage | nose geometry from the thickness curve; bending still uses the spar section | C | The torsion nose is no longer a rectangle. Spar bending does not add the nose skin as a cap. |
+| Single-cell D-cell torsion | `DCellSkin.GJ` | Bredt-Batho on the thickness-curve nose | B | Area and skin length are integrated. The aft bay between spars remains a rectangle. |
 | Two-cell D-cell + geodetic / skin torsion | `two_cell_bredt`, `_gj_arrays` | two-cell Bredt-Batho with differing shear moduli | B/C | Method is standard for closed thin-wall cells. Geodetic equivalent skin thickness is an AeroBeam approximation and needs benchmark. |
 | Geodetic / drag-truss strip demand | `GeodeticPanel`, `_torsion` | reports shear flow, strip force, and axial stress demand using an ANC-18-style two-spar drag-truss framing plus equivalent shear thickness | C/D | Demand output only. Bond/joint/attachment sizing and local member stability are outside AeroBeam. |
 | Rib torsion demand | `_torsion` | reports required rib bay torque and front/rear attach reactions | C | Demand output only. AeroBeam no longer sizes rib geometry/materials. |
-| Rear spar load path for cantilever/single-strut | `_one_case`, `_elastic_coupled_rear_response` | rear spar beam with torsion-couple load elastically connected to front spar by distributed geodetic/skin springs | C | Scalar `kappa` blend removed; still needs quantitative calibration before using for final rear spar sizing. |
+| Rear spar load path | `_one_case` | Cantilever: both spars are root-fixed beams on their load shares. Single strut: front spar is strut-braced and the rear spar is a root-fixed beam on its own share. Dual strut: both spars share the relieved bending. | B | The distributed spring is not the load path. Aerodynamic torque stays in the torsion cell and in the rib or strip demand. |
 | Aluminum skin wing box | `SkinPanel`, `WingBox`, `_gj_arrays` | simplified skin panels and two-cell torsion | C | Partial model. Reports effective-width and cap/stringer demand only. Does not size stringers, fasteners, frames, rivets, or post-buckled diagonal tension fields. |
 | Skin compression buckling | `skin_compression_buckling` | flat plate buckling | B/C | Standard basis, but boundary conditions and post-buckled load redistribution are simplified. Report treats as warning for semi-monocoque. |
-| Web shear/bending buckling | `web_buckling`, `web_bending_buckling` | plate buckling coefficient estimates | B/C | Standard-style preliminary checks. Needs verification against Bruhn/NACA examples and correct stiffener boundary assumptions. |
+| Web shear/bending buckling | `web_buckling`, `web_bending_buckling` | Timoshenko metal plate; orthotropic long plate for wood and plywood | B | Simply supported. Solid wood uses E_T/E_L = 0.05. Plywood uses E_90/E_0 = 0.50. |
 | Cap column buckling | `cap_column_buckling` | Euler column between ribs using strong-axis assumption | C | The strong-axis/web-restraint assumption is not universally valid. Needs review for each cap attachment type. |
 | Tube wall crippling | `_compute_buckling` | simplified NASA SP-8007 style expression with imperfection factor | C | Useful warning only. Not a complete local buckling/crippling design method. |
 | Local fitting / bearing load demand | `fitting_loads`, `summary_text` | reports root, strut, and jury reaction demands plus required bearing area from a user allowable | Display | No bearing, lug, bushing, bolt, doubler, or local crush sizing is performed. |
-| Divergence | `_divergence` | closed-form divergence speed using estimated shear center | C/D | Simplified estimate. Shear center is approximate; no aeroelastic coupling/eigenvalue analysis. Must be labelled screening-only. |
+| Divergence | `_divergence`, `_shear_center_x` | uniform-wing formula with thin-wall shear center | C | Screening only, not flutter. Open tubes use the spar axis. A nose plus an aft cell uses the outer wall. |
 | Margin of safety | `_ms` | stress ratio allowables, simple combined interaction | B/C | Basic stress margin is standard; combined bending/torsion interaction is simplified and not a full failure criterion for all materials. |
 
 ## Highest-risk models to freeze or label experimental
@@ -65,16 +65,15 @@ at least one independent structural method.
 These are the places where AeroBeam currently risks sounding more authoritative
 than the model supports:
 
-1. **Rear spar coupling through geodetic/skin**
-   - Rear response now uses an elastic spring solve instead of a scalar blend.
-   - Reported `kappa` is diagnostic relative-deflection reduction, not the
-     governing solver.
-   - Needs quantitative calibration against 2-spar beam/frame or truss models.
+1. **Rear spar path**
+   - Cantilever, single-strut, and dual-strut are separate beams.
+   - Geodetic strip force is a demand. It does not spring the spars together.
+   - Joints, glue, and local strip buckling stay outside the solver.
 
-2. **Load-bearing jury strut reactions**
-   - The compatibility solve is plausible but new.
-   - Needs a clean free-body diagram, sign convention review, and comparison to
-     hand frame / finite-element beam models.
+2. **Jury strut**
+   - Treated as a Bruhn column brace on the lift strut.
+   - It does not relieve spar shear, moment, or deflection.
+   - The reported jury load is 2.5% of the negative-g lift-strut compression.
 
 3. **Geodetic / drag-truss strip demand**
    - ANC-18 is now the governing reference for wood two-spar/drag-truss framing.
@@ -122,8 +121,9 @@ Create saved `.aerobeam` files and expected numerical outputs for each:
 2. Elliptical cantilever lift case, constant EI, independent numerical check.
 3. Strut-braced beam with one ideal support, benchmark against independent
    beam/frame calculations.
-4. Strut-braced beam with load-bearing jury support, benchmark against a
-   statically indeterminate beam calculation.
+4. Jury-braced lift strut: Euler length is the longer pin-ended segment, and
+   the brace demand is 2.5% of lift-strut compression. The spar reaction is
+   unchanged.
 5. Round tube spar stress and EI, hand-calculated.
 6. Symmetric and asymmetric I-beam EI/NA, hand-calculated.
 7. Box spar EI/NA/weight, hand-calculated.
@@ -143,7 +143,7 @@ Create saved `.aerobeam` files and expected numerical outputs for each:
    - geodetic torsion sharing,
    - rib reaction demand,
    - divergence speed,
-   - load-bearing jury support until benchmarked.
+   - jury strut brace demand,
 
 2. Add a `benchmarks/` directory:
    - `cases/*.aerobeam`
@@ -169,6 +169,6 @@ Create saved `.aerobeam` files and expected numerical outputs for each:
 AeroBeam is suitable for beta exploration and comparison of concepts. It is not
 yet suitable for production structural sizing without the benchmark program
 above. The basic beam/section math is the strongest part. The coupled torsion,
-geodetic/rear-spar load-path, rib reaction demand, load-bearing jury, post-buckling, and
+geodetic/rear-spar load-path, rib reaction demand, jury-strut fittings, post-buckling, and
 divergence models require formal validation before release claims should be
 made.

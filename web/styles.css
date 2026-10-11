@@ -256,7 +256,8 @@ label {
   font-size: 0.84rem;
 }
 
-label.hidden-field {
+label.hidden-field,
+button.hidden-field {
   display: none;
 }
 

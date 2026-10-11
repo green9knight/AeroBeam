@@ -105,7 +105,7 @@ class LoadsAeroStandardsTest(unittest.TestCase):
                 **DEFAULT_INPUTS,
                 "num_points": 101,
                 "b": 200.0,
-                "strut_bl": 100.0,
+                "strut_bl": 80.0,
                 "config": "strut_braced",
             }
         )
@@ -118,8 +118,57 @@ class LoadsAeroStandardsTest(unittest.TestCase):
         self.assertFalse(warning)
         self.assertAlmostEqual(amp, 1.0 / (1.0 - 0.25))
         self.assertAlmostEqual(amplified[0], moment[0] * amp)
+        tip = int(np.argmin(np.abs(analyzer.x - analyzer.b_half)))
+        self.assertGreater(analyzer.x[tip], analyzer.strut_bl)
+        self.assertAlmostEqual(amplified[tip], moment[tip])
 
-    def test_divergence_formula_matches_current_closed_form_screening_calculation(self):
+    def test_strut_root_shear_is_lift_minus_strut_reaction(self):
+        analyzer = WingStressAnalyzer(
+            {
+                **DEFAULT_INPUTS,
+                "b": 200.0,
+                "num_points": 201,
+                "lift_distribution_type": "uniform",
+                "ng_lift": 1000.0,
+                "config": "strut_braced",
+                "front_spar_load_share": 1.0,
+                "strut_bl": 80.0,
+                "strut_fuse_bl": 0.0,
+                "jury_strut": False,
+                "secondary_bending": False,
+                "distribute_wing_weight": False,
+            }
+        )
+        analyzer.analyze()
+        reaction = analyzer.strut_summary["Fv_strut_attach"]
+        self.assertAlmostEqual(analyzer.pos["V_root"], 1000.0 - reaction, delta=5.0)
+
+    def test_tip_twist_uses_running_torque_over_gj(self):
+        analyzer = analyzer_with(
+            lift_distribution_type="uniform",
+            root_chord=48.0,
+            tip_chord=48.0,
+            taper_start_bl=100.0,
+            Cm_ac=-0.10,
+            Vd_mph=100.0,
+            altitude_ft=0.0,
+            dcell_enabled=True,
+            dcell_skin_thick=0.125,
+            wing_structure_type="fabric_buildup",
+        )
+        analyzer.analyze()
+        torsion = analyzer.torsion
+        gj = float(np.mean(analyzer.GJ))
+        # Constant-GJ check of the root-fixed integral of T(x)/GJ.
+        span = analyzer.b_half
+        torque_root = float(torsion["T_running"][0])
+        # Uniform distributed torque gives T(x) = T_root * (1 - x/L) and
+        # tip twist = T_root * L / (2 GJ).
+        expected = torque_root * span / (2.0 * gj)
+        self.assertAlmostEqual(torsion["phi"][-1], expected, delta=abs(expected) * 0.05)
+        self.assertAlmostEqual(torsion["phi"][0], 0.0)
+
+    def test_divergence_formula_matches_uniform_wing_eigenvalue(self):
         analyzer = WingStressAnalyzer(
             {
                 **DEFAULT_INPUTS,
@@ -136,12 +185,11 @@ class LoadsAeroStandardsTest(unittest.TestCase):
         gj = 2_000_000.0
         result = analyzer._divergence(gj)
         rho = isa_density(0.0)
-        c_ft = 60.0 / 12.0
-        x_ac = 0.30 * 60.0
-        x_sc = 0.20 * 60.0
-        e_ft = (x_ac - x_sc) / 12.0
-        gj_ft = gj / 144.0
-        expected_fps = math.sqrt(2.0 * gj_ft / (rho * 6.0 * e_ft * c_ft**2))
+        span = analyzer.b_half
+        c = 60.0
+        e = (0.30 - 0.20) * c
+        q_psi = (math.pi / (2.0 * span))**2 * gj / (e * c**2 * 6.0)
+        expected_fps = math.sqrt(2.0 * q_psi * 144.0 / rho)
         expected_mph = expected_fps * 3600.0 / 5280.0
 
         self.assertAlmostEqual(result["V_div"], expected_mph)

@@ -117,26 +117,7 @@ class TwoSparCouplingTest(unittest.TestCase):
         coupled_delta = np.max(np.abs(zr_c - zf_c))
         self.assertLess(coupled_delta, free_delta * 0.02)
 
-    def test_aerobeam_kappa_increases_with_geodetic_stiffness(self):
-        base = {
-            **DEFAULT_INPUTS,
-            "b": 200.0,
-            "num_points": 61,
-            "config": "cantilever",
-            "front_spar_load_share": 0.7,
-            "wing_structure_type": "fabric_buildup",
-            "dcell_enabled": True,
-            "geodetic_enabled": True,
-        }
-        low = WingStressAnalyzer({**base, "geodetic_reduction_factor": 0.25})
-        high = WingStressAnalyzer({**base, "geodetic_reduction_factor": 1.0})
-        low.analyze()
-        high.analyze()
-
-        self.assertGreater(high._geodetic_kappa, low._geodetic_kappa)
-        self.assertLessEqual(high._geodetic_kappa, 1.0)
-
-    def test_aerobeam_rear_response_uses_elastic_coupling_solver(self):
+    def test_geodetic_stiffness_does_not_change_spar_bending(self):
         base = {
             **DEFAULT_INPUTS,
             "b": 200.0,
@@ -149,15 +130,54 @@ class TwoSparCouplingTest(unittest.TestCase):
             "Vd_mph": 0.0,
             "Cm_ac": 0.0,
         }
-        weak = WingStressAnalyzer({**base, "geodetic_reduction_factor": 0.0})
-        strong = WingStressAnalyzer({**base, "geodetic_reduction_factor": 1.0})
-        weak.analyze()
-        strong.analyze()
+        low = WingStressAnalyzer({**base, "geodetic_reduction_factor": 0.25})
+        high = WingStressAnalyzer({**base, "geodetic_reduction_factor": 1.0})
+        low.analyze()
+        high.analyze()
 
-        self.assertGreater(weak.pos["z_delta_max"], strong.pos["z_delta_max"])
-        self.assertGreater(strong._geodetic_kappa, weak._geodetic_kappa)
+        self.assertEqual(low._rear_spar_path, "cantilever beam")
+        self.assertAlmostEqual(low.pos["z_delta_max"], high.pos["z_delta_max"])
+        self.assertAlmostEqual(float(np.max(np.abs(low.pos["M_rear"]))), float(np.max(np.abs(high.pos["M_rear"]))))
+        self.assertGreater(high._torsion_stiffness, low._torsion_stiffness)
 
-    def test_jury_tube_links_reduce_relative_deflection(self):
+    def test_three_configs_keep_different_rear_spar_paths(self):
+        common = {
+            **DEFAULT_INPUTS,
+            "b": 200.0,
+            "num_points": 81,
+            "front_spar_load_share": 0.7,
+            "lift_distribution_type": "uniform",
+            "ng_lift": 1000.0,
+            "distribute_wing_weight": False,
+            "strut_bl": 80.0,
+            "strut_fuse_bl": 0.0,
+            "jury_strut": False,
+            "secondary_bending": False,
+            "Vd_mph": 0.0,
+            "Cm_ac": 0.0,
+            "dcell_enabled": False,
+            "geodetic_enabled": False,
+            "num_spars": 2,
+        }
+        cantilever = WingStressAnalyzer({**common, "config": "cantilever"})
+        single = WingStressAnalyzer({**common, "config": "single_strut"})
+        dual = WingStressAnalyzer({**common, "config": "strut_braced"})
+        cantilever.analyze()
+        single.analyze()
+        dual.analyze()
+
+        self.assertEqual(cantilever._rear_spar_path, "cantilever beam")
+        self.assertEqual(single._rear_spar_path, "single-strut rear cantilever")
+        self.assertEqual(dual._rear_spar_path, "dual-strut shared bending")
+        # Cantilever rear root moment is the load share of the full cantilever moment.
+        self.assertAlmostEqual(cantilever.pos["M_rear"][0], cantilever.pos["M_front"][0] * 0.3 / 0.7, delta=1.0)
+        # Single strut relieves the front spar and leaves the rear spar cantilevered.
+        self.assertGreater(abs(single.pos["M_rear"][0]), abs(single.pos["M_front"][0]))
+        self.assertAlmostEqual(single.pos["M_rear"][0], cantilever.pos["M_rear"][0], delta=1.0)
+        # Dual strut relieves both spars, so the rear root moment is below the cantilever share.
+        self.assertLess(abs(dual.pos["M_rear"][0]), abs(cantilever.pos["M_rear"][0]))
+
+    def test_jury_brace_does_not_change_spar_bending_deflection(self):
         base = {
             **DEFAULT_INPUTS,
             "b": 200.0,
@@ -184,10 +204,11 @@ class TwoSparCouplingTest(unittest.TestCase):
         loose.analyze()
         tied.analyze()
 
-        self.assertGreater(loose.pos["z_delta_max"], tied.pos["z_delta_max"])
+        self.assertAlmostEqual(loose.pos["z_delta_max"], tied.pos["z_delta_max"])
         idx = int(np.argmin(np.abs(tied.x - 50.0)))
-        self.assertLess(abs(tied.pos["z_delta"][idx]), abs(loose.pos["z_delta"][idx]))
+        self.assertAlmostEqual(tied.pos["z_delta"][idx], loose.pos["z_delta"][idx])
         self.assertGreater(tied._jury_coupling_stiffness(), 0.0)
+        self.assertEqual(tied.pos["Fv_jury"], 0.0)
 
     def test_jury_tube_coupling_stiffness_matches_series_spring_projection(self):
         inputs = {

@@ -7,9 +7,15 @@ from spar_sections import (
     MATERIAL_DB,
     STRUT_MATERIALS,
     cap_column_buckling,
+    half_thickness_over_chord,
+    orthotropic_long_plate_compression,
+    single_cell_shear_center,
     skin_compression_buckling,
     skin_effective_width,
+    two_cell_shear_center,
     web_buckling,
+    web_bending_buckling,
+    wood_plate_constants,
     two_cell_bredt,
 )
 from wing_stress_analyzer import DEFAULT_INPUTS, WingStressAnalyzer
@@ -103,18 +109,83 @@ class StabilityTorsionStandardsTest(unittest.TestCase):
         self.assertAlmostEqual(result["P_cr"], p_cr)
         self.assertAlmostEqual(result["sigma_cr_cap"], p_cr / area)
 
-    def test_dcell_single_cell_gj_matches_bredt_batho_formula(self):
+    def test_dcell_area_comes_from_the_thickness_curve(self):
         dcell = DCellSkin(
             t_skin=0.125,
             skin_mat="Birch Plywood",
             chord_to_spar=16.0,
             t_web=0.125,
+            t_c=0.12,
+            x_t_c=0.30,
         )
-        h_spar = 6.0
-        area = 16.0 * h_spar
-        ds_over_t = 2.0 * 16.0 / 0.125 + h_spar / 0.125
-        expected = 4.0 * MATERIAL_DB["Birch Plywood"]["G"] * area**2 / ds_over_t
-        self.assertAlmostEqual(dcell.GJ(h_spar), expected)
+        h_max = 0.12 * 80.0
+        geo = dcell.nose_geometry(h_max, 1.0, n=80)
+        # Independent integral of the same thickness law, cut at the spar.
+        import numpy as np
+        xs = np.linspace(0.0, geo["x_spar"], 80)
+        chord = h_max / 0.12
+        ys = np.array([
+            0.0 if x == 0.0 else half_thickness_over_chord(x / chord, 0.12, 0.30) * chord
+            for x in xs
+        ])
+        area = 2.0 * float(np.sum((ys[1:] + ys[:-1]) * 0.5 * np.diff(xs)))
+        self.assertAlmostEqual(geo["area"], area, delta=area * 0.02)
+        self.assertLess(geo["area"], 16.0 * h_max)
+        self.assertGreater(geo["skin_length"], 2.0 * 16.0)
+        self.assertLess(geo["h_web"], h_max)
+        ds_over_t = geo["skin_length"] / 0.125 + geo["h_web"] / 0.125
+        expected = 4.0 * MATERIAL_DB["Birch Plywood"]["G"] * geo["area"] ** 2 / ds_over_t
+        self.assertAlmostEqual(dcell.GJ(h_max), expected, delta=expected * 0.01)
+
+    def test_closed_section_shear_center_follows_the_thin_wall_flow(self):
+        radius = 5.0
+        count = 120
+        circle = [
+            (radius * math.cos(2.0 * math.pi * i / count) + 3.0,
+             radius * math.sin(2.0 * math.pi * i / count))
+            for i in range(count + 1)
+        ]
+        tube = single_cell_shear_center(circle, 0.05)
+        self.assertAlmostEqual(tube["x"], 3.0, delta=0.05)
+        self.assertAlmostEqual(tube["Fy"], 1.0, delta=0.02)
+
+        dcell = DCellSkin(
+            t_skin=0.05, skin_mat="Birch Plywood",
+            chord_to_spar=12.0, t_web=0.08, t_c=0.12, x_t_c=0.30,
+        )
+        geo = dcell.nose_geometry(7.2, 1.0)
+        nose_x = dcell.shear_center_x(7.2, 1.0)
+        self.assertGreater(nose_x, 1.0)
+        self.assertLess(nose_x, geo["x_spar"])
+        self.assertNotAlmostEqual(nose_x / 60.0, 0.22, delta=0.02)
+        outer = two_cell_shear_center(
+            geo["points"], 0.05, geo["x_spar"], 36.0, geo["h_web"], 0.05, 0.05)
+        self.assertAlmostEqual(outer["Fy"], 1.0, delta=0.05)
+        self.assertGreater(outer["x"], nose_x)
+        self.assertLess(outer["x"], 36.0)
+
+    def test_wood_shear_buckling_uses_orthotropic_plate(self):
+        plywood = web_buckling(0.10, 6.0, 12.0, "Birch Plywood")
+        spruce = web_buckling(0.10, 6.0, 12.0, "Sitka Spruce")
+        self.assertEqual(plywood["plate"], "orthotropic")
+        constants = wood_plate_constants("Birch Plywood")
+        sigma_4 = orthotropic_long_plate_compression(
+            constants["E1"], constants["E2"], constants["nu12"], constants["nu21"],
+            constants["G"], 0.10, 6.0)
+        # Seydel shear stiffness is not the compression formula. It must differ
+        # from the metal plate with nu forced to 0, which was the old wood path.
+        metal_nu0 = plywood["k_s"] * math.pi ** 2 * MATERIAL_DB["Birch Plywood"]["E"] * (0.10 / 6.0) ** 2 / 12.0
+        self.assertNotAlmostEqual(plywood["tau_cr"], metal_nu0, delta=metal_nu0 * 0.05)
+        self.assertGreater(plywood["tau_cr"], spruce["tau_cr"])
+        bend = web_bending_buckling(0.10, 6.0, "Birch Plywood")
+        self.assertAlmostEqual(bend["sigma_cr_web_bending"], (23.9 / 4.0) * sigma_4, delta=sigma_4 * 0.01)
+        # Isotropic reduction of the long-plate formula is Timoshenko k = 4.
+        e = 10_000_000.0
+        nu = 0.33
+        g = e / (2.0 * (1.0 + nu))
+        iso = orthotropic_long_plate_compression(e, e, nu, nu, g, 0.10, 6.0)
+        timoshenko = 4.0 * math.pi ** 2 * e * (0.10 / 6.0) ** 2 / (12.0 * (1.0 - nu ** 2))
+        self.assertAlmostEqual(iso, timoshenko, delta=timoshenko * 0.001)
 
     def test_two_cell_bredt_satisfies_equilibrium_and_compatibility(self):
         A1 = 35.0

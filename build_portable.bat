@@ -36,7 +36,11 @@ if exist "dist\AeroBeam" (
 )
 
 REM Copy AeroBeam.ico next to the exe so iconbitmap finds it at runtime
-if exist "AeroBeam.ico" copy /Y "AeroBeam.ico" "AeroBeam_Portable\AeroBeam.ico"
+if exist "AeroBeam.ico" (
+    copy /Y "AeroBeam.ico" "AeroBeam_Portable\AeroBeam.ico"
+) else if exist "web\AeroBeam.ico" (
+    copy /Y "web\AeroBeam.ico" "AeroBeam_Portable\AeroBeam.ico"
+)
 
 echo.
 echo ================================================

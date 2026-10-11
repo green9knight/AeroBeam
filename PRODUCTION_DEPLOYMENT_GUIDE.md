@@ -1,5 +1,9 @@
 # AeroBeam Production Deployment Guide
 
+This guide describes a hosted web server that is not part of the current
+release. The supported application is the desktop program in
+`wing_stress_gui.py`, built with `build_portable.bat`.
+
 **Version:** 1.0  
 **Last Updated:** 2026-06-17
 

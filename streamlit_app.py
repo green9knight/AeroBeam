@@ -9,12 +9,18 @@ import io
 import matplotlib.pyplot as plt
 import tempfile
 import os
+from input_validation import ValidationError, validate_inputs
 from styles import apply_modern_theme
 
+_ico = None
+_favicon = "✈️"
 try:
     from PIL import Image as _PIL_Image
-    _ico = _PIL_Image.open("AeroBeam.ico").convert("RGBA")
-    _favicon = _ico
+    for _icon_path in ("AeroBeam.ico", os.path.join("web", "AeroBeam.ico")):
+        if os.path.isfile(_icon_path):
+            _ico = _PIL_Image.open(_icon_path).convert("RGBA")
+            _favicon = _ico
+            break
 except Exception:
     _ico = None
     _favicon = "✈️"
@@ -58,6 +64,11 @@ else:
     st.markdown("## ✈️ AeroBeam v1.2.1")
     st.caption("Wing Bending · Shear · Buckling · Torsion")
 
+st.caption(
+    "Preliminary design only. Not for airworthiness or final sizing. "
+    "MIT License — Copyright (c) 2026 Phil Ramer."
+)
+
 # Sidebar
 with st.sidebar:
     # Sidebar logo — same base64 approach, no clipping
@@ -89,10 +100,18 @@ with st.sidebar:
                 _inp = _sanitize_spar_inputs(_inp, "rear_spar")
                 # Store the sanitized snapshot so results match what was run
                 st.session_state.last_run_inp = dict(_inp)
+                _inp, _warnings = validate_inputs(_inp)
                 analyzer = WingStressAnalyzer(_inp)
+                analyzer.validation_warnings = _warnings
                 analyzer.analyze()
                 st.session_state.result = analyzer
+                if analyzer.validation_warnings:
+                    st.warning(
+                        "\n".join(item.message for item in analyzer.validation_warnings)
+                    )
                 st.success("Analysis complete")
+            except ValidationError as e:
+                st.error(str(e))
             except Exception as e:
                 st.error(f"Analysis error: {e}")
                 st.code(_tb.format_exc())
@@ -165,7 +184,7 @@ with st.sidebar:
 
 # Tabs
 tabs = st.tabs([
-    "Wing Geometry", "Wing Structure", "Flight & Airfoil", "Loads & Config",
+    "Wing Geometry", "Flight & Airfoil", "Loads & Config", "Wing Structure",
     "Front Spar", "Rear Spar", "Buckling",
     "Results", "Plots"
 ])
@@ -185,7 +204,7 @@ with tabs[0]:
         st.session_state.inp["front_spar_load_share"] = st.number_input("Front Spar Load Share", value=float(g("front_spar_load_share")), step=0.05, key="front_spar_load_share")
 
 # Flight & Airfoil
-with tabs[2]:
+with tabs[1]:
     st.subheader("Flight & Airfoil")
     fams = ["(All)"] + airfoil_families()
     fam = st.selectbox("Family", fams, key="af_fam")
@@ -218,12 +237,22 @@ with tabs[2]:
     st.session_state.inp["Vd_mph"] = st.number_input("Dive Speed Vd (mph)", value=float(g("Vd_mph")), key="vd")
 
 # Loads & Config
-with tabs[3]:
+with tabs[2]:
     st.subheader("Loads & Configuration")
+    _configs = ["strut_braced", "cantilever", "single_strut"]
+    _cfg = g("config", "strut_braced")
+    st.session_state.inp["config"] = st.selectbox(
+        "Configuration", _configs,
+        index=_configs.index(_cfg) if _cfg in _configs else 0,
+        key="config",
+    )
+    if st.session_state.inp["config"] != "cantilever":
+        st.session_state.inp["jury_strut"] = st.checkbox(
+            "Enable Jury Strut", value=bool(g("jury_strut", False)), key="jury_strut")
+    else:
+        st.session_state.inp["jury_strut"] = False
     st.session_state.inp["n"] = st.number_input("Load Factor (+g)", value=float(g("n")), key="n")
     st.session_state.inp["Weight"] = st.number_input("Gross Weight (lb)", value=float(g("Weight")), key="weight")
-    st.session_state.inp["config"] = st.selectbox("Configuration", ["strut_braced", "cantilever", "single_strut"], index=0, key="config")
-    st.session_state.inp["jury_strut"] = st.checkbox("Enable Jury Strut", value=bool(g("jury_strut", False)), key="jury_strut")
 
 
 # Front Spar
@@ -425,7 +454,7 @@ with tabs[5]:
         st.caption(f"Total depth = {total_hr:.3f} in")
 
 # Wing Structure
-with tabs[1]:
+with tabs[3]:
     st.subheader("Wing Structure")
 
     try:

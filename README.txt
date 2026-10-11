@@ -1,7 +1,7 @@
 AeroBeam v1.2.0  —  Wing Bending & Stress Analysis
 ====================================================
 For Ultralight and Experimental Aircraft
-© Phil Ramer  —  All rights reserved
+Copyright (c) 2026 Phil Ramer. Released under the MIT License.
 
 WHAT IT DOES
 ------------

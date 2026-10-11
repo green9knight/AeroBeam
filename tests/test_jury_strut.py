@@ -35,12 +35,19 @@ class JuryStrutTest(unittest.TestCase):
             with_jury.strut_summary["P_euler"],
             without_jury.strut_summary["P_euler"],
         )
-        self.assertGreater(with_jury.strut_summary["Fv_jury"], 0.0)
-        self.assertGreater(with_jury.strut_summary["Fv_strut_attach"], 0.0)
+        self.assertEqual(with_jury.strut_summary["Fv_jury"], 0.0)
+        self.assertAlmostEqual(
+            with_jury.strut_summary["jury_brace_load"],
+            0.025 * abs(with_jury.neg["F_axial"]),
+        )
+        self.assertAlmostEqual(
+            with_jury.strut_summary["Fv_strut_attach"],
+            without_jury.strut_summary["Fv_strut_attach"],
+        )
         station = 20
-        self.assertLess(
-            abs(with_jury.pos["M_front"][station]),
-            abs(without_jury.pos["M_front"][station]),
+        self.assertAlmostEqual(
+            with_jury.pos["M_front"][station],
+            without_jury.pos["M_front"][station],
         )
 
     def test_out_of_range_jury_bl_does_not_change_euler_length(self):

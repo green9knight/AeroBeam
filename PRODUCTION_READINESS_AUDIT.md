@@ -1,6 +1,6 @@
 # AeroBeam Production Readiness Audit
 **Date:** 2026-06-17  
-**Status:** COMPREHENSIVE REVIEW FOR PRODUCTION DEPLOYMENT
+**Status:** Historical review. The supported release is the desktop app. Input checks now run inside `WingStressAnalyzer` before an analysis.
 
 ## Executive Summary
 

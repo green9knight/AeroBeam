@@ -651,70 +651,304 @@ def get_angle(description: str) -> Optional[AluminumAngle]:
     return None
 
 
+# ─── AIRFOIL THICKNESS AND THIN-WALL SHEAR CENTER ───────────────────────────
+
+def naca4_half_thickness_ratio(x_over_c: float) -> float:
+    """Half-thickness over chord of a NACA 4-digit section with t/c = 1.
+
+    The crest is at x/c = 0.30 and the half-thickness there is 0.5, so the
+    full thickness ratio is 1. Multiply by the real t/c to scale it.
+    """
+
+    x = min(max(float(x_over_c), 1e-8), 1.0)
+    return 5.0 * (
+        0.2969 * math.sqrt(x)
+        - 0.1260 * x
+        - 0.3516 * x * x
+        + 0.2843 * x ** 3
+        - 0.1015 * x ** 4
+    )
+
+
+def half_thickness_over_chord(x_over_c: float, t_c: float, x_t_c: float) -> float:
+    """Half-thickness over chord, with the NACA crest moved to ``x_t_c``.
+
+    The airfoil table stores thickness ratio and the station of maximum
+    thickness, not coordinates. The nose used for the D-cell is this law
+    scaled to those two numbers.
+    """
+
+    x_t = min(max(float(x_t_c), 0.08), 0.60)
+    xi = min(max(float(x_over_c), 0.0), 1.0)
+    if xi <= x_t:
+        x_n = 0.30 * xi / x_t
+    else:
+        x_n = 0.30 + 0.70 * (xi - x_t) / max(1.0 - x_t, 1e-6)
+    return float(t_c) * naca4_half_thickness_ratio(x_n)
+
+
+def _segment_props(p0, p1):
+    x1, y1 = float(p0[0]), float(p0[1])
+    x2, y2 = float(p1[0]), float(p1[1])
+    dx = x2 - x1
+    dy = y2 - y1
+    ds = math.hypot(dx, dy)
+    return x1, y1, x2, y2, dx, dy, ds
+
+
+def single_cell_shear_center(points, thickness) -> dict:
+    """Shear center of one closed thin-wall cell, measured from the same origin as ``points``.
+
+    Bruhn / Megson: cut the cell at the first point, integrate the open-section
+    shear flow for a unit vertical shear, then add the constant closing flow
+    that makes the cell twist rate zero. The line of action of that flow is
+    the shear center.
+    """
+
+    pts = [(float(p[0]), float(p[1])) for p in points]
+    if len(pts) < 4:
+        return {"x": 0.0, "Fy": 0.0, "ok": False}
+    if abs(pts[0][0] - pts[-1][0]) > 1e-9 or abs(pts[0][1] - pts[-1][1]) > 1e-9:
+        pts.append(pts[0])
+    n = len(pts) - 1
+    if np.isscalar(thickness):
+        tvals = [float(thickness)] * n
+    else:
+        tvals = [float(v) for v in thickness]
+        if len(tvals) != n:
+            raise ValueError("thickness must have one value per segment")
+
+    segs = []
+    inertia = 0.0
+    for i in range(n):
+        x1, y1, x2, y2, dx, dy, ds = _segment_props(pts[i], pts[i + 1])
+        if ds < 1e-12 or tvals[i] <= 0.0:
+            continue
+        inertia += tvals[i] * ds * (y1 * y1 + y1 * y2 + y2 * y2) / 3.0
+        segs.append((x1, y1, x2, y2, dx, dy, ds, tvals[i]))
+    if inertia <= 0.0 or not segs:
+        return {"x": 0.0, "Fy": 0.0, "ok": False}
+
+    first_moment = 0.0
+    q_mid = []
+    for x1, y1, x2, y2, dx, dy, ds, t in segs:
+        q_start = -first_moment / inertia
+        dQ = t * ds * 0.5 * (y1 + y2)
+        first_moment += dQ
+        q_end = -first_moment / inertia
+        q_mid.append(0.5 * (q_start + q_end))
+
+    twist_num = 0.0
+    twist_den = 0.0
+    for q, seg in zip(q_mid, segs):
+        ds = seg[6]
+        t = seg[7]
+        twist_num += q * ds / t
+        twist_den += ds / t
+    q0 = -twist_num / max(twist_den, 1e-12)
+
+    moment = 0.0
+    fy = 0.0
+    for q, seg in zip(q_mid, segs):
+        x1, y1, x2, y2, dx, dy, ds, t = seg
+        qtot = q + q0
+        xm = 0.5 * (x1 + x2)
+        ym = 0.5 * (y1 + y2)
+        moment += qtot * (xm * dy - ym * dx)
+        fy += qtot * dy
+    if abs(fy) < 1e-8:
+        return {"x": 0.0, "Fy": fy, "ok": False}
+    return {"x": moment / fy, "Fy": fy, "ok": True}
+
+
+def rectangular_cell_shear_center(x_left: float, x_right: float, height: float) -> float:
+    """Shear center of a doubly symmetric rectangular cell. It is the centroid."""
+
+    del height
+    return 0.5 * (float(x_left) + float(x_right))
+
+
+def two_cell_shear_center(nose_points, nose_t, x_spar: float,
+                          x_rear: float, h_web: float,
+                          t_cover: float, t_rear: float) -> dict:
+    """Shear center of the outer wall of a nose plus a rectangular aft cell.
+
+    The contour is the nose skin, the aft covers, and the rear spar web.
+    That is one closed cell. The front spar web is internal to the two-cell
+    torsion model and is not part of this outer shear flow.
+    """
+
+    if h_web <= 0.0 or x_rear <= x_spar:
+        return {"x": 0.0, "Fy": 0.0, "ok": False}
+    pts = [(float(p[0]), float(p[1])) for p in nose_points]
+    if not pts:
+        return {"x": 0.0, "Fy": 0.0, "ok": False}
+    y_top = 0.5 * h_web
+    y_bot = -y_top
+    if np.isscalar(nose_t):
+        t_skin = float(nose_t)
+    else:
+        t_skin = float(nose_t[0])
+    outer = []
+    thickness = []
+    pending_t = t_skin
+    for p in pts:
+        on_web = abs(p[0] - x_spar) <= 1e-6
+        interior_web = on_web and abs(p[1]) < y_top - 1e-6
+        if interior_web:
+            continue
+        at_web_bottom = (
+            on_web and p[1] < 0.0 and outer
+            and abs(outer[-1][0] - x_spar) <= 1e-6 and outer[-1][1] > 0.0
+        )
+        if at_web_bottom:
+            for x in np.linspace(x_spar, x_rear, 9)[1:]:
+                thickness.append(t_cover)
+                outer.append((float(x), y_top))
+            for y in np.linspace(y_top, y_bot, 17)[1:]:
+                thickness.append(t_rear)
+                outer.append((float(x_rear), float(y)))
+            for x in np.linspace(x_rear, x_spar, 9)[1:-1]:
+                thickness.append(t_cover)
+                outer.append((float(x), y_bot))
+            pending_t = t_cover
+        if outer:
+            thickness.append(pending_t)
+        outer.append(p)
+        pending_t = t_skin
+    if len(outer) < 4:
+        return {"x": 0.0, "Fy": 0.0, "ok": False}
+    # The last point repeats the leading edge, so thickness has one entry per segment.
+    if len(thickness) != len(outer) - 1:
+        return {"x": 0.0, "Fy": 0.0, "ok": False}
+    return single_cell_shear_center(outer, thickness)
+
+
 # ─── D-CELL LEADING EDGE SKIN ────────────────────────────────────────────────
 
 @dataclass
 class DCellSkin:
     """
-    D-cell (leading edge closed section) from LE to front spar web.
+    D-cell from the leading edge to the front spar web.
 
-    Torsional stiffness by Bredt-Batho:
-        GJ = 4 * G * A_enclosed² / ∮(ds/t)
+    Torsional stiffness is Bredt-Batho:
+        GJ = 4 * G * A_enclosed^2 / ∮(ds/t)
 
-    A_enclosed is the dominant term — it is computed as a simple rectangle:
-        A = chord_to_spar x h_spar
-
-    This is accurate to ±5% for typical airfoils where the LE radius
-    is small relative to the D-cell width. The r_LE detail changes GJ
-    by <5% and is not worth asking the user to measure.
-
-    The user inputs they DO know:
-        chord_to_spar — front spar position x chord  (from Wing Geometry)
-        t_skin        — skin thickness (1/16" or 1/8" ply, or aluminum sheet)
-        skin_mat      — material
-        t_web         — front spar web thickness (closing wall)
+    Enclosed area and skin length come from a thickness curve scaled to the
+    stored t/c and the station of maximum thickness, cut at the front spar.
+    The aft box between the spars stays a rectangle. ``h_spar`` is the local
+    maximum thickness at the station and is not scaled a second time.
+    ``scale`` applies to root chordwise distances and to skin/web thickness.
     """
     t_skin:        float   # skin thickness [in]
     skin_mat:      str     # material name from MATERIAL_DB
     chord_to_spar: float   # chordwise distance LE → front spar web [in] (root)
     t_web:         float   # front spar web thickness [in] (rear wall of D-cell)
+    t_c:           float = 0.12
+    x_t_c:         float = 0.30
+
+    def nose_geometry(self, h_spar: float, scale: float = 1.0, n: int = 64) -> dict:
+        """Area, skin arc, spar height, and the closed-loop points of the nose cell."""
+
+        c_spar = self.chord_to_spar * scale
+        t_c = self.t_c if self.t_c > 1e-6 else 0.12
+        h_max = max(float(h_spar), 0.0)
+        local_chord = h_max / t_c
+        if c_spar <= 1e-9 or local_chord <= 1e-9:
+            return {
+                "area": 0.0, "skin_length": 0.0, "h_web": h_max,
+                "points": [(0.0, 0.0), (0.0, 0.0)], "x_spar": c_spar,
+            }
+        x_frac = min(c_spar / local_chord, 0.95)
+        c_spar = x_frac * local_chord
+        xs = np.linspace(0.0, c_spar, n)
+        ys = np.array([
+            half_thickness_over_chord(x / local_chord, t_c, self.x_t_c) * local_chord
+            for x in xs
+        ])
+        ys[0] = 0.0
+        area = 2.0 * float(np.sum((ys[1:] + ys[:-1]) * 0.5 * np.diff(xs)))
+        dx = np.diff(xs)
+        dy = np.diff(ys)
+        skin_length = 2.0 * float(np.sum(np.sqrt(dx * dx + dy * dy)))
+        h_web = 2.0 * float(ys[-1])
+        upper = list(zip(xs.tolist(), ys.tolist()))
+        lower_x = xs[::-1][1:-1]
+        lower_y = -ys[::-1][1:-1]
+        y_top = float(ys[-1])
+        # Shear flow on the web is quadratic in y, so one segment is not enough.
+        web = [(c_spar, float(y)) for y in np.linspace(y_top, -y_top, 17)[1:-1]]
+        points = (
+            upper
+            + web
+            + [(c_spar, -y_top)]
+            + list(zip(lower_x.tolist(), lower_y.tolist()))
+            + [(0.0, 0.0)]
+        )
+        return {
+            "area": area,
+            "skin_length": skin_length,
+            "h_web": h_web,
+            "points": points,
+            "x_spar": c_spar,
+        }
 
     def enclosed_area(self, h_spar: float, scale: float = 1.0) -> float:
-        """Enclosed area of D-cell [in²] — simple rectangle, accurate to ±5%."""
-        c = self.chord_to_spar * scale
-        h = h_spar * scale
-        return c * h
+        """Enclosed nose area [in²] from the thickness curve, not a rectangle."""
+        return self.nose_geometry(h_spar, scale)["area"]
 
     def ds_over_t_own(self, h_spar: float, scale: float = 1.0) -> float:
-        """
-        ∮ ds/t for D-cell perimeter EXCLUDING the shared front spar web.
-        Top skin + LE nose + bottom skin, approximated as 2 flat panels.
-        """
-        c  = self.chord_to_spar * scale
+        """∮ ds/t of the nose skin, excluding the front-spar web."""
+        skin = self.nose_geometry(h_spar, scale)["skin_length"]
         ts = self.t_skin * scale
-        return 2.0 * c / ts     # top + bottom flat runs
+        return skin / max(ts, 1e-9)
 
     def ds_over_t_web(self, h_spar: float, scale: float = 1.0) -> float:
-        """ds/t for the shared front spar web (rear wall of D-cell)."""
-        h  = h_spar * scale
+        """ds/t of the front spar web that closes the nose. Height is the airfoil at the spar."""
+        h_web = self.nose_geometry(h_spar, scale)["h_web"]
         tw = self.t_web * scale
-        return h / tw
+        return h_web / max(tw, 1e-9)
+
+    def shear_center_x(self, h_spar: float, scale: float = 1.0) -> float:
+        """Shear center of the nose cell, inches aft of the leading edge."""
+        geo = self.nose_geometry(h_spar, scale)
+        pts = geo["points"]
+        if len(pts) < 4:
+            return 0.0
+        nseg = len(pts) - 1
+        # The closing side of the stored loop is the web: last segment before
+        # the return to the leading edge is not unique. Assign web thickness
+        # to the vertical segment at the spar and skin thickness elsewhere.
+        x_spar = geo["x_spar"]
+        t_skin = self.t_skin * scale
+        t_web = self.t_web * scale
+        tvals = []
+        for i in range(nseg):
+            x1, x2 = pts[i][0], pts[i + 1][0]
+            if abs(x1 - x_spar) < 1e-6 and abs(x2 - x_spar) < 1e-6:
+                tvals.append(t_web)
+            else:
+                tvals.append(t_skin)
+        result = single_cell_shear_center(pts, tvals)
+        if not result["ok"]:
+            return 0.5 * x_spar
+        return float(result["x"])
 
     def GJ(self, h_spar: float, scale: float = 1.0) -> float:
-        """Single-cell Bredt GJ for D-cell alone [lb·in²]."""
+        """Single-cell Bredt GJ for the nose [lb·in²]."""
         G    = MATERIAL_DB[self.skin_mat]["G"]
         A_e  = self.enclosed_area(h_spar, scale)
         ds_t = self.ds_over_t_own(h_spar, scale) + self.ds_over_t_web(h_spar, scale)
+        if A_e <= 0.0 or ds_t <= 0.0:
+            return 0.0
         return 4.0 * G * A_e**2 / ds_t
 
     def weight(self, h_spar: float, b_half: float, scale_tip: float = 0.5) -> float:
         """Approximate half-span weight of D-cell skin [lb]."""
         rho   = MATERIAL_DB[self.skin_mat]["rho"]
         ts    = self.t_skin
-        c_r   = self.chord_to_spar;  h_r = h_spar
-        c_t   = c_r * scale_tip;     h_t = h_r * scale_tip
-        perim_r = 2*c_r + h_r
-        perim_t = 2*c_t + h_t
+        perim_r = self.nose_geometry(h_spar, 1.0)["skin_length"]
+        perim_t = self.nose_geometry(h_spar * scale_tip, scale_tip)["skin_length"]
         return (perim_r + perim_t) / 2 * ts * rho * b_half
 
 
@@ -832,17 +1066,8 @@ class SkinPanel:
         return 30 * self.thickness
 
     def buckling_stress(self, rib_spacing: float) -> float:
-        """
-        Critical buckling stress of flat panel [psi].
-        Simply supported on 4 sides, compression.
-        k=4.0, ν=0.33 aluminum.
-        """
-        E  = MATERIAL_DB[self.mat_name]["E"]
-        t  = self.thickness
-        b  = rib_spacing
-        nu = 0.33
-        k  = 4.0
-        return k * math.pi**2 * E * (t/b)**2 / (12 * (1 - nu**2))
+        """Critical compression stress of a flat panel [psi]. Metal and wood use different plate laws."""
+        return skin_compression_buckling(self.thickness, rib_spacing, self.mat_name)["sigma_cr_skin"]
 
     def weight_per_sqin(self) -> float:
         return self.thickness * MATERIAL_DB[self.mat_name]["rho"]
@@ -1144,67 +1369,134 @@ def shear_buckling_ks(a: float, b: float) -> float:
         return 5.34 / r**2 + 4.00   # tall panel (a < b)
 
 
+def wood_plate_constants(mat_name: str) -> dict:
+    """Orthotropic moduli for a wood or plywood panel.
+
+    Solid wood uses a Wood Handbook transverse ratio E_T/E_L = 0.05.
+    Cross-banded aircraft plywood uses E_90/E_0 = 0.50 so the cross plies
+    carry load, which the solid-wood ratio does not. In-plane G is the
+    material-table value. Poisson's ratio nu_LT = 0.30, and nu_TL follows
+    from reciprocity. These are material constants, not buckling coefficients.
+    """
+
+    mat = MATERIAL_DB[mat_name]
+    e1 = float(mat["E"])
+    plywood = "plywood" in mat_name.lower()
+    e2 = (0.50 if plywood else 0.05) * e1
+    nu12 = 0.30
+    nu21 = nu12 * e2 / max(e1, 1e-9)
+    return {
+        "E1": e1,
+        "E2": e2,
+        "G": float(mat["G"]),
+        "nu12": nu12,
+        "nu21": nu21,
+        "plywood": plywood,
+    }
+
+
+def orthotropic_plate_stiffness(e1: float, e2: float, nu12: float, nu21: float,
+                                g_lt: float, t: float) -> tuple:
+    """D1, D2, D3 of a specially orthotropic plate [lb·in]."""
+
+    denom = 12.0 * (1.0 - nu12 * nu21)
+    d1 = e1 * t ** 3 / denom
+    d2 = e2 * t ** 3 / denom
+    d3 = nu21 * d1 + 2.0 * g_lt * t ** 3 / 12.0
+    return d1, d2, d3
+
+
+def orthotropic_long_plate_compression(e1: float, e2: float, nu12: float, nu21: float,
+                                       g_lt: float, t: float, b: float) -> float:
+    """Long simply-supported orthotropic plate, compression along the stiff axis.
+
+    Lekhnitskii's minimum for a long plate. It reduces to Timoshenko's k = 4
+    result when the plate is isotropic and G = E / (2(1+nu)).
+    """
+
+    d1, d2, d3 = orthotropic_plate_stiffness(e1, e2, nu12, nu21, g_lt, t)
+    return (2.0 * math.pi ** 2 / (b ** 2 * t)) * (math.sqrt(max(d1 * d2, 0.0)) + d3)
+
+
+def _metal_plate_stress(k: float, young: float, nu: float, t: float, b: float) -> float:
+    return k * math.pi ** 2 * young * (t / b) ** 2 / (12.0 * (1.0 - nu ** 2))
+
+
 def web_buckling(t_web: float, h_web: float, stiffener_spacing: float,
                  mat_name: str) -> dict:
     """
     Shear buckling check for spar web panel.
 
-    Inputs:
-      t_web             — web thickness [in]
-      h_web             — web clear height between caps [in]
-      stiffener_spacing — c-t-c stiffener spacing along span [in]
-                          (use rib_spacing if no intermediate stiffeners)
-      mat_name          — material
-
-    Returns dict with tau_cr, k_s, aspect_ratio, MS_shear_buckling,
-    and t_min (minimum thickness to avoid buckling at the applied load).
+    Metal uses Timoshenko's isotropic plate with nu = 0.33 and the shear
+    coefficient k_s. Wood and plywood use the same k_s on Seydel's orthotropic
+    stiffness (D1 D2^3)^(1/4), not the metal formula with nu set to 0.
     """
     m   = MATERIAL_DB[mat_name]
-    E   = m["E"]; nu = 0.33 if not m["is_wood"] else 0.0
-    Fsu = m["Fsu"]
-
     a   = stiffener_spacing
     b   = h_web
     k_s = shear_buckling_ks(a, b)
-
-    tau_cr = k_s * math.pi**2 * E * (t_web / b)**2 / (12 * (1 - nu**2))
+    if m["is_wood"]:
+        c = wood_plate_constants(mat_name)
+        d1, d2, _d3 = orthotropic_plate_stiffness(
+            c["E1"], c["E2"], c["nu12"], c["nu21"], c["G"], t_web)
+        d_shear = (d1 * d2 ** 3) ** 0.25
+        tau_cr = k_s * math.pi ** 2 * d_shear / (max(t_web, 1e-12) * b ** 2)
+        plate = "orthotropic"
+    else:
+        tau_cr = _metal_plate_stress(k_s, m["E"], 0.33, t_web, b)
+        plate = "isotropic"
 
     return {
         "k_s":          k_s,
         "aspect_ratio": a / max(b, 1e-9),
         "tau_cr":       tau_cr,
         "stiffener_spacing": stiffener_spacing,
+        "plate":        plate,
     }
 
 
 def web_bending_buckling(t_web: float, h_web: float, mat_name: str) -> dict:
     """
-    Bending (compression) buckling of web under moment.
-    k_c = 23.9 for simply-supported plate in pure bending.
-    Source: Timoshenko & Gere Table 9-5
+    Bending buckling of a web under moment.
+
+    Metal: Timoshenko k_c = 23.9, nu = 0.33.
+    Wood: the same 23.9/4 ratio applied to the long-plate orthotropic
+    compression stress, so an isotropic plate still returns k_c = 23.9.
     """
     m  = MATERIAL_DB[mat_name]
-    E  = m["E"]; nu = 0.33 if not m["is_wood"] else 0.0
     k_c = 23.9
-    sigma_cr = k_c * math.pi**2 * E * (t_web / h_web)**2 / (12 * (1 - nu**2))
-    return {"k_c": k_c, "sigma_cr_web_bending": sigma_cr}
+    if m["is_wood"]:
+        c = wood_plate_constants(mat_name)
+        sigma_c = orthotropic_long_plate_compression(
+            c["E1"], c["E2"], c["nu12"], c["nu21"], c["G"], t_web, h_web)
+        sigma_cr = (k_c / 4.0) * sigma_c
+        plate = "orthotropic"
+    else:
+        sigma_cr = _metal_plate_stress(k_c, m["E"], 0.33, t_web, h_web)
+        plate = "isotropic"
+    return {"k_c": k_c, "sigma_cr_web_bending": sigma_cr, "plate": plate}
 
 
 def skin_compression_buckling(t_skin: float, b_panel: float,
                                mat_name: str, k: float = 4.0) -> dict:
     """
-    Compression buckling of flat skin panel between ribs (or nose ribs).
+    Compression buckling of a flat skin panel between ribs or nose ribs.
 
-    b_panel = shortest unsupported dimension [in]
-              For box skin: rib_spacing
-              For D-cell skin: nose_rib_spacing
-    k = 4.0 for SS all edges (conservative standard)
-    Source: NACA TN 3781, Bruhn C5
+    Metal: Timoshenko / Bruhn, simply supported, k = 4, nu = 0.33.
+    Wood and plywood: Lekhnitskii long-plate compression on the orthotropic
+    stiffness. k scales that result so k = 4 is the simply-supported case.
     """
     m  = MATERIAL_DB[mat_name]
-    E  = m["E"]; nu = 0.33 if not m["is_wood"] else 0.0
-    sigma_cr = k * math.pi**2 * E * (t_skin / b_panel)**2 / (12 * (1 - nu**2))
-    return {"sigma_cr_skin": sigma_cr, "k": k, "b_panel": b_panel}
+    if m["is_wood"]:
+        c = wood_plate_constants(mat_name)
+        sigma_4 = orthotropic_long_plate_compression(
+            c["E1"], c["E2"], c["nu12"], c["nu21"], c["G"], t_skin, b_panel)
+        sigma_cr = (k / 4.0) * sigma_4
+        plate = "orthotropic"
+    else:
+        sigma_cr = _metal_plate_stress(k, m["E"], 0.33, t_skin, b_panel)
+        plate = "isotropic"
+    return {"sigma_cr_skin": sigma_cr, "k": k, "b_panel": b_panel, "plate": plate}
 
 
 def skin_effective_width(t_skin: float, b_panel: float,

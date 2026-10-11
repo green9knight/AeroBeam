@@ -24,12 +24,6 @@ const inputSections = [
           ["lift_distribution_type", "Lift distribution", "select", ["schrenk", "elliptical", "chord_based", "uniform"]],
         ],
       },
-      {
-        title: "Spar Positions",
-        fields: [
-          ["num_spars", "Number of spars", "number", "1"],
-        ],
-      },
     ],
   },
   {
@@ -64,6 +58,28 @@ const inputSections = [
     title: "Loads & Config",
     groups: [
       {
+        title: "Configuration, Strut, Jury",
+        fields: [
+          ["config", "Configuration", "select", ["strut_braced", "cantilever", "single_strut"]],
+          ["strut_fuse_bl", "Strut BL at fuselage (in)", "number", "0.1"],
+          ["strut_bl", "Strut BL at spar (in)", "number", "0.1"],
+          ["strut_vert", "Strut rise (in)", "number", "0.1"],
+          ["strut_mat", "Strut material", "select", "strutMaterials"],
+          ["strut_tube_od", "Strut OD (in)", "number", "0.001"],
+          ["strut_tube_wall", "Strut wall (in)", "number", "0.001"],
+          ["jury_strut", "Enable jury strut", "checkbox"],
+          ["jury_spar_bl", "Jury spar BL (in)", "number", "0.1"],
+          ["jury_tube_mat", "Jury link tube material", "select", "strutMaterials"],
+          ["jury_tube_od", "Jury link tube OD (in)", "number", "0.001"],
+          ["jury_tube_wall", "Jury link tube wall (in)", "number", "0.001"],
+          ["jury_front_link_length", "Front jury link length (in)", "number", "0.1"],
+          ["jury_rear_link_length", "Rear jury link length (in)", "number", "0.1"],
+          ["jury_front_link_angle", "Front jury link angle (deg)", "number", "1"],
+          ["jury_rear_link_angle", "Rear jury link angle (deg)", "number", "1"],
+          ["secondary_bending", "P-delta amplification", "checkbox"],
+        ],
+      },
+      {
         title: "Loads",
         fields: [
           ["Weight", "Gross weight (lb)", "number", "1"],
@@ -75,42 +91,7 @@ const inputSections = [
           ["distribute_wing_weight", "Distribute wing weight relief", "checkbox"],
         ],
       },
-      {
-        title: "Configuration, Strut, Jury",
-        fields: [
-          ["config", "Configuration", "select", ["strut_braced", "cantilever", "single_strut"]],
-          ["strut_fuse_bl", "Strut BL at fuselage (in)", "number", "0.1"],
-          ["strut_bl", "Strut BL at spar (in)", "number", "0.1"],
-          ["strut_vert", "Strut rise (in)", "number", "0.1"],
-          ["strut_mat", "Strut material", "select", "strutMaterials"],
-          ["strut_tube_od", "Strut OD (in)", "number", "0.001"],
-          ["strut_tube_wall", "Strut wall (in)", "number", "0.001"],
-          ["secondary_bending", "P-delta amplification", "checkbox"],
-          ["jury_strut", "Enable jury strut", "checkbox"],
-          ["jury_spar_bl", "Jury spar BL (in)", "number", "0.1"],
-          ["jury_tube_mat", "Jury link tube material", "select", "strutMaterials"],
-          ["jury_tube_od", "Jury link tube OD (in)", "number", "0.001"],
-          ["jury_tube_wall", "Jury link tube wall (in)", "number", "0.001"],
-          ["jury_front_link_length", "Front jury link length (in)", "number", "0.1"],
-          ["jury_rear_link_length", "Rear jury link length (in)", "number", "0.1"],
-          ["jury_front_link_angle", "Front jury link angle (deg)", "number", "1"],
-          ["jury_rear_link_angle", "Rear jury link angle (deg)", "number", "1"],
-        ],
-      },
     ],
-  },
-  {
-    id: "front",
-    title: "Front Spar",
-    groups: [
-      { title: "Type & Tube", fields: sparFields("front_spar") },
-      { title: "D-cell", fields: [["dcell_enabled", "Enable D-cell", "checkbox"], ["dcell_skin_mat", "D-cell material", "select", "materials"], ["dcell_skin_thick", "D-cell skin thickness (in)", "number", "0.001"]] },
-    ],
-  },
-  {
-    id: "rear",
-    title: "Rear Spar",
-    groups: [{ title: "Type & Geometry", fields: sparFields("rear_spar") }],
   },
   {
     id: "structure",
@@ -149,6 +130,19 @@ const inputSections = [
         fields: [],
       },
     ],
+  },
+  {
+    id: "front",
+    title: "Front Spar",
+    groups: [
+      { title: "Type & Tube", fields: sparFields("front_spar") },
+      { title: "D-cell", fields: [["dcell_enabled", "Enable D-cell", "checkbox"], ["dcell_skin_mat", "D-cell material", "select", "materials"], ["dcell_skin_thick", "D-cell skin thickness (in)", "number", "0.001"]] },
+    ],
+  },
+  {
+    id: "rear",
+    title: "Rear Spar",
+    groups: [{ title: "Type & Geometry", fields: sparFields("rear_spar") }],
   },
   {
     id: "buckling",
@@ -210,7 +204,7 @@ function allInputKeys() {
   const schemaKeys = inputSections.flatMap((section) =>
     section.groups.flatMap((group) => group.fields.map((field) => field[0]))
   );
-  return [...new Set(["front_spar_percent", "rear_spar_percent", "front_spar_load_share", ...schemaKeys])];
+  return [...new Set(["num_spars", "front_spar_percent", "rear_spar_percent", "front_spar_load_share", ...schemaKeys])];
 }
 
 function sparPrefixForKey(key) {
@@ -702,10 +696,49 @@ function updateSparFieldVisibility(prefix, { prune = false } = {}) {
   });
 }
 
+function setFieldVisible(key, visible) {
+  const nodes = document.querySelectorAll(`[data-key="${key}"]`);
+  nodes.forEach((node) => {
+    const wrapper = node.closest("label") || (node.matches("label") ? node : null);
+    if (wrapper) wrapper.classList.toggle("hidden-field", !visible);
+    if (node.matches("input, select, textarea")) node.disabled = !visible;
+  });
+}
+
+function updatePrerequisiteVisibility() {
+  const config = state.inputs.config || state.defaults.config || "strut_braced";
+  const spars = Number(state.inputs.num_spars ?? state.defaults.num_spars ?? 2);
+  const hasStrut = config === "strut_braced" || config === "single_strut";
+  const twoSpars = Number.isFinite(spars) && spars >= 2;
+  const strutKeys = [
+    "strut_fuse_bl", "strut_bl", "strut_vert", "strut_mat", "strut_tube_od", "strut_tube_wall",
+    "secondary_bending", "jury_strut",
+  ];
+  const juryKeys = [
+    "jury_spar_bl", "jury_tube_mat", "jury_tube_od", "jury_tube_wall",
+    "jury_front_link_length", "jury_rear_link_length", "jury_front_link_angle", "jury_rear_link_angle",
+  ];
+  const juryOn = hasStrut && parseBool(state.inputs.jury_strut);
+  for (const key of strutKeys) setFieldVisible(key, hasStrut);
+  for (const key of juryKeys) setFieldVisible(key, juryOn);
+  setFieldVisible("rear_spar_percent", twoSpars);
+  setFieldVisible("front_spar_load_share", twoSpars);
+  if (!twoSpars) {
+    document.querySelectorAll('[data-spar-prefix="rear_spar"]').forEach((node) => {
+      const wrapper = node.closest("label");
+      if (wrapper) wrapper.classList.add("hidden-field");
+      if (node.matches("input, select, textarea")) node.disabled = true;
+    });
+  }
+  const rearButton = document.querySelector('.tab-button[data-section="rear"]');
+  if (rearButton) rearButton.classList.toggle("hidden-field", !twoSpars);
+}
+
 function updateAllSparFieldVisibility(options = {}) {
   updateSparFieldVisibility("front_spar", options);
   updateSparFieldVisibility("rear_spar", options);
   updateStructureFieldVisibility(options);
+  updatePrerequisiteVisibility();
 }
 
 function updateStructureFieldVisibility({ prune = false } = {}) {
@@ -744,6 +777,7 @@ function renderInputTabs() {
   inputSections.forEach((section, index) => {
     const button = document.createElement("button");
     button.type = "button";
+    button.dataset.section = section.id;
     button.className = `tab-button ${index === 0 ? "active" : ""}`;
     button.textContent = section.title;
     button.addEventListener("click", () => {

@@ -116,8 +116,8 @@ def _validate_geometry(inputs: Dict[str, Any], warnings: List[ValidationWarning]
         # Normalize if given as percentage
         load_share = load_share / 100.0
         inputs["front_spar_load_share"] = load_share
-    if not (0 < load_share < 1):
-        raise ValidationError(f"Front spar load share {load_share} must be between 0 and 1")
+    if not (0.0 <= load_share <= 1.0):
+        raise ValidationError(f"Front spar load share {load_share} must be from 0 to 1")
 
 
 def _validate_loads(inputs: Dict[str, Any], warnings: List[ValidationWarning]) -> None:
@@ -296,8 +296,10 @@ def _validate_flight(inputs: Dict[str, Any], warnings: List[ValidationWarning]) 
     # Speeds
     for speed_key, name in [("Vd_mph", "Dive"), ("Vc_mph", "Cruise"), ("Va_mph", "Maneuver")]:
         speed = float(inputs.get(speed_key, 0))
-        if speed <= 0:
-            raise ValidationError(f"{name} speed must be positive")
+        if speed < 0:
+            raise ValidationError(f"{name} speed cannot be negative")
+        if speed == 0:
+            warnings.append(ValidationWarning(speed_key, f"{name} speed is 0, so speed-dependent checks are skipped."))
         if speed > 500:
             warnings.append(ValidationWarning(speed_key, f"{name} speed {speed} mph is very high"))
     

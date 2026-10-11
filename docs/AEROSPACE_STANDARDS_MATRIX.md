@@ -47,12 +47,12 @@ report as one of:
 | Shear/moment integration | Beam equilibrium | Closed-form cases | STANDARD after benchmark | Validate sign and integration accuracy. |
 | Cantilever deflection | Euler-Bernoulli beam theory | Closed-form `wL^4/(8EI)` style cases | STANDARD after benchmark | Add constant-EI benchmark. |
 | Strut-braced support deflection | Indeterminate beam with point support | independent Euler-Bernoulli beam model | PRELIMINARY | Expand support reaction/deflection benchmarks. |
-| Load-bearing jury support | Indeterminate beam with two supports | Independent beam/frame model | PRELIMINARY after limited FE benchmark | Add more load/support/variable-EI cases before production. |
+| Jury strut | Bruhn column brace on the lift strut. Euler length is the longer pin-ended segment. Brace demand is 2.5% of lift-strut compression. | Bruhn, Analysis and Design of Flight Vehicle Structures, column bracing | PRELIMINARY | Do not apply the jury strut as a spar support reaction. |
 | Jury front/rear tube-link coupling | same-tube jury links projected as axial stiffness springs between spars through the strut node | independent frame/beam model | EXPERIMENTAL/PRELIMINARY | Uses `EA/L * sin²(theta)` and springs in series; link loads/Euler/joints still require separate sizing. |
 | Main strut axial load | Statics/trigonometry | Hand free-body diagram | PRELIMINARY | Add benchmark values for `Fv`, `Fa`, `Ps`. |
 | Strut Euler buckling | Euler column, assumed `K=1` | Timoshenko/Gere, Bruhn column examples | PRELIMINARY | Add K-factor input or clearly state pin-ended. |
 | Jury-braced Euler length | Column braced at intermediate point | Euler column segment length | PRELIMINARY | Benchmark longest unsupported segment logic. |
-| P-delta amplification | Beam-column amplification | Known beam-column example | EXPERIMENTAL/PRELIMINARY | Validate for strut-braced wing segment before production. |
+| P-delta amplification | Beam-column factor `1/(1-P/Pe)` on the spar segment that carries strut compression | Timoshenko beam-column | PRELIMINARY | Outboard of the strut is not amplified. |
 | Round tube section | Annulus area/I | Hand calculation | STANDARD after test | Add section benchmark. |
 | Plain rectangular section | `I = bh^3/12` | Hand calculation | STANDARD after test | Add benchmark. |
 | Built-up I-beam section | transformed section + parallel axis | Hand calculation for symmetric/asymmetric caps | PRELIMINARY | Add NA/EI benchmark. |
@@ -60,18 +60,18 @@ report as one of:
 | Aluminum C-spar section | rectangular element approximation | Hand calc + local buckling review | PRELIMINARY | Add benchmark and attachment caveat. |
 | Aluminum angle cap conversion | equivalent flat-bar area | Bruhn-style idealization or documented assumption | EXPERIMENTAL/PRELIMINARY | Validate stress and buckling idealization. |
 | D-cell bending contribution | thin skin transformed elements | Hand section calculation | EXPERIMENTAL/PRELIMINARY | Validate with real airfoil geometry. |
-| D-cell torsion | Bredt-Batho single cell | Closed-cell torsion hand example | PRELIMINARY | Add GJ/shear-flow benchmark. |
+| D-cell torsion | Bredt-Batho on a nose cut from the thickness curve | Closed-cell torsion hand example | PRELIMINARY | Area is the thickness-curve integral, not a rectangle. |
 | Two-cell torsion | Bredt-Batho multi-cell | two-cell hand example | PRELIMINARY | Add `q1/q2/GJ` benchmark. |
 | Geodetic/drag-truss strip demand and stiffness | ANC-18 two-spar/drag-truss framework; strip axial stiffness `k_s = 2 A E sin(theta) cos(theta) / s * f_red`; equivalent shear thickness used for demand reporting | ANC-18 hand examples or independent truss/shear-panel model | EXPERIMENTAL/PRELIMINARY | Reports strip force/stress demand and reduced elastic coupling estimate only; bond/joint/attachment sizing and local member stability remain outside AeroBeam. |
 | Rib torsion demand | required rib bay torque and front/rear attach reactions | independent rib design / frame model | DISPLAY/PRELIMINARY | AeroBeam reports demand only; it does not size ribs. |
-| Rear spar coupling / rear spar response | two-spar elastic spring solve using geodetic/skin distributed connection stiffness | independent two-spar + elastic-connection model | EXPERIMENTAL with trend scaffold | Scalar blend removed; elastic solve has limiting-behavior tests but still needs quantitative calibration. |
+| Rear spar response | Cantilever and single-strut: root-fixed beam loaded by its lift share. Dual strut: both spars share the relieved bending. No distributed spring. | Beam statics for each configuration | PRELIMINARY | Drag-truss strip force remains demand only. |
 | Aluminum skin buckling/effective width/cap-stringer demand | flat plate buckling plus von Karman/Winter effective-width screening | Bruhn/Niu/Megson/NACA examples | PRELIMINARY | Reports effective width, effective skin load, and remaining cap/stringer compression demand only; rivet/fastener/stringer/frame sizing remains separate. |
-| Web shear buckling | plate buckling coefficient | Bruhn/NACA example | PRELIMINARY | Add benchmark and stiffener boundary statement. |
+| Web shear buckling | Timoshenko k_s for metal; Seydel orthotropic stiffness for wood and plywood | Bruhn/NACA example | PRELIMINARY | Simply supported edges. Wood is not the metal formula with nu = 0. |
 | Web bending buckling | plate compression buckling | Bruhn/NACA example | PRELIMINARY | Add benchmark. |
 | Cap column buckling | Euler column between ribs | Bruhn/Timoshenko example | EXPERIMENTAL/PRELIMINARY | Validate axis and restraint assumptions. |
 | Tube wall crippling | simplified cylindrical shell/crippling warning | NASA SP-8007 or handbook example | EXPERIMENTAL/PRELIMINARY | Treat as warning only until validated. |
 | Local fitting / bearing load demand | free-body reaction loads at root, strut, and jury fittings plus required bearing area from user allowable | fitting design by separate standards/manual methods | DISPLAY | Reports load and required bearing-area demand only; bearing, lugs, bushings, bolts, doublers, and local tube crush sizing are outside AeroBeam. |
-| Divergence speed | simplified closed-form aeroelastic divergence | aeroelastic text example | EXPERIMENTAL | Keep labelled screening-only. |
+| Divergence speed | Uniform unswept wing, `q = (pi/(2L))^2 GJ / (e c^2 Cl_alpha)` | Bisplinghoff / Fung torsional divergence | EXPERIMENTAL | Shear center is the thin-wall flow of the closed contour, or the spar axis for an open tube. Screening only, not flutter. |
 | Margin of safety | `allowable/applied - 1` | standard stress margin definition | PRELIMINARY | Clarify allowables and ultimate vs limit load. |
 | Combined stress interaction | simplified interaction equation | material-specific failure criterion | EXPERIMENTAL/PRELIMINARY | Validate per material family. |
 
@@ -119,8 +119,8 @@ formula implementations:
 - Two-cell Bredt-Batho equilibrium and equal-twist compatibility residuals.
 - Strut axial load trigonometry.
 - Main strut single-support statics.
-- Load-bearing jury reactions for one uniform-load, constant-grid independent
-  Euler-Bernoulli beam FE case.
+- Jury strut leaves spar reactions unchanged and sets the brace demand to
+  2.5% of negative-g lift-strut compression. Euler length is the longer segment.
 - Local fitting/bearing load demand values match root, strut, and jury reaction loads.
 - Required bearing-area demand equals load divided by user allowable.
 - Independent two-spar spring FE scaffold verifies zero-coupling and
@@ -132,7 +132,7 @@ formula implementations:
 
 The following remain explicitly unvalidated/high risk:
 
-- load-bearing jury support reactions beyond the initial uniform-load FE benchmark;
+- jury-strut end fittings and the stiffness required to enforce the brace point;
 - rear spar coupling/rear spar response needs quantitative calibration against
   independent two-spar elastic-connection models;
 - rib structural sizing is not performed; AeroBeam only reports required rib

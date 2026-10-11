@@ -1,6 +1,8 @@
+import os
+import tempfile
 import unittest
 
-from web_app import report_payload
+from input_validation import ValidationError, validate_inputs
 from wing_stress_analyzer import DEFAULT_INPUTS, WingStressAnalyzer
 
 
@@ -26,8 +28,22 @@ class DefaultInputsTest(unittest.TestCase):
         analyzer.analyze()
         self.assertGreater(analyzer.sigma_max_front, 0.0)
         self.assertGreater(analyzer.strut_summary["P_euler"], 0.0)
-        pdf = report_payload({})
-        self.assertEqual(pdf[:4], b"%PDF")
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "report.pdf")
+            analyzer.export_pdf(path)
+            with open(path, "rb") as handle:
+                self.assertEqual(handle.read(4), b"%PDF")
+
+    def test_impossible_span_is_rejected(self):
+        with self.assertRaises(ValidationError):
+            validate_inputs({**DEFAULT_INPUTS, "b": -10})
+
+    def test_full_front_spar_share_and_zero_dive_speed_are_accepted(self):
+        sanitized, warnings = validate_inputs(
+            {**DEFAULT_INPUTS, "front_spar_load_share": 1.0, "Vd_mph": 0.0}
+        )
+        self.assertEqual(sanitized["front_spar_load_share"], 1.0)
+        self.assertTrue(any(item.field == "Vd_mph" for item in warnings))
 
 
 if __name__ == "__main__":

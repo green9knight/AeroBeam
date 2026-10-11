@@ -20,10 +20,17 @@ all_hiddenimports += collect_submodules('openpyxl')
 all_hiddenimports += collect_submodules('xlsxwriter')
 all_hiddenimports += ['openpyxl', 'xlsxwriter']
 
-# Include icon only if it is present next to the spec
-_spec_dir  = os.path.dirname(os.path.abspath(SPEC))
-_icon_path = os.path.join(_spec_dir, 'AeroBeam.ico')
-_icon      = _icon_path if os.path.isfile(_icon_path) else None
+# Include icon from the repo root or web/AeroBeam.ico
+_spec_dir = os.path.dirname(os.path.abspath(SPEC))
+_icon_path = None
+for _candidate in (
+    os.path.join(_spec_dir, 'AeroBeam.ico'),
+    os.path.join(_spec_dir, 'web', 'AeroBeam.ico'),
+):
+    if os.path.isfile(_candidate):
+        _icon_path = _candidate
+        break
+_icon = _icon_path
 
 if _icon:
     all_datas += [(_icon_path, '.')]

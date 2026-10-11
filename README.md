@@ -1,74 +1,70 @@
 # AeroBeam
-Wing spar design and stress analysis.
 
-## Engineering status
+Wing spar design and stress analysis for ultralight and experimental aircraft.
 
-AeroBeam is currently a beta/preliminary design tool. Do not use results for
-airworthiness or final structural sizing without independent verification by a
-qualified aircraft structures engineer.
+AeroBeam is a preliminary design tool. Do not use the results for airworthiness
+or final structural sizing without independent verification by a qualified
+aircraft structures engineer.
 
-Before relying on a result, read:
+## Install
+
+Python 3.11 or newer. On Windows, use the official Python installer so Tkinter
+is included.
+
+```bash
+python -m pip install -r requirements.txt
+```
+
+## Run the desktop app
+
+```bash
+python wing_stress_gui.py
+```
+
+The desktop app is the supported interface. It can save and open `.aerobeam`
+project files, and it can export a PDF report or an Excel workbook after an
+analysis.
+
+An optional browser interface is also included:
+
+```bash
+python -m streamlit run streamlit_app.py
+```
+
+## Build a portable Windows app
+
+From a Windows machine, with the dependencies above installed:
+
+```bat
+build_portable.bat
+```
+
+That script uses PyInstaller and `wing_stress.spec` to create
+`AeroBeam_Portable\`. The window icon is `web\AeroBeam.ico`.
+
+## Tests
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+## What the analysis covers
+
+For a strut-braced or cantilever wing, AeroBeam estimates shear, bending
+moment, deflection, bending stress, and margin of safety for the front and
+rear spars. It also estimates torsion, wing twist, buckling warnings, and a
+simplified divergence-speed screen.
+
+Read these before relying on a result:
 
 - `docs/STRUCTURAL_METHODS_AUDIT.md`
 - `docs/AEROSPACE_STANDARDS_MATRIX.md`
 - `docs/VALIDATION_PLAN.md`
+- `README.txt`
 
-## Run the web front end
+Several methods are still preliminary or experimental. The results summary
+labels them.
 
-```bash
-python3 -m pip install -r requirements.txt
-python3 web_app.py
-```
+## License
 
-Then open:
-
-```text
-http://127.0.0.1:8000
-```
-
-The web server uses the existing AeroBeam analyzer and a browser-based UI for
-quick inputs, advanced JSON inputs, summary output, and plots.
-
-The web UI can save and load input files:
-
-- **Download Inputs** saves the current setup as `aerobeam-inputs.aerobeam`.
-- **Upload Inputs** loads `.aerobeam` or `.json` files and reruns the analysis.
-
-Optional beta password protection:
-
-```bash
-AEROBEAM_BETA_PASSWORD=your-password python3 web_app.py
-```
-
-## Deploy to Render
-
-This repo includes `render.yaml` for Render Blueprint deployment.
-
-1. Push this branch to GitHub.
-2. In Render, choose **New + → Blueprint**.
-3. Select the AeroBeam repository and branch.
-4. Render will detect `render.yaml`.
-5. Set the secret environment variable:
-
-```text
-AEROBEAM_BETA_PASSWORD
-```
-
-6. Deploy and share the generated Render URL with beta testers.
-
-Render supplies the `PORT` value automatically. The app binds to `0.0.0.0` via
-the `HOST` value in `render.yaml`, and `/healthz` is used for health checks.
-
-## Run the desktop GUI
-
-Linux may need Tkinter installed first:
-
-```bash
-sudo apt-get install python3-tk
-```
-
-Then run:
-
-```bash
-python3 wing_stress_gui.py
-```
+[MIT](LICENSE). Copyright (c) 2026 Phil Ramer.

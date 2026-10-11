@@ -24,24 +24,24 @@ METHOD_STATUS = {
         "note": "Assumes ideal pin-ended column and equivalent vertical reaction.",
     },
     "jury": {
-        "status": "EXPERIMENTAL",
-        "label": "Load-bearing jury strut support",
-        "note": "Compatibility approximation; validate against independent indeterminate beam/frame model.",
+        "status": "PRELIMINARY",
+        "label": "Jury strut column brace",
+        "note": "Bruhn: a jury strut braces the lift strut. Pin-ended Euler length is the longer segment. Brace demand is 2.5% of lift-strut compression. It does not relieve spar bending.",
     },
     "pdelta": {
         "status": "PRELIMINARY",
         "label": "P-delta amplification",
-        "note": "Scalar beam-column amplification; benchmark for strut-braced wing segment required.",
+        "note": "Timoshenko beam-column factor 1/(1-P/Pe) applied only between the root and the lift strut, where the spar carries the strut compression.",
     },
     "torsion": {
         "status": "EXPERIMENTAL",
         "label": "D-cell/geodetic/rib/skin torsion sharing",
-        "note": "Bredt-Batho portions are standard; rear-spar coupling now uses an elastic spring solve but still needs calibration. Rib outputs are required reactions only, not rib sizing.",
+        "note": "Nose area and skin length come from the thickness curve. Bredt-Batho is the torsion cell. Rear-spar bending is a beam on rib reactions, separate for cantilever, single-strut, and dual-strut. Strip force is demand only.",
     },
     "buckling": {
         "status": "PRELIMINARY",
         "label": "Web, skin, cap, and tube buckling warnings",
-        "note": "Plate/column screening checks; boundary-condition benchmarks required.",
+        "note": "Metal plates use Timoshenko. Wood and plywood use an orthotropic long-plate formula. Boundary conditions remain simply supported screening checks.",
     },
     "fittings": {
         "status": "DISPLAY",
@@ -51,7 +51,7 @@ METHOD_STATUS = {
     "divergence": {
         "status": "EXPERIMENTAL",
         "label": "Divergence speed screening",
-        "note": "Simplified closed-form estimate with approximate shear center; not flutter analysis.",
+        "note": "Uniform-wing torsional divergence, q = (pi/(2L))^2 * GJ / (e c^2 Cl_alpha). Shear center is the thin-wall shear flow of the closed contour, or the spar axis if the wing is an open tube. Screening only, not flutter.",
     },
 }
 

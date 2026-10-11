@@ -19,6 +19,7 @@ if sys.platform == "win32":
     try: ctypes.windll.shcore.SetProcessDpiAwareness(1)
     except: pass
 
+from input_validation import ValidationError, validate_inputs
 from wing_stress_analyzer import WingStressAnalyzer, DEFAULT_INPUTS, dynamic_pressure_psi
 from spar_sections import (
     MATERIAL_DB, STRUT_MATERIALS, ALUMINUM_ANGLES, ANGLE_DESCRIPTIONS,
@@ -27,7 +28,7 @@ from spar_sections import (
 from airfoil_database import AIRFOIL_DB, get_airfoil
 from common_tube_spars import COMMON_TUBE_SIZES, get_tube_by_description
 
-VERSION = "1.2.0"
+VERSION = "1.2.1"
 APP_TITLE = f"AeroBeam v{VERSION}  —  Phil Ramer"
 
 # Colour tags for summary panel
@@ -480,10 +481,16 @@ class WingStressGUI:
 
         # Icon
         try:
-            base = (os.path.dirname(sys.executable) if getattr(sys,"frozen",False)
-                    else os.path.dirname(os.path.abspath(__file__)))
-            ico = os.path.join(base, "AeroBeam.ico")
-            if os.path.isfile(ico): self.root.iconbitmap(ico)
+            if getattr(sys, "frozen", False):
+                bases = [os.path.dirname(sys.executable)]
+            else:
+                here = os.path.dirname(os.path.abspath(__file__))
+                bases = [here, os.path.join(here, "web")]
+            for base in bases:
+                ico = os.path.join(base, "AeroBeam.ico")
+                if os.path.isfile(ico):
+                    self.root.iconbitmap(ico)
+                    break
         except: pass
 
         self.analyzer    = None
@@ -576,7 +583,7 @@ class WingStressGUI:
         ttk.Separator(btn_row, orient="vertical").pack(side=tk.LEFT, fill=tk.Y, pady=3, padx=4)
         ttk.Button(btn_row, text="⟳ Reset", command=self._populate_defaults
                    ).pack(side=tk.LEFT, padx=2)
-        ttk.Button(btn_row, text="✈ Geometry", command=self._plot_geometry
+        ttk.Button(btn_row, text="✈ Geometry", command=self._show_geometry
                    ).pack(side=tk.LEFT, padx=2)
         
         # Right-aligned buttons
@@ -610,27 +617,61 @@ class WingStressGUI:
         for tag_name, tag_config in tag_configs:
             self._summary_text.tag_configure(tag_name, **tag_config)
 
+    def _embed_figure(self, fig, parent):
+        """Put a figure in a tab and let the tab set its size.
+
+        ``place`` keeps the canvas from requesting the figure's pixel size,
+        which otherwise grows the window and leaves the drawing clipped until
+        someone resizes it by hand.
+        """
+        holder = ttk.Frame(parent)
+        holder.pack(fill=tk.BOTH, expand=True)
+        canvas = FigureCanvasTkAgg(fig, master=holder)
+        widget = canvas.get_tk_widget()
+        widget.place(relx=0, rely=0, relwidth=1, relheight=1)
+        fig.canvas.mpl_connect("resize_event", self._relayout_figure)
+        return canvas
+
+    def _relayout_figure(self, event):
+        fig = event.canvas.figure
+        if fig.bbox.width < 40 or fig.bbox.height < 40:
+            return
+        try:
+            fig.tight_layout(pad=1.1)
+        except Exception:
+            pass
+
     def _create_plots_tab(self, notebook):
         """Create the Plots tab with matplotlib figure."""
         plot_tab = ttk.Frame(notebook)
         notebook.add(plot_tab, text="Plots")
         
         # Use Figure directly — no pyplot global state contamination
-        self._fig = Figure(figsize=(9, 6))
+        self._fig = Figure(figsize=(5, 3.5))
         self._fig.patch.set_facecolor("#1e2128")
         self._axes = self._fig.subplots(2, 2)
-        self._fig.tight_layout(pad=2.5)
-        self._canvas_plt = FigureCanvasTkAgg(self._fig, master=plot_tab)
-        self._canvas_plt.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+        self._canvas_plt = self._embed_figure(self._fig, plot_tab)
+
+    def _create_geometry_tab(self, notebook):
+        """Plan and elevation, drawn in the results pane instead of a popup."""
+        self._geo_tab = ttk.Frame(notebook)
+        notebook.add(self._geo_tab, text="Geometry")
+        self._geo_fig = Figure(figsize=(5, 3.5))
+        self._geo_fig.patch.set_facecolor("#1e2128")
+        self._geo_ax_top = self._geo_fig.add_subplot(211)
+        self._geo_ax_side = self._geo_fig.add_subplot(212)
+        self._canvas_geo = self._embed_figure(self._geo_fig, self._geo_tab)
+        self._draw_geometry_figure()
 
     def _create_results_notebook(self, parent):
-        """Create and return the results notebook with Summary and Plots tabs."""
+        """Create and return the results notebook with Summary, Plots, and Geometry."""
         nb = ttk.Notebook(parent)
         nb.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
         
         # Create tabs
         self._create_summary_tab(nb)
         self._create_plots_tab(nb)
+        self._create_geometry_tab(nb)
         
         return nb
 
@@ -682,8 +723,7 @@ class WingStressGUI:
 
         tabs = {}
         for name in ("Wing Geometry", "Flight & Airfoil", "Loads & Config",
-                     "Front Spar", "Rear Spar",
-                     "Wing Structure", "Buckling"):
+                     "Wing Structure", "Front Spar", "Rear Spar", "Buckling"):
             frm = ttk.Frame(nb, padding=4)
             nb.add(frm, text=name)
             frm.columnconfigure(0, weight=0)   # label column — fixed width
@@ -753,14 +793,14 @@ class WingStressGUI:
         self._front_tube_frame.columnconfigure(0, weight=0)
         self._front_tube_frame.columnconfigure(1, weight=1)
         tf = self._front_tube_frame
-        self._le(tf,"OD (in):","front_spar_od",3.0,row=0)
-        self._le(tf,"Wall (in):","front_spar_wall",0.065,row=1)
-        self._lc(tf,"Material:","front_spar_mat",aluminum_mat_names(),"6061-T6",row=2)
         tube_descs = ["(Manual)"] + [str(t) for t in COMMON_TUBE_SIZES]
         self._front_tube_sel = tk.StringVar(value="(Manual)")
-        ttk.Label(tf,text="Quick-select:").grid(row=3,column=0,sticky="e",padx=3,pady=2)
+        ttk.Label(tf,text="Quick-select:").grid(row=0,column=0,sticky="e",padx=3,pady=2)
         ttk.Combobox(tf,textvariable=self._front_tube_sel,values=tube_descs,
-                     width=28,state="readonly").grid(row=3,column=1,sticky="w",padx=3,pady=2)
+                     width=28,state="readonly").grid(row=0,column=1,sticky="w",padx=3,pady=2)
+        self._le(tf,"OD (in):","front_spar_od",3.0,row=1)
+        self._le(tf,"Wall (in):","front_spar_wall",0.065,row=2)
+        self._lc(tf,"Material:","front_spar_mat",aluminum_mat_names(),"6061-T6",row=3)
         self._front_tube_sel.trace_add("write", lambda *_: self._on_tube_sel("front"))
 
         # Built-up fields
@@ -779,7 +819,7 @@ class WingStressGUI:
         df.columnconfigure(0, weight=0); df.columnconfigure(1, weight=1)
         self._lc(df,"Skin material:","dcell_skin_mat",all_mat_names(),"Birch Plywood",row=0)
         self._le(df,"Skin thickness (in):","dcell_skin_thick",0.0625,row=1)
-        # Live enclosed area display — A = front_spar% × chord × airfoil_t/c × chord
+        # Live enclosed area from the airfoil thickness curve, same as the solver
         self._dcell_area_var = tk.StringVar(value="")
         ttk.Label(df,text="Enclosed area (auto):").grid(row=2,column=0,sticky="e",padx=3,pady=2)
         ttk.Label(df,textvariable=self._dcell_area_var,foreground="#005500",
@@ -816,14 +856,14 @@ class WingStressGUI:
         self._rear_tube_frame.columnconfigure(0, weight=0)
         self._rear_tube_frame.columnconfigure(1, weight=1)
         tf = self._rear_tube_frame
-        self._le(tf,"OD (in):","rear_spar_od",2.0,row=0)
-        self._le(tf,"Wall (in):","rear_spar_wall",0.065,row=1)
-        self._lc(tf,"Material:","rear_spar_mat",aluminum_mat_names(),"6061-T6",row=2)
         tube_descs = ["(Manual)"] + [str(t) for t in COMMON_TUBE_SIZES]
         self._rear_tube_sel = tk.StringVar(value="(Manual)")
-        ttk.Label(tf,text="Quick-select:").grid(row=3,column=0,sticky="e",padx=3,pady=2)
+        ttk.Label(tf,text="Quick-select:").grid(row=0,column=0,sticky="e",padx=3,pady=2)
         ttk.Combobox(tf,textvariable=self._rear_tube_sel,values=tube_descs,
-                     width=28,state="readonly").grid(row=3,column=1,sticky="w",padx=3,pady=2)
+                     width=28,state="readonly").grid(row=0,column=1,sticky="w",padx=3,pady=2)
+        self._le(tf,"OD (in):","rear_spar_od",2.0,row=1)
+        self._le(tf,"Wall (in):","rear_spar_wall",0.065,row=2)
+        self._lc(tf,"Material:","rear_spar_mat",aluminum_mat_names(),"6061-T6",row=3)
         self._rear_tube_sel.trace_add("write", lambda *_: self._on_tube_sel("rear"))
 
         # Built-up
@@ -1183,8 +1223,8 @@ class WingStressGUI:
         self._strut_frame.grid(row=row(), column=0, columnspan=4, sticky="ew")
         
         sf = self._strut_frame
-        self._le(sf, "Strut BL at spar (in):", "strut_bl", 104.0, row=0)
-        self._le(sf, "Strut BL at fuselage (in):", "strut_fuse_bl", 0.0, row=1)
+        self._le(sf, "Strut BL at fuselage (in):", "strut_fuse_bl", 0.0, row=0)
+        self._le(sf, "Strut BL at spar (in):", "strut_bl", 104.0, row=1)
         self._le(sf, "Strut rise (in):", "strut_vert", 44.0, row=2)
         self._lc(sf, "Strut material:", "strut_mat", strut_mat_names(),
                  "4130 Chromoly (normalized)", row=3, width=28)
@@ -1218,10 +1258,17 @@ class WingStressGUI:
                    "secondary_bending", False, row=row())
 
     def _build_jury_strut_section(self, parent, row):
-        """Build jury strut configuration section."""
-        section_label(parent, "Jury Strut", row=row())
-        self._lchk(parent, "Enable jury strut", "jury_strut", False, row=row())
-        self._le(parent, "Jury spar BL (in):", "jury_spar_bl", 60.0, row=row())
+        """Build jury strut configuration section.
+
+        The jury braces the lift strut, so this block follows the strut
+        stations and is hidden on a cantilever wing.
+        """
+        self._jury_frame = ttk.Frame(parent)
+        self._jury_frame.grid(row=row(), column=0, columnspan=4, sticky="ew")
+        jf = self._jury_frame
+        section_label(jf, "Jury Strut", row=0)
+        self._lchk(jf, "Enable jury strut", "jury_strut", False, row=1)
+        self._le(jf, "Jury spar BL (in):", "jury_spar_bl", 60.0, row=2)
 
 
     # ── Loads & Config tab ───────────────────────────────────────────────────
@@ -1231,20 +1278,12 @@ class WingStressGUI:
         self._configure_tab_grid(f)
         row = RowCounter()
         
-        # Gross Weight & Loads section
-        self._build_loads_section(f, row)
-        
-        # Configuration section
+        # Configuration decides whether a lift strut, and then a jury, exist.
         self._build_config_section(f, row)
-        
-        # Strut frame
         self._build_strut_frame(f, row)
-        
-        # Secondary Bending section
-        self._build_secondary_bending_section(f, row)
-        
-        # Jury Strut section
         self._build_jury_strut_section(f, row)
+        self._build_secondary_bending_section(f, row)
+        self._build_loads_section(f, row)
         
         self._refresh_config()
         self._update_strut_info()
@@ -1308,6 +1347,7 @@ class WingStressGUI:
         self._le(f,"t/c:","airfoil_t_c",0.12,row=r); r+=1
         # Re-propose spar heights when t/c is edited manually
         self._vars["airfoil_t_c"].trace_add("write", self._repropose_h_web)
+        self._vars["airfoil_t_c"].trace_add("write", lambda *_: self._update_dcell_area())
 
         self._airfoil_info = tk.StringVar(value="")
         ttk.Label(f,textvariable=self._airfoil_info,foreground="#444",
@@ -1411,6 +1451,9 @@ class WingStressGUI:
         if hasattr(self, "_strut_frame"):
             if has_strut: self._strut_frame.grid()
             else:         self._strut_frame.grid_remove()
+        if hasattr(self, "_jury_frame"):
+            if has_strut: self._jury_frame.grid()
+            else:         self._jury_frame.grid_remove()
 
     def _update_geodetic_info(self):
         try:
@@ -1429,15 +1472,26 @@ class WingStressGUI:
             t_c    = float(self._vars["airfoil_t_c"].get())
             t_skin = float(self._vars["dcell_skin_thick"].get())
             mat    = self._vars["dcell_skin_mat"].get()
-            from spar_sections import MATERIAL_DB
-            G      = MATERIAL_DB.get(mat, {}).get("G", 80000)
-            c2s    = fp_pct * chord
-            h_spar = t_c * chord
-            A      = c2s * h_spar
-            ds_t   = 2*c2s/t_skin + h_spar/max(t_skin, 0.001)
-            GJ     = 4 * G * A**2 / max(ds_t, 1)
-            txt    = "%.1f in2  (%.1f wide x %.1f deep)   GJ ~= %s lb.in2" % (
-                     A, c2s, h_spar, "{:,.0f}".format(GJ))
+            from spar_sections import DCellSkin
+            af = get_airfoil(self._vars["airfoil"].get()) if "airfoil" in self._vars else None
+            x_t_c = float((af or {}).get("x_t_c") or 0.30)
+            tw = 0.0
+            web = self._vars.get("front_spar_t_web")
+            wall = self._vars.get("front_spar_wall")
+            if web is not None:
+                tw = float(web.get() or 0)
+            if tw <= 0 and wall is not None:
+                tw = float(wall.get() or 0)
+            if tw <= 0:
+                tw = 0.125
+            c2s = fp_pct * chord
+            cell = DCellSkin(
+                t_skin=t_skin, skin_mat=mat, chord_to_spar=c2s,
+                t_web=tw, t_c=t_c, x_t_c=x_t_c)
+            geo = cell.nose_geometry(t_c * chord)
+            txt = "%.1f in2  (nose to %.1f in, web %.1f in)   GJ ~= %s lb.in2" % (
+                geo["area"], geo["x_spar"], geo["h_web"],
+                "{:,.0f}".format(cell.GJ(t_c * chord)))
             self._dcell_area_var.set(txt)
         except (ValueError, KeyError, ZeroDivisionError, AttributeError):
             pass
@@ -1666,14 +1720,24 @@ class WingStressGUI:
         self.root.update_idletasks()
         try:
             inp = self._collect()
+            inp, warnings = validate_inputs(inp)
             self.analyzer = WingStressAnalyzer(inp)
+            self.analyzer.validation_warnings = warnings
             self.analyzer.analyze()
             self._show_summary()
             self._update_plots()
             self._nb.select(0)
-            self.status_var.set("Analysis complete.")
-            # Auto-show wing geometry after successful analysis
-            self.root.after(100, self._plot_geometry)
+            warnings = self.analyzer.validation_warnings
+            if warnings:
+                note = "; ".join(item.message for item in warnings[:3])
+                self.status_var.set(f"Analysis complete. Check input warnings: {note}")
+            else:
+                self.status_var.set("Analysis complete.")
+            # Show the wing in the Geometry tab once the pane has its size.
+            self.root.after(100, self._show_geometry)
+        except ValidationError as exc:
+            messagebox.showerror("Input Error", str(exc))
+            self.status_var.set("Input error — see dialog.")
         except Exception:
             tb = traceback.format_exc()
             messagebox.showerror("Analysis Error", tb)
@@ -1796,39 +1860,32 @@ class WingStressGUI:
         self._canvas_plt.draw()
         self._nb.select(1)
 
-    def _plot_geometry(self):
+    def _show_geometry(self):
+        """Select the Geometry tab and draw the current wing into it."""
+        self._nb.select(self._geo_tab)
+        self.root.update_idletasks()
+        self._draw_geometry_figure()
+
+    def _draw_geometry_figure(self):
+        top, side = self._geo_ax_top, self._geo_ax_side
+        top.clear()
+        side.clear()
         if self.analyzer is None:
-            messagebox.showinfo("Info","Run analysis first.")
-            return
-        from matplotlib.figure import Figure
-        from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
-
-        win = tk.Toplevel(self.root)
-        win.title("AeroBeam  Wing Geometry")
-        win.configure(bg=C_HEADER_BG)
-
-        # Pack canvas first so it gets full window space
-        toolbar_frame = tk.Frame(win, bg=C_HEADER_BG)
-        toolbar_frame.pack(side=tk.TOP, fill=tk.X)
-
-        # Use a large initial figsize — canvas will scale it to fit anyway
-        fig = Figure(figsize=(20, 12), facecolor="#1e2128")
-        ax_top  = fig.add_subplot(211)
-        ax_side = fig.add_subplot(212)
-        self.analyzer.draw_geometry(ax_top, ax_side)
-        fig.subplots_adjust(hspace=0.38, left=0.06, right=0.97, top=0.95, bottom=0.07)
-
-        canvas = FigureCanvasTkAgg(fig, master=win)
-        toolbar = NavigationToolbar2Tk(canvas, toolbar_frame)
-        toolbar.update()
-        canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-
-        # Maximise — canvas fills automatically because expand=True
-        try:    win.state("zoomed")
-        except: win.geometry("1400x900")
-
-        # Single deferred draw after window is fully laid out
-        win.after(200, canvas.draw)
+            for ax in (top, side):
+                ax.set_facecolor("#252930")
+                ax.tick_params(colors="#B9BCC2", labelcolor="#B9BCC2")
+                for spine in ax.spines.values():
+                    spine.set_color("#6E7F87")
+                ax.set_xticks([])
+                ax.set_yticks([])
+            top.set_title("Run analysis to draw the wing", color="#e8eaf0")
+        else:
+            self.analyzer.draw_geometry(top, side)
+        try:
+            self._geo_fig.tight_layout(pad=1.1)
+        except Exception:
+            pass
+        self._canvas_geo.draw_idle()
 
     # ── Save / Load ───────────────────────────────────────────────────────────
 
@@ -1956,8 +2013,9 @@ class WingStressGUI:
 
         data["num_spars"] = 2
 
-        with open(path, "w") as fh:
+        with open(path, "w", encoding="utf-8") as fh:
             json.dump(data, fh, indent=2, default=str)
+        self._set_status(f"Saved {path}", C_GREEN)
 
     def _coerce_to_bool(self, value):
         """Convert value to boolean, handling string representations."""
@@ -1990,7 +2048,6 @@ class WingStressGUI:
         lsf = data.get("front_spar_load_share", 0.55)
         if isinstance(lsf, (int, float)) and lsf > 1.0:
             data["front_spar_load_share"] = lsf / 100.0
-        self._set_status(f"Saved {path}", C_GREEN)
 
     def _open(self):
         path = filedialog.askopenfilename(
@@ -2009,17 +2066,25 @@ class WingStressGUI:
     def _save(self):
         if not self.current_file:
             self._save_as()
-        else:
+            return
+        try:
             self._write_file(self.current_file)
+        except Exception:
+            messagebox.showerror("Save Error", traceback.format_exc())
 
     def _save_as(self):
         path = filedialog.asksaveasfilename(
             defaultextension=".aerobeam",
             filetypes=[("AeroBeam project","*.aerobeam"),("JSON","*.json")])
-        if path:
+        if not path:
+            return
+        try:
             self._write_file(path)
-            self.current_file = path
-            self.root.title(f"{APP_TITLE}  —  {os.path.basename(path)}")
+        except Exception:
+            messagebox.showerror("Save Error", traceback.format_exc())
+            return
+        self.current_file = path
+        self.root.title(f"{APP_TITLE}  —  {os.path.basename(path)}")
 
     # ── Export ────────────────────────────────────────────────────────────────
 
@@ -2057,7 +2122,8 @@ class WingStressGUI:
         msg = (f"AeroBeam v{VERSION}\n"
                f"Wing Bending & Stress Analysis\n"
                f"for Ultralight & Experimental Aircraft\n\n"
-               f"© Phil Ramer — All rights reserved\n\n"
+               f"Copyright (c) 2026 Phil Ramer\n"
+               f"Released under the MIT License.\n\n"
                f"Divergence speed check included.\n"
                f"Results are for preliminary design only.\n"
                f"Verify all results with a licensed engineer.")

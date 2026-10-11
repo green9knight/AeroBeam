@@ -74,8 +74,8 @@ class TorsionCouplingTest(unittest.TestCase):
 
         self.assertGreater(analyzer._torsion_stiffness, 0.0)
         self.assertEqual(analyzer._torsion_stiffness, analyzer._torsion_transfer["k_total"])
-        self.assertGreater(analyzer._geodetic_kappa, 0.0)
-        self.assertLessEqual(analyzer._geodetic_kappa, 1.0)
+        self.assertEqual(analyzer._rear_spar_path, "single-strut rear cantilever")
+        self.assertGreater(analyzer.torsion["geodetic_strip_force"], 0.0)
 
     def test_geodetic_reduction_factor_changes_transfer_stiffness(self):
         base_inputs_dict = base_inputs(
@@ -92,7 +92,7 @@ class TorsionCouplingTest(unittest.TestCase):
         high.analyze()
 
         self.assertGreater(high._torsion_stiffness, low._torsion_stiffness)
-        self.assertGreater(high._geodetic_kappa, low._geodetic_kappa)
+        self.assertAlmostEqual(low.pos["z_max_rear"], high.pos["z_max_rear"])
 
 
 if __name__ == "__main__":

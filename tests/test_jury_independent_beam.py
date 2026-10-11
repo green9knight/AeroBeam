@@ -213,7 +213,7 @@ class JuryIndependentBeamTest(unittest.TestCase):
         )
         self.assertAlmostEqual(analyzer.pos["z_front"][-1], fe_z[-1], delta=abs(fe_z[-1]) * 0.06)
 
-    def test_jury_reactions_match_independent_beam_model_for_uniform_case(self):
+    def test_jury_brace_does_not_change_spar_support_reaction(self):
         inputs = dict(DEFAULT_INPUTS)
         inputs.update(
             {
@@ -227,33 +227,31 @@ class JuryIndependentBeamTest(unittest.TestCase):
                 "front_spar_load_share": 1.0,
                 "strut_fuse_bl": 0.0,
                 "strut_bl": 80.0,
-                "jury_strut": True,
-                "jury_spar_bl": 40.0,
+                "jury_strut": False,
                 "secondary_bending": False,
                 "distribute_wing_weight": False,
                 "dcell_enabled": False,
                 "geodetic_enabled": False,
             }
         )
-        analyzer = WingStressAnalyzer(inputs)
-        analyzer.analyze()
+        plain = WingStressAnalyzer(inputs)
+        plain.analyze()
+        braced = WingStressAnalyzer({**inputs, "jury_strut": True, "jury_spar_bl": 40.0})
+        braced.analyze()
 
-        reactions = beam_fe_support_reactions(
-            analyzer.x,
-            analyzer._lift_dist(inputs["ng_lift"]),
-            analyzer._EI_f,
-            [0.0, inputs["jury_spar_bl"], inputs["strut_bl"]],
-        )
-
+        self.assertEqual(braced.strut_summary["Fv_jury"], 0.0)
         self.assertAlmostEqual(
-            analyzer.strut_summary["Fv_jury"],
-            reactions[inputs["jury_spar_bl"]],
-            delta=abs(reactions[inputs["jury_spar_bl"]]) * 0.05,
+            braced.strut_summary["Fv_strut_attach"],
+            plain.strut_summary["Fv_strut_attach"],
         )
+        self.assertAlmostEqual(braced.pos["M_front"][10], plain.pos["M_front"][10])
         self.assertAlmostEqual(
-            analyzer.strut_summary["Fv_strut_attach"],
-            reactions[inputs["strut_bl"]],
-            delta=abs(reactions[inputs["strut_bl"]]) * 0.05,
+            braced.strut_summary["jury_brace_load"],
+            0.025 * abs(braced.neg["F_axial"]),
+        )
+        self.assertLess(
+            braced.strut_summary["effective_length"],
+            plain.strut_summary["effective_length"],
         )
 
 

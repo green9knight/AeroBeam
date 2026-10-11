@@ -48,7 +48,7 @@ Each expected file should contain only defensible values and tolerances:
 3. Schrenk lift, compare to independent numerical integration / accepted
    aeronautical structures examples.
 4. Strut-braced single support, compare to independent beam/frame calculations.
-5. Strut-braced plus jury support, compare to an independent beam model.
+5. Jury-braced lift strut, compare Euler length and 2.5% brace demand to Bruhn. The jury strut is not a spar support.
 6. Jury front/rear tube-link coupling, compare to an independent frame/beam
    model with the same tube axial stiffness and link geometry.
 
@@ -124,7 +124,7 @@ Current coverage:
 - single-cell D-cell Bredt-Batho `GJ`.
 - two-cell Bredt-Batho equilibrium and equal-twist compatibility residuals.
 - geodetic strip force consistency with the equivalent shear thickness relation.
-- geodetic axial-strip shear stiffness formula and reduction-factor sensitivity.
+- geodetic axial-strip shear stiffness formula. The reduction factor does not change spar bending.
 - dynamic pressure `q = 1/2 rho V^2`;
 - lift distributions integrate to requested total lift;
 - chord-based lift follows chord ratio;
@@ -132,8 +132,8 @@ Current coverage:
   expected uniform-load amounts;
 - strut axial load trigonometry;
 - main strut single-support static reaction;
-- load-bearing jury support reactions for one independent Euler-Bernoulli beam
-  finite-element benchmark;
+- jury strut column brace: spar reaction unchanged, Euler length reduced to
+  the longer segment, brace demand equal to 2.5% of negative-g compression;
 - P-delta scalar amplification formula;
 - divergence screening formula arithmetic.
 

@@ -22,7 +22,9 @@ class FittingDemandTest(unittest.TestCase):
         self.assertAlmostEqual(demands["front_root_vertical"], abs(analyzer.pos["V_root"] * analyzer.lsf))
         self.assertAlmostEqual(demands["rear_root_vertical"], abs(analyzer.pos["V_root"] * analyzer.rsf))
         self.assertAlmostEqual(demands["main_strut_vertical"], abs(analyzer.pos["Fv_strut_attach"]))
-        self.assertAlmostEqual(demands["jury_vertical"], abs(analyzer.pos["Fv_jury"]))
+        self.assertEqual(analyzer.pos["Fv_jury"], 0.0)
+        self.assertAlmostEqual(demands["jury_vertical"], analyzer.strut_summary["jury_brace_load"])
+        self.assertGreater(demands["jury_vertical"], 0.0)
         self.assertAlmostEqual(demands["main_strut_axial"], abs(analyzer.pos["F_axial"]))
         self.assertAlmostEqual(
             demands["front_root_vertical_bearing_area_required"],
