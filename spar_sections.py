@@ -925,7 +925,8 @@ def rectangular_cell_shear_center(x_left: float, x_right: float, height: float) 
 
 def two_cell_shear_center(nose_points, nose_t, x_spar: float,
                           x_rear: float, h_web: float,
-                          t_cover: float, t_rear: float) -> dict:
+                          t_cover: float, t_rear: float,
+                          t_cover_bot: float = None) -> dict:
     """Shear center of the outer wall of a nose plus a rectangular aft cell.
 
     The contour is the nose skin, the aft covers, and the rear spar web.
@@ -935,6 +936,8 @@ def two_cell_shear_center(nose_points, nose_t, x_spar: float,
 
     if h_web <= 0.0 or x_rear <= x_spar:
         return {"x": 0.0, "Fy": 0.0, "ok": False}
+    t_top = max(float(t_cover), 1e-9)
+    t_bottom = t_top if t_cover_bot is None else max(float(t_cover_bot), 1e-9)
     pts = [(float(p[0]), float(p[1])) for p in nose_points]
     if not pts:
         return {"x": 0.0, "Fy": 0.0, "ok": False}
@@ -958,15 +961,15 @@ def two_cell_shear_center(nose_points, nose_t, x_spar: float,
         )
         if at_web_bottom:
             for x in np.linspace(x_spar, x_rear, 9)[1:]:
-                thickness.append(t_cover)
+                thickness.append(t_top)
                 outer.append((float(x), y_top))
             for y in np.linspace(y_top, y_bot, 17)[1:]:
                 thickness.append(t_rear)
                 outer.append((float(x_rear), float(y)))
             for x in np.linspace(x_rear, x_spar, 9)[1:-1]:
-                thickness.append(t_cover)
+                thickness.append(t_bottom)
                 outer.append((float(x), y_bot))
-            pending_t = t_cover
+            pending_t = t_bottom
         if outer:
             thickness.append(pending_t)
         outer.append(p)

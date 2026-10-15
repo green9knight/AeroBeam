@@ -235,11 +235,16 @@ with tabs[1]:
             st.session_state.inp["Cm_ac"] = af.get("Cm_ac", 0.0)
             st.session_state.inp["Cl_alpha"] = af.get("Cl_alpha", 0.0)
             st.session_state.inp["airfoil_t_c"] = af.get("t_c", 0.12)
+            st.session_state["tc"] = float(af.get("t_c", 0.12) or 0.12) * 100.0
             st.success(f"Applied {selected}")
             st.rerun()
     st.session_state.inp["Cm_ac"] = st.number_input("Cm_ac", value=float(g("Cm_ac")), format="%.4f", key="cm_ac")
     st.session_state.inp["Cl_alpha"] = st.number_input("Cl_alpha", value=float(g("Cl_alpha")), key="cl_alpha")
-    st.session_state.inp["airfoil_t_c"] = st.number_input("t/c", value=float(g("airfoil_t_c")), format="%.4f", key="tc")
+    _tc_stored = float(g("airfoil_t_c", 0.15))
+    _tc_shown = _tc_stored * 100.0 if abs(_tc_stored) <= 1.0 else _tc_stored
+    _tc_pct = st.number_input("Thickness %", value=_tc_shown, format="%.2f", key="tc")
+    from wing_stress_analyzer import parse_fraction
+    st.session_state.inp["airfoil_t_c"] = parse_fraction(_tc_pct, 0.15)
     st.session_state.inp["Vd_mph"] = st.number_input("Dive Speed Vd (mph)", value=float(g("Vd_mph")), key="vd")
 
 # Loads & Config
@@ -525,6 +530,32 @@ with tabs[3]:
                 "Strips per Bay", value=int(g("geodetic_strips_per_bay",2)), min_value=1, key="gspb")
             st.session_state.inp["geodetic_angle"] = st.number_input(
                 "Angle (deg)", value=float(g("geodetic_angle",45.0)), step=5.0, key="ga")
+
+    st.markdown("**Inboard torsion box**")
+    st.session_state.inp["torsion_box_enabled"] = st.checkbox(
+        "Sheet the inboard rib bays",
+        value=bool(g("torsion_box_enabled", False)), key="tbx")
+    if g("torsion_box_enabled"):
+        st.session_state.inp["torsion_box_bays"] = int(st.number_input(
+            "Rib bays from the root", value=int(g("torsion_box_bays", 4)),
+            min_value=0, step=1, key="tb_bays"))
+        _tb1, _tb2 = st.columns(2)
+        with _tb1:
+            _ttm = g("torsion_box_top_mat", "Birch Plywood")
+            st.session_state.inp["torsion_box_top_mat"] = st.selectbox(
+                "Top sheet material", _WS_ALL,
+                index=_WS_ALL.index(_ttm) if _ttm in _WS_ALL else 0, key="tb_tm")
+            st.session_state.inp["torsion_box_top_thick"] = st.number_input(
+                "Top sheet thickness (in)", value=float(g("torsion_box_top_thick", 0.125)),
+                format="%.4f", key="tb_tt")
+        with _tb2:
+            _tbm = g("torsion_box_bot_mat", "Birch Plywood")
+            st.session_state.inp["torsion_box_bot_mat"] = st.selectbox(
+                "Bottom sheet material", _WS_ALL,
+                index=_WS_ALL.index(_tbm) if _tbm in _WS_ALL else 0, key="tb_bm")
+            st.session_state.inp["torsion_box_bot_thick"] = st.number_input(
+                "Bottom sheet thickness (in)", value=float(g("torsion_box_bot_thick", 0.125)),
+                format="%.4f", key="tb_bt")
 
     if g("wing_structure_type") == "aluminum_skin":
         st.markdown("**Aluminum Skin**")

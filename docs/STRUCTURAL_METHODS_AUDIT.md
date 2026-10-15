@@ -57,7 +57,7 @@ at least one independent structural method.
 | Cap column buckling | `cap_column_buckling` | Euler column between ribs using strong-axis assumption | C | The strong-axis/web-restraint assumption is not universally valid. Needs review for each cap attachment type. |
 | Tube wall crippling | `_compute_buckling` | simplified NASA SP-8007 style expression with imperfection factor | C | Useful warning only. Not a complete local buckling/crippling design method. |
 | Local fitting / bearing load demand | `fitting_loads`, `summary_text` | reports root, strut, and jury reaction demands plus required bearing area from a user allowable | Display | No bearing, lug, bushing, bolt, doubler, or local crush sizing is performed. |
-| Divergence | `_divergence`, `_shear_center_x` | uniform-wing formula with thin-wall shear center | C | Screening only, not flutter. Open tubes use the spar axis. A nose plus an aft cell uses the outer wall. |
+| Divergence | `_divergence`, `_divergence_span`, `_shear_center_x` | uniform-wing formula, or a Rayleigh quotient when an inboard torsion box is on | C | Screening only, not flutter. Open tubes use the spar axis. A nose plus an aft cell uses the outer wall. The box is torsion sheet only. |
 | Margin of safety | `_ms` | stress ratio allowables, simple combined interaction | B/C | Basic stress margin is standard; combined bending/torsion interaction is simplified and not a full failure criterion for all materials. |
 
 ## Highest-risk models to freeze or label experimental
@@ -97,6 +97,7 @@ than the model supports:
 6. **Divergence**
    - Current calculation is a screening estimate only.
    - Shear center and GJ assumptions dominate the result.
+   - An inboard torsion box uses the spanwise GJ and shear center. The sheets are not added to spar bending.
 
 ## What should be shown in UI/report
 

@@ -51,11 +51,13 @@ class ConfigToggleTest(unittest.TestCase):
                 "front_spar_percent": 30,
                 "rear_spar_percent": 80,
                 "front_spar_load_share": 75,
+                "airfoil_t_c": 17,
             }
         )
         self.assertAlmostEqual(analyzer.front_pct, 0.30)
         self.assertAlmostEqual(analyzer.rear_pct, 0.80)
         self.assertAlmostEqual(analyzer.lsf, 0.75)
+        self.assertAlmostEqual(analyzer.t_c, 0.17)
 
     def test_distributed_wing_weight_changes_root_shear(self):
         base = analyze_with(distribute_wing_weight=False)

@@ -36,7 +36,7 @@ METHOD_STATUS = {
     "torsion": {
         "status": "EXPERIMENTAL",
         "label": "D-cell/geodetic/rib/skin torsion sharing",
-        "note": "Nose area and skin length come from the thickness curve. Bredt-Batho is the torsion cell. Torque about the shear center is the signed pitching moment plus lift times the aerodynamic-center offset. Cantilever and single-strut ribs are stiff in their plane, so bending is shared by EI and the rib torque includes the spar-to-spar couple. Reported spar positions add that twist: nose-up lowers a point aft of the shear center. A plywood or formed-aluminum rib is a shear panel. A Dow-foam rib with spruce caps is a sandwich beam and is soft in core shear. Dual-strut bending stays on the entered load share. Strip force is demand only.",
+        "note": "Nose area and skin length come from the thickness curve. Bredt-Batho is the torsion cell. An optional inboard torsion box closes the bays between the spars for a chosen number of rib bays; top and bottom each have a material and a thickness, and those sheets are not added to spar bending. Torque about the shear center is the signed pitching moment plus lift times the aerodynamic-center offset. Cantilever and single-strut ribs are stiff in their plane, so bending is shared by EI and the rib torque includes the spar-to-spar couple. Reported spar positions add that twist: nose-up lowers a point aft of the shear center. A plywood or formed-aluminum rib is a shear panel. A Dow-foam rib with spruce caps is a sandwich beam and is soft in core shear. Dual-strut bending stays on the entered load share. Strip force is demand only.",
     },
     "buckling": {
         "status": "PRELIMINARY",
@@ -51,7 +51,7 @@ METHOD_STATUS = {
     "divergence": {
         "status": "EXPERIMENTAL",
         "label": "Divergence speed screening",
-        "note": "Uniform-wing torsional divergence, q = (pi/(2L))^2 * GJ / (e c^2 Cl_alpha). Shear center is the thin-wall shear flow of the closed contour, or the spar axis if the wing is an open tube. Screening only, not flutter.",
+        "note": "Uniform-wing torsional divergence, q = (pi/(2L))^2 * GJ / (e c^2 Cl_alpha). With an inboard torsion box the screen is the same Rayleigh quotient on spanwise GJ and shear center, mode sin(pi x / 2L), which reduces to that formula when the wing is uniform. Shear center is the thin-wall shear flow of the closed contour, or the spar axis if the wing is an open tube. Screening only, not flutter.",
     },
 }
 

@@ -85,6 +85,11 @@ DEFAULT_INPUTS: Dict[str, Any] = {
     "geodetic_reduction_factor": 0.75,
     "skin_top_mat": "6061-T6", "skin_top_thick": 0.0,
     "skin_bot_mat": "6061-T6", "skin_bot_thick": 0.0,
+    # Inboard torsion box. Off until chosen. Sheets are torsion only.
+    "torsion_box_enabled": False,
+    "torsion_box_bays": 4,
+    "torsion_box_top_mat": "Birch Plywood", "torsion_box_top_thick": 0.125,
+    "torsion_box_bot_mat": "Birch Plywood", "torsion_box_bot_thick": 0.125,
     "wood_knockdown": 0.75,
     # Rib structure (torsion transfer between spars)
     "rib_type":   "Plywood web",  # or "Sheet aluminum formed" or "Dow foam with spruce caps"
@@ -211,7 +216,7 @@ def _normalize_inputs(inp: dict) -> None:
                 inp[key] = parse_user_float(inp[key])
             except ValueError:
                 pass
-    for key in ("front_spar_percent", "rear_spar_percent", "front_spar_load_share"):
+    for key in ("front_spar_percent", "rear_spar_percent", "front_spar_load_share", "airfoil_t_c"):
         if key in inp:
             inp[key] = parse_fraction(inp[key], float(DEFAULT_INPUTS.get(key, 0.0)))
     for key in (
@@ -487,6 +492,29 @@ class WingStressAnalyzer:
             self.top_skin = None
             self.bot_skin = None
 
+        # Inboard sheets between the spars. Off does not change an existing wing.
+        self.torsion_box_enabled = parse_bool(i.get("torsion_box_enabled", False))
+        try:
+            bays = int(float(i.get("torsion_box_bays", 0) or 0))
+        except (TypeError, ValueError):
+            bays = 0
+        self.torsion_box_bays = max(bays, 0)
+
+        def _sheet_gauge(key, default):
+            try:
+                return max(float(i.get(key, default) or 0.0), 0.0)
+            except (TypeError, ValueError):
+                return default
+
+        def _sheet_mat(key):
+            name = str(i.get(key, "Birch Plywood") or "Birch Plywood")
+            return name if name in MATERIAL_DB else "Birch Plywood"
+
+        self.torsion_box_top = _sheet_gauge("torsion_box_top_thick", 0.125)
+        self.torsion_box_bot = _sheet_gauge("torsion_box_bot_thick", 0.125)
+        self.torsion_box_top_mat = _sheet_mat("torsion_box_top_mat")
+        self.torsion_box_bot_mat = _sheet_mat("torsion_box_bot_mat")
+
         self.front_spar_type = i.get("front_spar_type", "Round Tube")
         self.rear_spar_type  = i.get("rear_spar_type",  "Round Tube")
         # Sanitize spar dimensions before building — prevents zero-EI crashes
@@ -658,6 +686,84 @@ class WingStressAnalyzer:
 
     # ── GJ arrays ────────────────────────────────────────────────────────────
 
+    def _sheet_modulus(self, name: str) -> float:
+        if name not in MATERIAL_DB:
+            name = "Birch Plywood" if "Birch Plywood" in MATERIAL_DB else "6061-T6"
+        return float(MATERIAL_DB[name]["G"])
+
+    def _spar_web_G(self, prefix: str) -> float:
+        name = self.inp.get(f"{prefix}_web_mat") or self.inp.get(f"{prefix}_mat") or "6061-T6"
+        return self._sheet_modulus(name)
+
+    def _torsion_box_active(self) -> bool:
+        """True when the inboard sheets are chosen and can close a cell."""
+
+        if not getattr(self, "torsion_box_enabled", False):
+            return False
+        if int(getattr(self, "torsion_box_bays", 0) or 0) <= 0:
+            return False
+        if getattr(self, "num_spars", 1) < 2:
+            return False
+        if float(getattr(self, "torsion_box_top", 0.0) or 0.0) <= 1e-9:
+            return False
+        if float(getattr(self, "torsion_box_bot", 0.0) or 0.0) <= 1e-9:
+            return False
+        return float(getattr(self, "rib_spacing", 0.0) or 0.0) > 0.0
+
+    def _torsion_box_end(self) -> float:
+        """Outboard end of the sheeted bays, inches from the root."""
+
+        if not self._torsion_box_active():
+            return 0.0
+        return min(self.torsion_box_bays * self.rib_spacing, self.b_half)
+
+    def _box_covers(self, x: float) -> bool:
+        end = self._torsion_box_end()
+        return end > 0.0 and float(x) <= end + 1e-9
+
+    def _aft_closed_at(self, x: float) -> bool:
+        if self.num_spars != 2:
+            return False
+        if self._box_covers(x):
+            return True
+        if self.geodetic is not None:
+            return True
+        return getattr(self, "top_skin", None) is not None
+
+    def _box_wall_gt(self):
+        """G*t of the top and bottom walls. A stressed skin adds in parallel."""
+
+        gt_top = self._sheet_modulus(self.torsion_box_top_mat) * self.torsion_box_top
+        gt_bot = self._sheet_modulus(self.torsion_box_bot_mat) * self.torsion_box_bot
+        if getattr(self, "top_skin", None) is not None and self.bot_skin is not None:
+            gt_top += float(MATERIAL_DB[self.top_skin.mat_name]["G"]) * float(self.top_skin.thickness)
+            gt_bot += float(MATERIAL_DB[self.bot_skin.mat_name]["G"]) * float(self.bot_skin.thickness)
+        return gt_top, gt_bot
+
+    def _nose_plus_box_gj(self, A1, ds1, dss, c_b, h, t_rear):
+        """Two-cell Bredt. Each wall uses its own shear modulus. Gauge is constant."""
+
+        G_skin = float(MATERIAL_DB[self.dcell.skin_mat]["G"])
+        gt_top, gt_bot = self._box_wall_gt()
+        G_rear = self._spar_web_G("rear_spar")
+        A2 = max(c_b * h, 1e-9)
+        ds2 = (c_b / max(gt_top, 1e-9)
+               + c_b / max(gt_bot, 1e-9)
+               + h / max(G_rear * max(t_rear, 1e-9), 1e-12))
+        return two_cell_bredt(A1, A2, ds1 / G_skin, ds2, dss / G_skin, 1.0, 1.0, 1.0)
+
+    def _rectangle_box_gj(self, c_b, h, t_front, t_rear):
+        """One rectangular cell when the nose is open and the bay is sheeted."""
+
+        A = max(c_b * h, 1e-9)
+        gt_top, gt_bot = self._box_wall_gt()
+        ds = (c_b / max(gt_top, 1e-9)
+              + c_b / max(gt_bot, 1e-9)
+              + h / max(self._spar_web_G("front_spar") * max(t_front, 1e-9), 1e-12)
+              + h / max(self._spar_web_G("rear_spar") * max(t_rear, 1e-9), 1e-12))
+        q = 1.0 / (2.0 * A)
+        return 4.0 * A * A / max(ds, 1e-18), 0.0, q
+
     def _gj_arrays(self):
         N = self.N; scales = self.chord_x/self.root_chord
         GJ = np.zeros(N); q1f = np.zeros(N); q2f = np.zeros(N)
@@ -667,15 +773,25 @@ class WingStressAnalyzer:
         t_wrs = float(self.inp.get("rear_spar_t_web",
                                     self.inp.get("rear_spar_wall", 0.094)))
         for i, s in enumerate(scales):
-            if not self.dcell_enabled: break
+            boxed = self._box_covers(self.x[i])
+            if not self.dcell_enabled and not boxed:
+                break
             h    = h0 * s
             c_b  = (self.rear_pct-self.front_pct)*self.chord_x[i]
+            if boxed and self.dcell is None:
+                GJ[i], q1f[i], q2f[i] = self._rectangle_box_gj(c_b, h, t_wfs, t_wrs)
+                continue
+            if self.dcell is None:
+                continue
             A1   = self.dcell.enclosed_area(h, s)
             G1   = MATERIAL_DB[self.dcell.skin_mat]["G"]
             ds1  = self.dcell.ds_over_t_own(h, s)
             dss  = self.dcell.ds_over_t_web(h, s)
 
-            if self.geodetic is not None:
+            if boxed:
+                q1, q2, gj = self._nose_plus_box_gj(A1, ds1, dss, c_b, h, t_wrs)
+                GJ[i]=gj; q1f[i]=q1; q2f[i]=q2
+            elif self.geodetic is not None:
                 A2  = self.geodetic.enclosed_area(c_b, h)
                 G2  = MATERIAL_DB[self.geodetic.mat_name]["G"]
                 ds2 = self.geodetic.ds_over_t_own(c_b, h, t_wrs*s, s)
@@ -770,7 +886,9 @@ class WingStressAnalyzer:
             return self._y_sc
         y_sc = np.zeros(self.N)
         for i, chord in enumerate(self.chord_x):
-            x_local, _method = self._shear_center_x(float(chord))
+            boxed = self._box_covers(self.x[i])
+            x_local, _method = self._shear_center_x(
+                float(chord), aft=self._aft_closed_at(self.x[i]), box=boxed)
             y_sc[i] = float(self.y_le[i]) + float(x_local)
         self._y_sc = y_sc
         return y_sc
@@ -947,28 +1065,31 @@ class WingStressAnalyzer:
             return True
         if self.geodetic is not None:
             return True
-        return getattr(self, "top_skin", None) is not None
+        if getattr(self, "top_skin", None) is not None:
+            return True
+        return self._torsion_box_end() > 0.0
 
-    def _shear_center_x(self, chord: float) -> tuple:
+    def _shear_center_x(self, chord: float, aft=None, box: bool = False) -> tuple:
         """Chordwise shear center from the leading edge, and how it was obtained.
 
         An open tube puts the shear center on the spar axis. A closed nose or
-        box uses the thin-wall shear flow of that same contour.
+        box uses the thin-wall shear flow of that same contour. An inboard
+        torsion box is station by station: pass aft and box for that station.
         """
 
         front = self.front_pct * chord
         rear = self.rear_pct * chord
-        if not self._has_closed_torsion_cell():
+        if aft is None:
+            aft = self._aft_closed_at(0.0)
+            box = box or self._box_covers(0.0)
+        if self.dcell is None and not aft:
             return front, "spar axis"
 
         h_max = max(self.t_c * chord, 1e-6)
         scale = chord / max(self.root_chord, 1e-6)
-        has_aft = self.num_spars == 2 and (
-            self.geodetic is not None or getattr(self, "top_skin", None) is not None
-        )
-        if self.dcell is not None and not has_aft:
+        if self.dcell is not None and not aft:
             return self.dcell.shear_center_x(h_max, scale), "nose shear flow"
-        if self.dcell is None and has_aft:
+        if self.dcell is None and aft:
             return rectangular_cell_shear_center(front, rear, h_max), "box centroid"
 
         geo = self.dcell.nose_geometry(h_max, scale)
@@ -982,16 +1103,29 @@ class WingStressAnalyzer:
                 tvals.append(self.dcell.t_web * scale)
             else:
                 tvals.append(self.dcell.t_skin * scale)
-        if self.geodetic is not None:
+        t_cover_bot = None
+        if box:
+            G_ref = float(MATERIAL_DB[self.dcell.skin_mat]["G"])
+            gt_top, gt_bot = self._box_wall_gt()
+            t_cover = max(gt_top / max(G_ref, 1e-9), 1e-6)
+            t_cover_bot = max(gt_bot / max(G_ref, 1e-9), 1e-6)
+            t_rear = float(self.inp.get("rear_spar_t_web", self.inp.get("rear_spar_wall", 0.094)))
+            t_rear = max(t_rear, 1e-6) * self._spar_web_G("rear_spar") / max(G_ref, 1e-9)
+            method = "torsion-box shear flow"
+        elif self.geodetic is not None:
             t_cover = max(self.geodetic.t_eff(scale), 1e-6)
+            t_rear = float(self.inp.get("rear_spar_t_web", self.inp.get("rear_spar_wall", 0.094)))
+            t_rear = max(t_rear * scale, 1e-6)
+            method = "outer-wall shear flow"
         else:
             t_cover = max(self.top_skin.thickness, 1e-6)
-        t_rear = float(self.inp.get("rear_spar_t_web", self.inp.get("rear_spar_wall", 0.094)))
-        t_rear = max(t_rear * scale, 1e-6)
+            t_rear = float(self.inp.get("rear_spar_t_web", self.inp.get("rear_spar_wall", 0.094)))
+            t_rear = max(t_rear * scale, 1e-6)
+            method = "outer-wall shear flow"
         result = two_cell_shear_center(
-            pts, tvals, x_spar, rear, geo["h_web"], t_cover, t_rear)
+            pts, tvals, x_spar, rear, geo["h_web"], t_cover, t_rear, t_cover_bot)
         if result["ok"] and abs(result["Fy"] - 1.0) < 0.1:
-            return float(result["x"]), "outer-wall shear flow"
+            return float(result["x"]), method
         return self.dcell.shear_center_x(h_max, scale), "nose shear flow"
 
     def _divergence(self, GJ_root):
@@ -1003,17 +1137,57 @@ class WingStressAnalyzer:
             return {"V_div":float("inf"),"SF_div":float("inf"),
                     "e":e,"x_ac":x_ac,"x_sc":x_sc,"sc_method":sc_method,
                     "divergent":False}
-        rho   = isa_density(self.alt_ft)
         # Uniform unswept wing, constant chord and GJ, root fixed in twist:
         # q_div = (pi/(2L))^2 * GJ / (e * c^2 * Cl_alpha). Bisplinghoff/Fung.
         span = max(self.b_half, 1e-6)
         q_psi = (math.pi / (2.0 * span))**2 * GJ_root / (e * c**2 * self.Cl_alpha)
-        q_psf = q_psi * 144.0
-        V_fps = math.sqrt(max(2.0 * q_psf / max(rho, 1e-12), 0.0))
-        Vd    = V_fps * 3600.0 / 5280.0
+        Vd    = self._mph_from_q(q_psi)
         SF    = Vd/max(self.Vd_mph,1)
         return {"V_div":Vd,"SF_div":SF,"e":e,"x_ac":x_ac,"x_sc":x_sc,
                 "sc_method":sc_method,"divergent":True}
+
+    def _mph_from_q(self, q_psi: float) -> float:
+        rho = isa_density(self.alt_ft)
+        q_psf = q_psi * 144.0
+        V_fps = math.sqrt(max(2.0 * q_psf / max(rho, 1e-12), 0.0))
+        return V_fps * 3600.0 / 5280.0
+
+    def _divergence_span(self):
+        """Rayleigh divergence for a wing whose GJ and shear center change along the span.
+
+        The mode is phi = sin(pi x / 2L). When GJ, chord, and the aerodynamic
+        offset are constant, this is the uniform-wing formula.
+        """
+
+        span = max(self.b_half, 1e-6)
+        phi = np.sin(0.5 * math.pi * self.x / span)
+        dphi = (0.5 * math.pi / span) * np.cos(0.5 * math.pi * self.x / span)
+        e = np.zeros(self.N)
+        x_sc = 0.0
+        sc_method = "shear center"
+        for i in range(self.N):
+            boxed = self._box_covers(self.x[i])
+            x_local, method_i = self._shear_center_x(
+                float(self.chord_x[i]), aft=self._aft_closed_at(self.x[i]), box=boxed)
+            e[i] = self.x_ac_c * float(self.chord_x[i]) - x_local
+            if i == 0:
+                x_sc = x_local
+                sc_method = method_i
+        trap = getattr(np, "trapezoid", None)
+        if trap is None:
+            trap = np.trapz
+        num = float(trap(self.GJ * dphi**2, self.x))
+        den = float(trap(e * self.chord_x**2 * self.Cl_alpha * phi**2, self.x))
+        x_ac = self.x_ac_c * self.root_chord
+        e_root = x_ac - x_sc
+        base = {
+            "e": e_root, "x_ac": x_ac, "x_sc": x_sc, "sc_method": sc_method,
+            "spanwise": True, "box_end": self._torsion_box_end(),
+        }
+        if den <= 1e-18 or num <= 0.0:
+            return {**base, "V_div": float("inf"), "SF_div": float("inf"), "divergent": False}
+        Vd = self._mph_from_q(num / den)
+        return {**base, "V_div": Vd, "SF_div": Vd / max(self.Vd_mph, 1.0), "divergent": True}
 
     # ── Strut forces ─────────────────────────────────────────────────────────
 
@@ -1521,6 +1695,7 @@ class WingStressAnalyzer:
         return results
 
     def analyze(self):
+        self._y_sc = None
         self._spar_arrays()
         self.GJ, self.q1_frac, self.q2_frac = self._gj_arrays()
         self._torsion_transfer = self._torsion_transfer_stiffness()
@@ -1537,7 +1712,10 @@ class WingStressAnalyzer:
         _run_neg, phi_neg = self._integrate_twist(T_neg, self.GJ)
         self._add_twist_to_deflection(self.neg, phi_neg)
 
-        self.divergence = self._divergence(float(self.GJ[0]))
+        if self._torsion_box_active():
+            self.divergence = self._divergence_span()
+        else:
+            self.divergence = self._divergence(float(self.GJ[0]))
 
         # Strut summary
         sm = STRUT_MATERIALS[self.strut_mat]
@@ -1816,13 +1994,44 @@ class WingStressAnalyzer:
                 L += [f"  Strip axial σ demand: {sig_s:>9,.0f} psi   MS vs Fb only:{mf(Fb_s/max(sig_s,1)-1)}"]
                 L += ["  Geodetic mesh demand only; bond/joint/attachment sizing is outside AeroBeam."]
 
+        if self._torsion_box_active():
+            end = self._torsion_box_end()
+            L += [f"  Torsion box: {self.torsion_box_bays} rib bays, root to {end:.1f} in"]
+            L += [f"    Top sheet: {self.torsion_box_top:.3f} in  {self.torsion_box_top_mat}"]
+            L += [f"    Bottom sheet: {self.torsion_box_bot:.3f} in  {self.torsion_box_bot_mat}"]
+            L += ["    Sheets close the cell between the spars. They are not added to spar bending."]
+            if t is not None and len(self.q2_frac):
+                q2 = abs(float(self.q2_frac[0]))
+                torque = abs(float(t["T_running"][0]))
+                gt_top, gt_bot = self._box_wall_gt()
+                for label, mat, gt in (
+                    ("Top", self.torsion_box_top_mat, gt_top),
+                    ("Bottom", self.torsion_box_bot_mat, gt_bot),
+                ):
+                    G = self._sheet_modulus(mat)
+                    tau = q2 * torque * G / max(gt, 1e-12)
+                    props = MATERIAL_DB[mat]
+                    allow = float(props["Fsu"] or 0.0)
+                    if props.get("is_wood"):
+                        allow *= self.wood_kd
+                    if allow > 0.0:
+                        L += [f"    {label} sheet shear demand: {tau:,.0f} psi   MS vs Fsu:{mf(allow / max(tau, 1e-9) - 1)}"]
+                    else:
+                        L += [f"    {label} sheet shear demand: {tau:,.0f} psi"]
+                L += ["    Sheet shear is a demand. AeroBeam does not size the sheet."]
+
         L += [f"\n── DIVERGENCE {'─'*39}"]
         if d["divergent"] and d["V_div"]<float("inf"):
             L += [f"  AC={d['x_ac']:.2f}\"  SC={d['x_sc']:.2f}\"  e={d['e']:.2f}\"  ({d.get('sc_method', 'shear center')})"]
             L += [f"  V_div         : {d['V_div']:>8.0f} mph"]
             L += [f"  SF_div (divergence, Vd/V_div) :{mf(d['SF_div']-1)}"]
+            if d.get("spanwise"):
+                L += [f"  V_div uses spanwise GJ and shear center, box to {d.get('box_end', 0.0):.1f} in."]
             if d["SF_div"]<1.5:
                 L += ["  *** DIVERGENCE RISK — stiffness or SC review needed ***"]
+        elif self._has_closed_torsion_cell():
+            L += [f"  AC={d['x_ac']:.2f}\"  SC={d['x_sc']:.2f}\"  e={d['e']:.2f}\"  ({d.get('sc_method', 'shear center')})"]
+            L += ["  Shear center is at or behind the aerodynamic center. No divergence."]
         else:
             L += ["  No closed section — enable D-cell/skin for divergence check"]
 
@@ -1976,6 +2185,11 @@ class WingStressAnalyzer:
         if self.dcell:
             ax_top.fill_between(x, y_le, self.y_front, alpha=0.25,
                                 color="cyan", label="D-cell")
+        box_end = self._torsion_box_end()
+        if box_end > 0.0 and self.num_spars == 2:
+            ax_top.fill_between(
+                x, self.y_front, self.y_rear, where=(x <= box_end),
+                alpha=0.35, color="#D2B75F", label="Torsion box")
         # Taper break station
         if self.taper_start_bl > 0:
             ax_top.axvline(x=self.taper_start_bl, color="green", lw=1.2,

@@ -1056,6 +1056,9 @@ class WingStressGUI:
         
         # Geodetic lattice box (fabric_buildup only)
         self._build_geodetic_section(f, row)
+
+        # Inboard torsion box: chosen number of rib bays, each sheet has a material and a gauge
+        self._build_torsion_box_section(f, row)
         
         # Aluminum skin (aluminum_skin only)
         self._build_skin_section(f, row)
@@ -1110,6 +1113,27 @@ class WingStressGUI:
         ttk.Label(self._geodetic_frame, textvariable=self._geodetic_info,
                   foreground=C_TEXT_DIM, font=("Courier", 8)).grid(
                   row=len(geodetic_fields), column=0, columnspan=4, sticky="w", padx=4)
+
+    def _build_torsion_box_section(self, f, row):
+        """Inboard top and bottom sheets. Hidden until the box is chosen."""
+        section_label(f, "Inboard Torsion Box", row=row())
+        self._lchk(f, "Sheet the inboard rib bays", "torsion_box_enabled", False, row=row())
+
+        self._torsion_box_frame = ttk.Frame(f)
+        self._torsion_box_frame.grid(row=row(), column=0, columnspan=4, sticky="ew")
+        box_fields = [
+            ("entry", "Rib bays from the root:", "torsion_box_bays", 4),
+            ("combo", "Top sheet material:", "torsion_box_top_mat", all_mat_names(), "Birch Plywood"),
+            ("entry", "Top sheet thickness (in):", "torsion_box_top_thick", 0.125),
+            ("combo", "Bottom sheet material:", "torsion_box_bot_mat", all_mat_names(), "Birch Plywood"),
+            ("entry", "Bottom sheet thickness (in):", "torsion_box_bot_thick", 0.125),
+        ]
+        self._build_subsection_fields(self._torsion_box_frame, box_fields)
+        ttk.Label(
+            self._torsion_box_frame,
+            text="Sheets close the bays between the spars. They add torsion stiffness only.",
+            foreground=C_TEXT_DIM, font=("Courier", 8),
+        ).grid(row=len(box_fields), column=0, columnspan=4, sticky="w", padx=4)
 
     def _build_skin_section(self, f, row):
         """Build aluminum skin configuration section."""
@@ -1263,6 +1287,9 @@ class WingStressGUI:
                                                      lambda *_: self._refresh_structure())
         self._vars["geodetic_enabled"].trace_add("write",
                                                   lambda *_: self._refresh_structure())
+        if "torsion_box_enabled" in self._vars:
+            self._vars["torsion_box_enabled"].trace_add(
+                "write", lambda *_: self._refresh_structure())
         
         # Geodetic info updates
         for var_name in ("rib_spacing", "geodetic_strips_per_bay", "geodetic_enabled"):
@@ -1433,7 +1460,7 @@ class WingStressGUI:
                   row=r,column=0,columnspan=4,sticky="w",padx=20,pady=(0,4)); r+=1
         self._le(f,"Cl_alpha (per rad):","Cl_alpha",6.30,row=r); r+=1
         self._le(f,"AC position (x/c):","x_ac_c",0.246,row=r); r+=1
-        self._le(f,"t/c:","airfoil_t_c",0.12,row=r); r+=1
+        self._le(f,"Thickness %:","airfoil_t_c",12,row=r); r+=1
         # Re-propose spar heights when t/c is edited manually
         self._vars["airfoil_t_c"].trace_add("write", self._repropose_h_web)
         self._vars["airfoil_t_c"].trace_add("write", lambda *_: self._update_dcell_area())
@@ -1538,6 +1565,12 @@ class WingStressGUI:
         if hasattr(self, "_skin_frame"):
             if st == "aluminum_skin": self._skin_frame.grid()
             else:                     self._skin_frame.grid_remove()
+        if hasattr(self, "_torsion_box_frame"):
+            box_on = self._vars.get("torsion_box_enabled", tk.BooleanVar(value=False)).get()
+            if box_on:
+                self._torsion_box_frame.grid()
+            else:
+                self._torsion_box_frame.grid_remove()
         self._update_geodetic_info()
 
     def _refresh_config(self):
@@ -1560,11 +1593,20 @@ class WingStressGUI:
                 f"→ strip spacing: {s:.2f}\" c-t-c")
         except: pass
 
+    def _thickness_fraction(self) -> float:
+        """Thickness box is a percent. 17 and 0.17 both mean 17% of chord."""
+
+        from wing_stress_analyzer import parse_fraction
+        try:
+            return parse_fraction(self._vars["airfoil_t_c"].get(), 0.15)
+        except (KeyError, TypeError):
+            return 0.15
+
     def _update_dcell_area(self):
         try:
             chord  = float(self._vars["root_chord"].get())
             fp_pct = float(self._vars["front_spar_percent"].get())
-            t_c    = float(self._vars["airfoil_t_c"].get())
+            t_c    = self._thickness_fraction()
             t_skin = float(self._vars["dcell_skin_thick"].get())
             mat    = self._vars["dcell_skin_mat"].get()
             from spar_sections import DCellSkin
@@ -1619,7 +1661,7 @@ class WingStressGUI:
     def _repropose_h_web(self, *_):
         """Re-propose spar heights from current airfoil t/c — called by traces."""
         try:
-            t_c = float(self._vars["airfoil_t_c"].get())
+            t_c = self._thickness_fraction()
             if t_c > 0:
                 self._propose_h_web(t_c)
         except (ValueError, KeyError):
@@ -1714,7 +1756,7 @@ class WingStressGUI:
         if af.get("x_ac_c") is not None:
             self._vars["x_ac_c"].set(str(af["x_ac_c"]))
         if af.get("t_c") is not None:
-            self._vars["airfoil_t_c"].set(str(af["t_c"]))
+            self._vars["airfoil_t_c"].set(f"{float(af['t_c']) * 100:g}")
             self._propose_h_web(af["t_c"])
         # Build info string with proposed spar depths
         try:
@@ -1727,8 +1769,10 @@ class WingStressGUI:
             depth_str = "  Front=%.2fin  Rear=%.2fin" % (d_f, d_r)
         except: depth_str = ""
         fam  = af.get("family","")
-        info = ("%s  (%s)  t/c=%s  Cm=%s  Cl_a=%s%s" %
-                (name, fam, af.get("t_c","?"), af.get("Cm_ac","?"),
+        tc = af.get("t_c")
+        tc_lbl = f"{float(tc) * 100:g}%" if isinstance(tc, (int, float)) else "?"
+        info = ("%s  (%s)  thickness=%s  Cm=%s  Cl_a=%s%s" %
+                (name, fam, tc_lbl, af.get("Cm_ac","?"),
                  af.get("Cl_alpha","?"), depth_str))
         if hasattr(self, "_airfoil_info"): self._airfoil_info.set(info)
 
@@ -1770,8 +1814,8 @@ class WingStressGUI:
         """
         from wing_stress_analyzer import DEFAULT_INPUTS
 
-        bool_keys = {"dcell_enabled","geodetic_enabled","distribute_wing_weight",
-                     "secondary_bending","jury_strut"}
+        bool_keys = {"dcell_enabled","geodetic_enabled","torsion_box_enabled",
+                     "distribute_wing_weight","secondary_bending","jury_strut"}
 
         # Start from cache — this is the user's actual configuration
         out = dict(self._data_cache)
@@ -1793,10 +1837,13 @@ class WingStressGUI:
                     except ValueError: out[k] = raw_str
                 # if empty: keep cache/default value
 
-        # Normalize load share
+        # Normalize load share and thickness. The thickness box is a percent.
+        from wing_stress_analyzer import parse_fraction
         lsf = out.get("front_spar_load_share", 0.55)
         if isinstance(lsf, (int,float)) and lsf > 1.0:
             out["front_spar_load_share"] = lsf / 100.0
+        if "airfoil_t_c" in out:
+            out["airfoil_t_c"] = parse_fraction(out["airfoil_t_c"], 0.15)
 
         out["num_spars"] = 2
         return out
@@ -2001,8 +2048,8 @@ class WingStressGUI:
         """
         from wing_stress_analyzer import DEFAULT_INPUTS
 
-        bool_keys = {"dcell_enabled","geodetic_enabled","distribute_wing_weight",
-                     "secondary_bending","jury_strut"}
+        bool_keys = {"dcell_enabled","geodetic_enabled","torsion_box_enabled",
+                     "distribute_wing_weight","secondary_bending","jury_strut"}
 
         # 1. Start from defaults for any keys NOT in the file (new features etc.)
         #    Then overlay with file data — file wins for every key it contains
@@ -2078,6 +2125,15 @@ class WingStressGUI:
                 else:
                     var.set(str(val))
 
+        if "airfoil_t_c" in self._vars:
+            try:
+                shown = float(self._vars["airfoil_t_c"].get())
+                if abs(shown) <= 1.0:
+                    shown *= 100.0
+                self._vars["airfoil_t_c"].set(f"{shown:g}")
+            except ValueError:
+                pass
+
         # 8. Update all derived displays
         self._update_h_total("front_spar")
         self._update_h_total("rear_spar")
@@ -2096,8 +2152,8 @@ class WingStressGUI:
         - Skips display-only keys and empty strings
         - Does NOT inject DEFAULT_INPUTS values — file reflects actual user inputs
         """
-        bool_keys = {"dcell_enabled", "geodetic_enabled", "distribute_wing_weight",
-                     "secondary_bending", "jury_strut"}
+        bool_keys = {"dcell_enabled", "geodetic_enabled", "torsion_box_enabled",
+                     "distribute_wing_weight", "secondary_bending", "jury_strut"}
         skip_keys = {"front_spar_h_total_disp", "rear_spar_h_total_disp"}
         string_keys = {"airfoil"}
 

@@ -39,7 +39,7 @@ const inputSections = [
         title: "Airfoil",
         fields: [
           ["airfoil", "Airfoil name", "select", "airfoils"],
-          ["airfoil_t_c", "Thickness t/c", "number", "0.001"],
+          ["airfoil_t_c", "Thickness %", "number", "0.1"],
           ["Cm_ac", "Cm aerodynamic moment", "number", "0.001"],
           ["Cm_flap", "Flap delta Cm", "number", "0.001"],
           ["Cl_alpha", "Cl_alpha (/rad)", "number", "0.01"],
@@ -127,6 +127,18 @@ const inputSections = [
           ["geodetic_strips_per_bay", "Strips per rib bay", "number", "1"],
           ["geodetic_angle", "Strip angle (deg)", "number", "1"],
           ["geodetic_reduction_factor", "Stiffness reduction factor", "number", "0.01"],
+        ],
+      },
+      {
+        title: "Inboard Torsion Box",
+        help: "Optional sheets on the inboard rib bays, top and bottom. Each sheet has its own material and thickness. The sheets add torsion stiffness only.",
+        fields: [
+          ["torsion_box_enabled", "Sheet the inboard rib bays", "checkbox"],
+          ["torsion_box_bays", "Rib bays from the root", "number", "1"],
+          ["torsion_box_top_mat", "Top sheet material", "select", "materials"],
+          ["torsion_box_top_thick", "Top sheet thickness (in)", "number", "0.001"],
+          ["torsion_box_bot_mat", "Bottom sheet material", "select", "materials"],
+          ["torsion_box_bot_thick", "Bottom sheet thickness (in)", "number", "0.001"],
         ],
       },
       {
@@ -303,9 +315,19 @@ function isRelevantStructureKey(key) {
     "skin_bot_mat",
     "skin_bot_thick",
   ]);
+  const torsionBoxDetails = new Set([
+    "torsion_box_bays",
+    "torsion_box_top_mat",
+    "torsion_box_top_thick",
+    "torsion_box_bot_mat",
+    "torsion_box_bot_thick",
+  ]);
 
   if (geodeticDetails.has(key)) {
     return structure === "fabric_buildup" && geodeticEnabled;
+  }
+  if (torsionBoxDetails.has(key)) {
+    return parseBool(state.inputs.torsion_box_enabled);
   }
   if (skinDetails.has(key)) {
     return structure === "aluminum_skin";
@@ -490,6 +512,14 @@ async function parseJsonResponse(response) {
   return response.json().catch(() => ({}));
 }
 
+function thicknessPercent(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return value;
+  const pct = Math.abs(n) <= 1 ? n * 100 : n;
+  const rounded = Math.round(pct * 100) / 100;
+  return Number.isInteger(rounded) ? String(rounded) : String(rounded);
+}
+
 function syncFormFromInputs() {
   for (const key of allInputKeys()) {
     const el = document.querySelector(`[data-key="${key}"]`);
@@ -498,7 +528,9 @@ function syncFormFromInputs() {
       el.checked = parseBool(state.inputs[key]);
       state.inputs[key] = el.checked;
     } else {
-      const value = state.inputs[key] ?? "";
+      const value = key === "airfoil_t_c"
+        ? thicknessPercent(state.inputs[key] ?? "")
+        : (state.inputs[key] ?? "");
       el.value = value;
       // For select elements, verify the value was set correctly
       // If not, the option might not exist, so keep the state value
@@ -656,7 +688,9 @@ function createField(field) {
     wrapper.appendChild(input);
     wrapper.append(` ${label}`);
   } else {
-    input.value = state.inputs[key] ?? "";
+    input.value = key === "airfoil_t_c"
+      ? thicknessPercent(state.inputs[key] ?? "")
+      : (state.inputs[key] ?? "");
     wrapper.appendChild(input);
   }
   input.addEventListener("input", () => handleFieldChange(key));
@@ -715,7 +749,8 @@ function applyAirfoilSelection() {
     ["x_ac_c", "x_ac_c"],
   ]) {
     if (airfoil[source] !== null && airfoil[source] !== undefined) {
-      setFieldValue(target, airfoil[source]);
+      const value = target === "airfoil_t_c" ? thicknessPercent(airfoil[source]) : airfoil[source];
+      setFieldValue(target, value);
     }
   }
 }

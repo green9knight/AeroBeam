@@ -322,10 +322,13 @@ def _validate_flight(inputs: Dict[str, Any], warnings: List[ValidationWarning]) 
     
     # Airfoil
     t_c = float(inputs.get("airfoil_t_c", 0.12))
+    if abs(t_c) > 1.0:
+        t_c /= 100.0
+    inputs["airfoil_t_c"] = t_c
     if t_c <= 0:
-        raise ValidationError("Airfoil thickness ratio must be positive")
+        raise ValidationError("Airfoil thickness must be positive")
     if t_c > 0.30:
-        warnings.append(ValidationWarning("airfoil_t_c", f"Airfoil t/c {t_c} is very thick"))
+        warnings.append(ValidationWarning("airfoil_t_c", f"Thickness {t_c * 100:g}% is very thick"))
     
     Cl_alpha = float(inputs.get("Cl_alpha", 5.73))
     if Cl_alpha <= 0:
