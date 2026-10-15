@@ -1,5 +1,5 @@
 """
-AeroBeam v1.2.2 — Spar Cross-Section Library
+AeroBeam v1.2.3 — Spar Cross-Section Library
 ===========================================
 Materials, CrossSection subclasses, D-cell, geodetic panel,
 SkinPanel, WingBox, AluminumAngle, and strut material database.
@@ -215,17 +215,22 @@ class CrossSection:
         raise NotImplementedError
 
     def get_arrays(self, x: np.ndarray, b_half: float,
-                   chord_root: float, chord_tip: float) -> dict:
+                   chord_root: float, chord_tip: float,
+                   chord: np.ndarray = None, cap_taper: bool = False) -> dict:
         """
         Return section properties at every spanwise station.
-        Geometry tapers linearly root→tip via chord ratio.
-        Returns dict of numpy arrays.
+
+        Web height follows the local chord. Cap sizes are the root sizes
+        unless the section supplies its own root-to-tip cap schedule.
         """
         props_list = []
-        for xi in x:
-            frac = xi / b_half          # 0 at root, 1 at tip
-            chord = chord_root + (chord_tip - chord_root) * frac
-            scale = chord / chord_root  # geometry scales with chord
+        for i, xi in enumerate(x):
+            if chord is not None:
+                c_i = float(chord[i])
+            else:
+                frac = xi / b_half          # 0 at root, 1 at tip
+                c_i = chord_root + (chord_tip - chord_root) * frac
+            scale = c_i / max(chord_root, 1e-9)
             props_list.append(self.get_props(scale))
         return {
             "EI":     np.array([p.EI     for p in props_list]),
@@ -239,8 +244,13 @@ class CrossSection:
 
     def weight(self, b_half: float, chord_root: float, chord_tip: float) -> float:
         """Half-span weight [lb] using average cross-section (exact for linear taper)."""
-        p_root = self.get_props(1.0)
-        p_tip  = self.get_props(chord_tip / chord_root)
+        if hasattr(self, "caps_at"):
+            p_root = self.get_props(1.0, caps=self.caps_at(0.0))
+            tip_scale = chord_tip / max(chord_root, 1e-9)
+            p_tip = self.get_props(tip_scale, caps=self.caps_at(1.0))
+        else:
+            p_root = self.get_props(1.0)
+            p_tip = self.get_props(chord_tip / max(chord_root, 1e-9))
         avg_area_rho = (p_root.area_rho + p_tip.area_rho) / 2.0
         return avg_area_rho * b_half
 
@@ -265,6 +275,38 @@ class SectionProps:
     @property
     def y_max(self) -> float:
         return max(self.y_top, self.y_bot)
+
+
+def resolved_tip(tip, root: float) -> float:
+    """A blank or non-positive tip size means the cap stays at the root size."""
+
+    try:
+        value = float(tip)
+    except (TypeError, ValueError):
+        return float(root)
+    if value <= 0.0:
+        return float(root)
+    return value
+
+
+def lerp_size(root: float, tip: float, frac: float) -> float:
+    f = min(max(float(frac), 0.0), 1.0)
+    return float(root) + (float(tip) - float(root)) * f
+
+
+def spar_station_scales(chord_scale: float, cap_scale: float = None) -> tuple:
+    """Depth, cap-width, and thickness scales at one span station.
+
+    The entered sizes are the root sizes. Chord scale sets the airfoil depth.
+    When a cap scale is supplied, cap width uses it and the cap and web
+    thickness stay at the root gauge. Without a cap scale the whole section
+    stays proportional to the chord scale.
+    """
+
+    depth = float(chord_scale)
+    if cap_scale is None:
+        return depth, depth, depth
+    return depth, float(cap_scale), 1.0
 
 
 def _composite_props(elements, cap_mat: str) -> SectionProps:
@@ -314,7 +356,7 @@ class RoundTube(CrossSection):
         self.wall = wall
         self.mat_name = mat_name
 
-    def get_props(self, scale: float = 1.0) -> SectionProps:
+    def get_props(self, scale: float = 1.0, cap_scale: float = None) -> SectionProps:
         od = self.OD * scale
         wa = self.wall * scale
         id_ = od - 2 * wa
@@ -328,7 +370,7 @@ class RoundTube(CrossSection):
             NA=NA, area=A, area_rho=A*rho,
         )
 
-    def get_arrays(self, x, b_half, chord_root, chord_tip):
+    def get_arrays(self, x, b_half, chord_root, chord_tip, chord=None, cap_taper=True):
         # Round tube is constant section — does NOT taper with chord.
         p = self.get_props(1.0)
         n = len(x)
@@ -353,9 +395,10 @@ class PlainRect(CrossSection):
         self.height = height
         self.mat_name = mat_name
 
-    def get_props(self, scale: float = 1.0) -> SectionProps:
-        w = self.width * scale
-        h = self.height * scale
+    def get_props(self, scale: float = 1.0, cap_scale: float = None) -> SectionProps:
+        depth, width, _thick = spar_station_scales(scale, cap_scale)
+        w = self.width * width
+        h = self.height * depth
         elements = [(w, h, h/2, self.mat_name)]
         return _composite_props(elements, self.mat_name)
 
@@ -372,23 +415,44 @@ class IBeam(CrossSection):
                  b_bot: float, t_bot: float,
                  h_web: float, t_web: float,
                  cap_mat: str = "Sitka Spruce",
-                 web_mat: str = "Birch Plywood"):
+                 web_mat: str = "Birch Plywood",
+                 b_top_tip: float = None, t_top_tip: float = None,
+                 b_bot_tip: float = None, t_bot_tip: float = None):
         self.b_top = b_top; self.t_top = t_top
         self.b_bot = b_bot; self.t_bot = t_bot
+        self.b_top_tip = resolved_tip(b_top_tip, b_top)
+        self.t_top_tip = resolved_tip(t_top_tip, t_top)
+        self.b_bot_tip = resolved_tip(b_bot_tip, b_bot)
+        self.t_bot_tip = resolved_tip(t_bot_tip, t_bot)
         self.h_web = h_web; self.t_web = t_web
         self.cap_mat = cap_mat
         self.web_mat = web_mat
 
-    def get_props(self, scale: float = 1.0) -> SectionProps:
-        s = scale
+    def caps_at(self, frac: float) -> tuple:
+        return (
+            lerp_size(self.b_top, self.b_top_tip, frac),
+            lerp_size(self.t_top, self.t_top_tip, frac),
+            lerp_size(self.b_bot, self.b_bot_tip, frac),
+            lerp_size(self.t_bot, self.t_bot_tip, frac),
+        )
+
+    def get_props(self, scale: float = 1.0, cap_scale: float = None, caps: tuple = None) -> SectionProps:
+        depth, width, thick = spar_station_scales(scale, cap_scale)
+        if caps is None:
+            b_top, t_top = self.b_top * width, self.t_top * thick
+            b_bot, t_bot = self.b_bot * width, self.t_bot * thick
+            h_web, t_web = self.h_web * depth, self.t_web * thick
+        else:
+            b_top, t_top, b_bot, t_bot = caps
+            h_web, t_web = self.h_web * depth, self.t_web
         # y measured from bottom of bottom cap
-        yc_bot = self.t_bot * s / 2
-        yc_web = self.t_bot * s + self.h_web * s / 2
-        yc_top = self.t_bot * s + self.h_web * s + self.t_top * s / 2
+        yc_bot = t_bot / 2
+        yc_web = t_bot + h_web / 2
+        yc_top = t_bot + h_web + t_top / 2
         elements = [
-            (self.b_bot*s, self.t_bot*s, yc_bot, self.cap_mat),
-            (self.t_web*s, self.h_web*s, yc_web, self.web_mat),
-            (self.b_top*s, self.t_top*s, yc_top, self.cap_mat),
+            (b_bot, t_bot, yc_bot, self.cap_mat),
+            (t_web, h_web, yc_web, self.web_mat),
+            (b_top, t_top, yc_top, self.cap_mat),
         ]
         return _composite_props(elements, self.cap_mat)
 
@@ -410,26 +474,46 @@ class DoubleIBeam(CrossSection):
                  h_web: float, t_web: float,
                  web_spacing: float,
                  cap_mat: str = "Sitka Spruce",
-                 web_mat: str = "Birch Plywood"):
+                 web_mat: str = "Birch Plywood",
+                 b_top_tip: float = None, t_top_tip: float = None,
+                 b_bot_tip: float = None, t_bot_tip: float = None):
         self.b_top = b_top; self.t_top = t_top
         self.b_bot = b_bot; self.t_bot = t_bot
+        self.b_top_tip = resolved_tip(b_top_tip, b_top)
+        self.t_top_tip = resolved_tip(t_top_tip, t_top)
+        self.b_bot_tip = resolved_tip(b_bot_tip, b_bot)
+        self.t_bot_tip = resolved_tip(t_bot_tip, t_bot)
         self.h_web = h_web; self.t_web = t_web
         self.web_spacing = web_spacing
         self.cap_mat = cap_mat
         self.web_mat = web_mat
 
-    def get_props(self, scale: float = 1.0) -> SectionProps:
-        s = scale
-        yc_bot = self.t_bot*s/2
-        yc_web = self.t_bot*s + self.h_web*s/2
-        yc_top = self.t_bot*s + self.h_web*s + self.t_top*s/2
-        ws = self.web_spacing * s
+    def caps_at(self, frac: float) -> tuple:
+        return (
+            lerp_size(self.b_top, self.b_top_tip, frac),
+            lerp_size(self.t_top, self.t_top_tip, frac),
+            lerp_size(self.b_bot, self.b_bot_tip, frac),
+            lerp_size(self.t_bot, self.t_bot_tip, frac),
+        )
+
+    def get_props(self, scale: float = 1.0, cap_scale: float = None, caps: tuple = None) -> SectionProps:
+        depth, width, thick = spar_station_scales(scale, cap_scale)
+        if caps is None:
+            b_top, t_top = self.b_top * width, self.t_top * thick
+            b_bot, t_bot = self.b_bot * width, self.t_bot * thick
+            h_web, t_web = self.h_web * depth, self.t_web * thick
+        else:
+            b_top, t_top, b_bot, t_bot = caps
+            h_web, t_web = self.h_web * depth, self.t_web
+        yc_bot = t_bot / 2
+        yc_web = t_bot + h_web / 2
+        yc_top = t_bot + h_web + t_top / 2
         # left web x-centroid irrelevant for bending I about horizontal axis
         elements = [
-            (self.b_bot*s, self.t_bot*s, yc_bot, self.cap_mat),
-            (self.t_web*s, self.h_web*s, yc_web, self.web_mat),  # left web
-            (self.t_web*s, self.h_web*s, yc_web, self.web_mat),  # right web
-            (self.b_top*s, self.t_top*s, yc_top, self.cap_mat),
+            (b_bot, t_bot, yc_bot, self.cap_mat),
+            (t_web, h_web, yc_web, self.web_mat),  # left web
+            (t_web, h_web, yc_web, self.web_mat),  # right web
+            (b_top, t_top, yc_top, self.cap_mat),
         ]
         return _composite_props(elements, self.cap_mat)
 
@@ -441,16 +525,32 @@ class BoxSpar(CrossSection):
     def __init__(self, b_outer: float, h_outer: float,
                  t_web: float, t_cap: float,
                  cap_mat: str = "Sitka Spruce",
-                 web_mat: str = "Birch Plywood"):
+                 web_mat: str = "Birch Plywood",
+                 b_outer_tip: float = None, t_cap_tip: float = None):
         self.b_outer = b_outer; self.h_outer = h_outer
+        self.b_outer_tip = resolved_tip(b_outer_tip, b_outer)
         self.t_web = t_web; self.t_cap = t_cap
+        self.t_cap_tip = resolved_tip(t_cap_tip, t_cap)
         self.cap_mat = cap_mat; self.web_mat = web_mat
 
-    def get_props(self, scale: float = 1.0) -> SectionProps:
-        s = scale
-        b = self.b_outer*s; h = self.h_outer*s
-        tc = self.t_cap*s;  tw = self.t_web*s
-        h_web = h - 2*tc
+    def caps_at(self, frac: float) -> tuple:
+        return (
+            lerp_size(self.b_outer, self.b_outer_tip, frac),
+            lerp_size(self.t_cap, self.t_cap_tip, frac),
+        )
+
+    def get_props(self, scale: float = 1.0, cap_scale: float = None, caps: tuple = None) -> SectionProps:
+        depth, width, thick = spar_station_scales(scale, cap_scale)
+        if caps is None:
+            b = self.b_outer * width
+            h = self.h_outer * depth
+            tc = self.t_cap * thick
+            tw = self.t_web * thick
+        else:
+            b, tc = caps
+            h = self.h_outer * depth
+            tw = self.t_web
+        h_web = max(h - 2*tc, 1e-3)
         yc_bot = tc/2
         yc_web = tc + h_web/2
         yc_top = tc + h_web + tc/2
@@ -472,21 +572,42 @@ class CChannel(CrossSection):
                  b_bot: float, t_bot: float,
                  h_web: float, t_web: float,
                  cap_mat: str = "6061-T6",
-                 web_mat: str = "6061-T6"):
+                 web_mat: str = "6061-T6",
+                 b_top_tip: float = None, t_top_tip: float = None,
+                 b_bot_tip: float = None, t_bot_tip: float = None):
         self.b_top = b_top; self.t_top = t_top
         self.b_bot = b_bot; self.t_bot = t_bot
+        self.b_top_tip = resolved_tip(b_top_tip, b_top)
+        self.t_top_tip = resolved_tip(t_top_tip, t_top)
+        self.b_bot_tip = resolved_tip(b_bot_tip, b_bot)
+        self.t_bot_tip = resolved_tip(t_bot_tip, t_bot)
         self.h_web = h_web; self.t_web = t_web
         self.cap_mat = cap_mat; self.web_mat = web_mat
 
-    def get_props(self, scale: float = 1.0) -> SectionProps:
-        s = scale
-        yc_bot = self.t_bot*s/2
-        yc_web = self.t_bot*s + self.h_web*s/2
-        yc_top = self.t_bot*s + self.h_web*s + self.t_top*s/2
+    def caps_at(self, frac: float) -> tuple:
+        return (
+            lerp_size(self.b_top, self.b_top_tip, frac),
+            lerp_size(self.t_top, self.t_top_tip, frac),
+            lerp_size(self.b_bot, self.b_bot_tip, frac),
+            lerp_size(self.t_bot, self.t_bot_tip, frac),
+        )
+
+    def get_props(self, scale: float = 1.0, cap_scale: float = None, caps: tuple = None) -> SectionProps:
+        depth, width, thick = spar_station_scales(scale, cap_scale)
+        if caps is None:
+            b_top, t_top = self.b_top * width, self.t_top * thick
+            b_bot, t_bot = self.b_bot * width, self.t_bot * thick
+            h_web, t_web = self.h_web * depth, self.t_web * thick
+        else:
+            b_top, t_top, b_bot, t_bot = caps
+            h_web, t_web = self.h_web * depth, self.t_web
+        yc_bot = t_bot / 2
+        yc_web = t_bot + h_web / 2
+        yc_top = t_bot + h_web + t_top / 2
         elements = [
-            (self.b_bot*s, self.t_bot*s, yc_bot, self.cap_mat),
-            (self.t_web*s, self.h_web*s, yc_web, self.web_mat),
-            (self.b_top*s, self.t_top*s, yc_top, self.cap_mat),
+            (b_bot, t_bot, yc_bot, self.cap_mat),
+            (t_web, h_web, yc_web, self.web_mat),
+            (b_top, t_top, yc_top, self.cap_mat),
         ]
         return _composite_props(elements, self.cap_mat)
 
@@ -502,21 +623,42 @@ class RoutedSpar(CrossSection):
                  b_top: float, t_top: float,
                  b_bot: float, t_bot: float,
                  h_web: float, t_web: float,
-                 mat_name: str = "Sitka Spruce"):
+                 mat_name: str = "Sitka Spruce",
+                 b_top_tip: float = None, t_top_tip: float = None,
+                 b_bot_tip: float = None, t_bot_tip: float = None):
         self.b_top = b_top; self.t_top = t_top
         self.b_bot = b_bot; self.t_bot = t_bot
+        self.b_top_tip = resolved_tip(b_top_tip, b_top)
+        self.t_top_tip = resolved_tip(t_top_tip, t_top)
+        self.b_bot_tip = resolved_tip(b_bot_tip, b_bot)
+        self.t_bot_tip = resolved_tip(t_bot_tip, t_bot)
         self.h_web = h_web; self.t_web = t_web
         self.mat_name = mat_name
 
-    def get_props(self, scale: float = 1.0) -> SectionProps:
-        s = scale
-        yc_bot = self.t_bot*s/2
-        yc_web = self.t_bot*s + self.h_web*s/2
-        yc_top = self.t_bot*s + self.h_web*s + self.t_top*s/2
+    def caps_at(self, frac: float) -> tuple:
+        return (
+            lerp_size(self.b_top, self.b_top_tip, frac),
+            lerp_size(self.t_top, self.t_top_tip, frac),
+            lerp_size(self.b_bot, self.b_bot_tip, frac),
+            lerp_size(self.t_bot, self.t_bot_tip, frac),
+        )
+
+    def get_props(self, scale: float = 1.0, cap_scale: float = None, caps: tuple = None) -> SectionProps:
+        depth, width, thick = spar_station_scales(scale, cap_scale)
+        if caps is None:
+            b_top, t_top = self.b_top * width, self.t_top * thick
+            b_bot, t_bot = self.b_bot * width, self.t_bot * thick
+            h_web, t_web = self.h_web * depth, self.t_web * thick
+        else:
+            b_top, t_top, b_bot, t_bot = caps
+            h_web, t_web = self.h_web * depth, self.t_web
+        yc_bot = t_bot / 2
+        yc_web = t_bot + h_web / 2
+        yc_top = t_bot + h_web + t_top / 2
         elements = [
-            (self.b_bot*s, self.t_bot*s, yc_bot, self.mat_name),
-            (self.t_web*s, self.h_web*s, yc_web, self.mat_name),
-            (self.b_top*s, self.t_top*s, yc_top, self.mat_name),
+            (b_bot, t_bot, yc_bot, self.mat_name),
+            (t_web, h_web, yc_web, self.mat_name),
+            (b_top, t_top, yc_top, self.mat_name),
         ]
         return _composite_props(elements, self.mat_name)
 
@@ -537,18 +679,31 @@ class AluminumCSpar(CrossSection):
     def __init__(self, b_cap: float, t_cap: float,
                  h_web: float, t_web: float,
                  cap_side: str = "top",
-                 mat_name: str = "6061-T6"):
+                 mat_name: str = "6061-T6",
+                 b_cap_tip: float = None, t_cap_tip: float = None):
         self.b_cap    = b_cap
         self.t_cap    = t_cap
+        self.b_cap_tip = resolved_tip(b_cap_tip, b_cap)
+        self.t_cap_tip = resolved_tip(t_cap_tip, t_cap)
         self.h_web    = h_web
         self.t_web    = t_web
         self.cap_side = cap_side
         self.mat_name = mat_name
 
-    def get_props(self, scale: float = 1.0) -> SectionProps:
-        s  = scale
-        bc = self.b_cap * s; tc = self.t_cap * s
-        hw = self.h_web * s; tw = self.t_web * s
+    def caps_at(self, frac: float) -> tuple:
+        return (
+            lerp_size(self.b_cap, self.b_cap_tip, frac),
+            lerp_size(self.t_cap, self.t_cap_tip, frac),
+        )
+
+    def get_props(self, scale: float = 1.0, cap_scale: float = None, caps: tuple = None) -> SectionProps:
+        depth, width, thick = spar_station_scales(scale, cap_scale)
+        if caps is None:
+            bc, tc = self.b_cap * width, self.t_cap * thick
+            hw, tw = self.h_web * depth, self.t_web * thick
+        else:
+            bc, tc = caps
+            hw, tw = self.h_web * depth, self.t_web
         be = tw; te = tw   # uncapped edge: web thickness only
 
         if self.cap_side == "top":
@@ -1298,6 +1453,122 @@ def all_mat_names() -> List[str]:
 
 def strut_mat_names() -> List[str]:
     return list(STRUT_MATERIALS.keys())
+
+
+# Rib constructions. Stored values are the labels written into a project file.
+RIB_TYPE_PLYWOOD = "Plywood web"
+RIB_TYPE_FORMED = "Sheet aluminum formed"
+RIB_TYPE_FOAM = "Dow foam with spruce caps"
+
+# DuPont Styrofoam Brand Panel Core 20 XPS, the published structural-core
+# minimums for Dow's extruded polystyrene. Homebuilt "Dow foam" board is this
+# XPS family. These are minimums, not a coupon test of a particular sheet.
+#   G, Fsu: ASTM C273 minimum
+#   flexural modulus: ASTM C203 minimum (foam board only; caps supply rib bending)
+#   compression: ASTM D1621 minimum
+DOW_FOAM_CORE = {
+    "G": 300.0,
+    "Fsu": 25.0,
+    "E_flex": 1_600.0,
+    "Fc": 20.0,
+    "rho": 1.5 / 1728.0,
+}
+
+
+def canonical_rib_type(name: str) -> str:
+    """Map a project-file label or short key onto one rib construction."""
+    text = str(name or "").strip().lower()
+    aliases = {
+        "plywood_web": RIB_TYPE_PLYWOOD,
+        "plywood web": RIB_TYPE_PLYWOOD,
+        "plywood": RIB_TYPE_PLYWOOD,
+        "formed_aluminum": RIB_TYPE_FORMED,
+        "sheet aluminum formed": RIB_TYPE_FORMED,
+        "aluminum formed": RIB_TYPE_FORMED,
+        "formed aluminum": RIB_TYPE_FORMED,
+        "foam_spruce": RIB_TYPE_FOAM,
+        "dow foam with spruce caps": RIB_TYPE_FOAM,
+        "dow foam": RIB_TYPE_FOAM,
+    }
+    return aliases.get(text, RIB_TYPE_PLYWOOD)
+
+
+def rib_tie_stiffness(rib_type: str, gap: float, spacing: float,
+                      h: float, t: float, b_cap: float, t_cap: float,
+                      rib_mat: str, wood_knockdown: float = 0.75) -> dict:
+    """In-plane stiffness of one rib bay, as stiffness per inch of span.
+
+    Plywood web and formed aluminum sheet are Bruhn/Peery shear panels:
+    one rib has k = G t h / gap. The formed flange is bent from the same
+    sheet, so its thickness is the sheet thickness, and it is not added
+    to the shear area.
+
+    A Dow-foam rib with spruce cap strips is a sandwich beam. Core shear
+    and cap bending add as flexibilities:
+    k = 1 / (gap/(G t h) + gap^3/(12 E I)).
+    I is the two Sitka spruce caps about their centroid. The foam's own
+    bending stiffness is not included.
+    """
+    kind = canonical_rib_type(rib_type)
+    gap = max(float(gap), 1e-6)
+    pitch = max(float(spacing), 1e-6)
+    h = max(float(h), 0.0)
+    t = max(float(t), 0.0)
+    b_cap = max(float(b_cap), 0.0)
+    t_cap = max(float(t_cap), 0.0)
+    shear_area = t * h
+
+    if kind == RIB_TYPE_FOAM:
+        core = DOW_FOAM_CORE
+        G = core["G"]
+        Fsu = core["Fsu"]
+        spruce = MATERIAL_DB["Sitka Spruce"]
+        d = h + t_cap
+        cap_area = b_cap * t_cap
+        I_caps = 0.0
+        if cap_area > 0.0 and d > 0.0:
+            I_caps = 2.0 * cap_area * (d / 2.0) ** 2 + 2.0 * b_cap * t_cap ** 3 / 12.0
+        flex = 0.0
+        if shear_area > 0.0 and G > 0.0:
+            flex += gap / (G * shear_area)
+        if I_caps > 0.0:
+            flex += gap ** 3 / (12.0 * spruce["E"] * I_caps)
+        k_one = 1.0 / flex if flex > 0.0 else 0.0
+        # End moment of an antisymmetric rib between the two spars is V*gap/2.
+        cap_sigma_per_lb = 0.0
+        if cap_area > 0.0 and d > 0.0:
+            cap_sigma_per_lb = (gap / 2.0) / (d * cap_area)
+        cap_allow = min(spruce["Fc"], spruce["Ft"]) * max(float(wood_knockdown), 0.0)
+        model = "sandwich beam: foam core shear in series with spruce cap bending"
+    else:
+        mat_name = resolve_material(rib_mat or "Birch Plywood")
+        if kind == RIB_TYPE_FORMED and MATERIAL_DB[mat_name]["is_wood"]:
+            mat_name = "2024-T3"
+        props = MATERIAL_DB[mat_name]
+        G = props["G"]
+        Fsu = props["Fsu"] or 0.0
+        k_one = G * shear_area / gap if shear_area > 0.0 else 0.0
+        cap_sigma_per_lb = 0.0
+        cap_allow = 0.0
+        I_caps = 0.0
+        if kind == RIB_TYPE_FORMED:
+            model = "formed-sheet shear panel; flange thickness equals the sheet"
+        else:
+            model = "plywood shear panel"
+
+    return {
+        "type": kind,
+        "label": kind,
+        "model": model,
+        "G": G,
+        "Fsu": Fsu,
+        "k_one": k_one,
+        "k_per_span": k_one / pitch,
+        "shear_area": shear_area,
+        "I_caps": I_caps,
+        "cap_sigma_per_lb": cap_sigma_per_lb,
+        "cap_allow": cap_allow,
+    }
 
 
 # ─── SELF-TEST ───────────────────────────────────────────────────────────────

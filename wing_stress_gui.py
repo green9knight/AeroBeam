@@ -1,5 +1,5 @@
 """
-AeroBeam v1.2.2 — GUI
+AeroBeam v1.2.3 — GUI
 ====================
 Full Tkinter front-end for WingStressAnalyzer.
 """
@@ -20,7 +20,9 @@ if sys.platform == "win32":
     except: pass
 
 from input_validation import ValidationError, validate_inputs
-from wing_stress_analyzer import WingStressAnalyzer, DEFAULT_INPUTS, dynamic_pressure_psi
+from wing_stress_analyzer import (
+    WingStressAnalyzer, DEFAULT_INPUTS, dynamic_pressure_psi, parse_user_float,
+)
 from spar_sections import (
     MATERIAL_DB, STRUT_MATERIALS, ALUMINUM_ANGLES, ANGLE_DESCRIPTIONS,
     spar_type_names, aluminum_mat_names, wood_mat_names, all_mat_names, strut_mat_names,
@@ -28,7 +30,7 @@ from spar_sections import (
 from airfoil_database import AIRFOIL_DB, get_airfoil
 from common_tube_spars import COMMON_TUBE_SIZES, get_tube_by_description
 
-VERSION = "1.2.2"
+VERSION = "1.2.3"
 APP_TITLE = f"AeroBeam v{VERSION}  —  Phil Ramer"
 
 # Colour tags for summary panel
@@ -546,7 +548,7 @@ class WingStressGUI:
         hdr.pack_propagate(False)
         tk.Label(hdr, text="✈  AeroBeam", bg=C_HEADER_BG, fg=C_ACCENT2,
                  font=("Segoe UI", 15, "bold")).pack(side=tk.LEFT, padx=16, pady=10)
-        tk.Label(hdr, text="v1.2.2   Wing Bending, Shear & Buckling Analysis",
+        tk.Label(hdr, text="v1.2.3   Wing Bending, Shear & Buckling Analysis",
                  bg=C_HEADER_BG, fg=C_TEXT_DIM,
                  font=("Segoe UI", 9)).pack(side=tk.LEFT, pady=14)
         self._hdr_status = tk.Label(hdr, text="Ready", bg=C_HEADER_BG,
@@ -753,6 +755,12 @@ class WingStressGUI:
         ttk.Label(f,text="  0 = taper from root to tip  |  enter BL where taper begins (Cessna-style constant chord inboard)",
                   foreground=C_TEXT_DIM, font=("Segoe UI",8)).grid(
                   row=r,column=0,columnspan=4,sticky="w",padx=20,pady=(0,4)); r+=1
+        self._lc(f, "Keep straight:", "taper_reference",
+                 ["Leading edge", "Main spar", "Trailing edge"], "Leading edge", row=r)
+        r += 1
+        ttk.Label(f, text="  The chord and spar percentages stay as entered. The section shifts so that line is straight.",
+                  foreground=C_TEXT_DIM, font=("Segoe UI", 8)).grid(
+                  row=r, column=0, columnspan=4, sticky="w", padx=20, pady=(0, 4)); r += 1
         self._le(f,"Rib spacing (in):","rib_spacing",12.0, row=r); r+=1
 
         section_label(f,"Spar Positions", row=r); r+=1
@@ -935,16 +943,23 @@ class WingStressGUI:
                                  row=r,column=1,sticky="w",padx=3,pady=2)
                 r+=1
 
-            # Top cap
+            # Top cap — root size, then tip size. A blank tip matches the root.
             cap_lbl = "Cap" if is_cspar else "Top cap"
-            self._le(f,f"{cap_lbl} width (in):",f"{prefix}_b_top",1.5,row=r); r+=1
-            self._le(f,f"{cap_lbl} height (in):",f"{prefix}_t_top",0.125 if is_alum else 0.75,row=r); r+=1
+            cap_t = 0.125 if is_alum else 0.75
+            self._le(f,f"Root {cap_lbl.lower()} width (in):",f"{prefix}_b_top",1.5,row=r); r+=1
+            self._le(f,f"Root {cap_lbl.lower()} height (in):",f"{prefix}_t_top",cap_t,row=r); r+=1
+            self._le(f,f"Tip {cap_lbl.lower()} width (in):",f"{prefix}_b_top_tip",1.5,row=r); r+=1
+            self._le(f,f"Tip {cap_lbl.lower()} height (in):",f"{prefix}_t_top_tip",cap_t,row=r); r+=1
 
             # Bottom cap (not for C-Spar)
             if not is_cspar:
-                self._le(f,"Bot cap width (in):",f"{prefix}_b_bot",1.5,row=r); r+=1
-                self._le(f,"Bot cap height (in):",f"{prefix}_t_bot",
-                         0.125 if is_alum else 0.75,row=r); r+=1
+                self._le(f,"Root bottom cap width (in):",f"{prefix}_b_bot",1.5,row=r); r+=1
+                self._le(f,"Root bottom cap height (in):",f"{prefix}_t_bot",cap_t,row=r); r+=1
+                self._le(f,"Tip bottom cap width (in):",f"{prefix}_b_bot_tip",1.5,row=r); r+=1
+                self._le(f,"Tip bottom cap height (in):",f"{prefix}_t_bot_tip",cap_t,row=r); r+=1
+            ttk.Label(f, text="  Caps taper in a straight line from the taper-start station to the tip.",
+                      foreground=C_TEXT_DIM, font=("Segoe UI", 8)).grid(
+                      row=r, column=0, columnspan=4, sticky="w", padx=20, pady=(0, 4)); r+=1
 
             # Web geometry
             self._le(f,"Shear web height - clear between caps (in):",f"{prefix}_h_web",
@@ -974,10 +989,15 @@ class WingStressGUI:
                     lambda *_, p=prefix: self._update_h_total(p))
 
         elif is_box:
-            self._le(f,"Outer width (in):",f"{prefix}_b_outer",2.0,row=r); r+=1
-            self._le(f,"Outer height (in):",f"{prefix}_h_outer",5.0,row=r); r+=1
-            self._le(f,"Cap thickness (in):",f"{prefix}_t_cap",0.75,row=r); r+=1
+            self._le(f,"Root outer width (in):",f"{prefix}_b_outer",2.0,row=r); r+=1
+            self._le(f,"Tip outer width (in):",f"{prefix}_b_outer_tip",2.0,row=r); r+=1
+            self._le(f,"Outer height at root (in):",f"{prefix}_h_outer",5.0,row=r); r+=1
+            self._le(f,"Root cap thickness (in):",f"{prefix}_t_cap",0.75,row=r); r+=1
+            self._le(f,"Tip cap thickness (in):",f"{prefix}_t_cap_tip",0.75,row=r); r+=1
             self._le(f,"Web thickness (in):",f"{prefix}_t_web",0.125,row=r); r+=1
+            ttk.Label(f, text="  Cap width and thickness taper from the taper-start station to the tip.",
+                      foreground=C_TEXT_DIM, font=("Segoe UI", 8)).grid(
+                      row=r, column=0, columnspan=4, sticky="w", padx=20, pady=(0, 4)); r+=1
 
         elif is_rect:
             self._le(f,"Width (in):",f"{prefix}_width",2.0,row=r); r+=1
@@ -1123,27 +1143,96 @@ class WingStressGUI:
     def _build_rib_section(self, f, row):
         """Build rib structure configuration section."""
         section_label(f, "Rib Structure (torsion transfer between spars)", row=row())
-        
-        # Rib field definitions
-        rib_fields = [
-            ("entry", "Rib web height (in):", "rib_h_web", 3.0),
-            ("entry", "Rib web thickness (in):", "rib_t_web", 0.125),
-            ("entry", "Rib cap width (in):", "rib_b_cap", 0.75),
-            ("entry", "Rib cap thickness (in):", "rib_t_cap", 0.125),
-            ("combo", "Rib material:", "rib_mat", wood_mat_names(), "Birch Plywood"),
-        ]
-        
-        for widget_type, label, var_name, *args in rib_fields:
-            if widget_type == "entry":
-                self._le(f, label, var_name, args[0], row=row())
-            elif widget_type == "combo":
-                self._lc(f, label, var_name, args[0], args[1], row=row())
-        
-        # Info label
+        self._rib_rows = {}
+
+        type_row = row()
+        type_var = self._v("rib_type", "Plywood web")
+        type_lbl = ttk.Label(f, text="Rib type:")
+        type_lbl.grid(row=type_row, column=0, sticky="e", padx=3, pady=2)
+        self._rib_type_combo = ttk.Combobox(
+            f, textvariable=type_var, width=28, state="readonly",
+            values=("Plywood web", "Sheet aluminum formed", "Dow foam with spruce caps"))
+        self._rib_type_combo.grid(row=type_row, column=1, sticky="w", padx=3, pady=2)
+        self._rib_type_combo.bind("<<ComboboxSelected>>", lambda _e: self._refresh_rib(True))
+
+        for label, name, default in (
+            ("Rib web height (in):", "rib_h_web", 3.0),
+            ("Rib web thickness (in):", "rib_t_web", 0.125),
+            ("Rib cap width (in):", "rib_b_cap", 0.75),
+            ("Rib cap thickness (in):", "rib_t_cap", 0.125),
+        ):
+            r = row()
+            lbl = ttk.Label(f, text=label)
+            lbl.grid(row=r, column=0, sticky="e", padx=3, pady=2)
+            var = self._v(name, default)
+            entry = ttk.Entry(f, textvariable=var, width=10)
+            entry.grid(row=r, column=1, sticky="w", padx=3, pady=2)
+            self._rib_rows[name] = (lbl, entry)
+
+        r = row()
+        mat_lbl = ttk.Label(f, text="Rib material:")
+        mat_lbl.grid(row=r, column=0, sticky="e", padx=3, pady=2)
+        mat_var = self._v("rib_mat", "Birch Plywood")
+        self._rib_mat_combo = ttk.Combobox(
+            f, textvariable=mat_var, values=wood_mat_names(), width=22, state="readonly")
+        self._rib_mat_combo.grid(row=r, column=1, sticky="w", padx=3, pady=2)
+        self._rib_rows["rib_mat"] = (mat_lbl, self._rib_mat_combo)
+
         self._rib_info = tk.StringVar(value="")
         ttk.Label(f, textvariable=self._rib_info, foreground=C_TEXT_DIM,
-                  font=("Courier", 8)).grid(
+                  font=("Courier", 8), wraplength=420, justify="left").grid(
                   row=row(), column=0, columnspan=4, sticky="w", padx=4)
+        type_var.trace_add("write", lambda *_: self._refresh_rib(False))
+        self._refresh_rib(False)
+
+    def _refresh_rib(self, fix_material=False):
+        """Show the fields that belong to the selected rib construction."""
+        if not hasattr(self, "_rib_rows"):
+            return
+        kind = self._vars.get("rib_type", tk.StringVar(value="Plywood web")).get()
+        labels = {
+            "rib_h_web": "Rib web height (in):",
+            "rib_t_web": "Rib web thickness (in):",
+            "rib_b_cap": "Rib cap width (in):",
+            "rib_t_cap": "Rib cap thickness (in):",
+        }
+        info = "Bruhn/Peery plywood shear panel. Stiffness is G t h / spar gap, per rib pitch."
+        mats = wood_mat_names()
+        default_mat = "Birch Plywood"
+        hide = set()
+        if kind == "Sheet aluminum formed":
+            labels["rib_h_web"] = "Sheet web height (in):"
+            labels["rib_t_web"] = "Sheet thickness (in):"
+            labels["rib_b_cap"] = "Formed flange width (in):"
+            hide.add("rib_t_cap")
+            mats = aluminum_mat_names()
+            default_mat = "2024-T3"
+            info = ("Formed aluminum sheet. The flange is bent from the sheet, so flange "
+                    "thickness equals the sheet. The shear panel is the web only.")
+        elif kind == "Dow foam with spruce caps":
+            labels["rib_h_web"] = "Foam height between caps (in):"
+            labels["rib_t_web"] = "Foam thickness (in):"
+            labels["rib_b_cap"] = "Spruce cap width (in):"
+            labels["rib_t_cap"] = "Spruce cap thickness (in):"
+            hide.add("rib_mat")
+            info = ("Sandwich rib. Core shear uses Dow Styrofoam Panel Core 20 minimums "
+                    "(ASTM C273): G = 300 psi, shear strength = 25 psi. Sitka spruce caps "
+                    "take the bending. Glue is not checked.")
+        for name, (lbl, widget) in self._rib_rows.items():
+            if name in labels:
+                lbl.configure(text=labels[name])
+            if name in hide:
+                lbl.grid_remove()
+                widget.grid_remove()
+            else:
+                lbl.grid()
+                widget.grid()
+        if kind != "Dow foam with spruce caps":
+            self._rib_mat_combo.configure(values=mats)
+            current = self._vars["rib_mat"].get()
+            if fix_material and current not in mats:
+                self._vars["rib_mat"].set(default_mat if default_mat in mats else mats[0])
+        self._rib_info.set(info)
 
     def _build_subsection_fields(self, parent, field_definitions):
         """
@@ -1425,6 +1514,12 @@ class WingStressGUI:
             self._vars[f"{prefix}_t_top"].set(f"{ang.t_equiv:.4f}")
             self._vars[f"{prefix}_b_bot"].set(str(ang.b_equiv))
             self._vars[f"{prefix}_t_bot"].set(f"{ang.t_equiv:.4f}")
+            if f"{prefix}_b_top_tip" in self._vars:
+                self._vars[f"{prefix}_b_top_tip"].set(str(ang.b_equiv))
+                self._vars[f"{prefix}_t_top_tip"].set(f"{ang.t_equiv:.4f}")
+            if f"{prefix}_b_bot_tip" in self._vars:
+                self._vars[f"{prefix}_b_bot_tip"].set(str(ang.b_equiv))
+                self._vars[f"{prefix}_t_bot_tip"].set(f"{ang.t_equiv:.4f}")
 
     def _refresh_dcell(self):
         enabled = self._vars.get("dcell_enabled", tk.BooleanVar(value=False)).get()
@@ -1694,8 +1789,8 @@ class WingStressGUI:
             else:
                 raw_str = str(raw).strip()
                 if raw_str != "":
-                    try:    out[k] = float(raw_str)
-                    except: out[k] = raw_str
+                    try:    out[k] = parse_user_float(raw_str)
+                    except ValueError: out[k] = raw_str
                 # if empty: keep cache/default value
 
         # Normalize load share
@@ -1940,6 +2035,18 @@ class WingStressGUI:
         if isinstance(lsf, (int,float)) and lsf > 1.0:
             merged["front_spar_load_share"] = lsf / 100.0
 
+        # A saved file from before tip caps existed keeps the root size out to the tip.
+        for prefix in ("front_spar", "rear_spar"):
+            for root_name, tip_name in (
+                ("b_top", "b_top_tip"), ("t_top", "t_top_tip"),
+                ("b_bot", "b_bot_tip"), ("t_bot", "t_bot_tip"),
+                ("b_outer", "b_outer_tip"), ("t_cap", "t_cap_tip"),
+            ):
+                tip_key = f"{prefix}_{tip_name}"
+                root_key = f"{prefix}_{root_name}"
+                if tip_key not in data and root_key in merged:
+                    merged[tip_key] = merged[root_key]
+
         # 4. Store full merged data in cache
         self._data_cache = dict(merged)
 
@@ -1978,6 +2085,7 @@ class WingStressGUI:
         self._update_strut_info()
         self._update_q()
         self._update_dcell_area()
+        self._refresh_rib(False)
 
     def _write_file(self, path):
         """

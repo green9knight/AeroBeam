@@ -36,7 +36,7 @@ METHOD_STATUS = {
     "torsion": {
         "status": "EXPERIMENTAL",
         "label": "D-cell/geodetic/rib/skin torsion sharing",
-        "note": "Nose area and skin length come from the thickness curve. Bredt-Batho is the torsion cell. Rear-spar bending is a beam on rib reactions, separate for cantilever, single-strut, and dual-strut. Strip force is demand only.",
+        "note": "Nose area and skin length come from the thickness curve. Bredt-Batho is the torsion cell. Torque about the shear center is the signed pitching moment plus lift times the aerodynamic-center offset. Cantilever and single-strut ribs are stiff in their plane, so bending is shared by EI and the rib torque includes the spar-to-spar couple. Reported spar positions add that twist: nose-up lowers a point aft of the shear center. A plywood or formed-aluminum rib is a shear panel. A Dow-foam rib with spruce caps is a sandwich beam and is soft in core shear. Dual-strut bending stays on the entered load share. Strip force is demand only.",
     },
     "buckling": {
         "status": "PRELIMINARY",

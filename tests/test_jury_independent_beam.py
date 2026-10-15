@@ -105,15 +105,17 @@ class JuryIndependentBeamTest(unittest.TestCase):
         )
         analyzer = WingStressAnalyzer(inputs)
         analyzer.analyze()
+        # Ribs lock the spars to one curve, so the wing bends on EI_front + EI_rear.
         fe_z = beam_fe_displacements(
             analyzer.x,
             analyzer._lift_dist(inputs["ng_lift"]),
-            analyzer._EI_f,
+            analyzer._EI_f + analyzer._EI_r,
             [0.0],
             fixed_rotations=[0.0],
         )
 
         self.assertAlmostEqual(analyzer.pos["z_front"][-1], fe_z[-1], delta=abs(fe_z[-1]) * 0.03)
+        self.assertAlmostEqual(analyzer.pos["z_rear"][-1], fe_z[-1], delta=abs(fe_z[-1]) * 0.03)
 
     def test_main_strut_reaction_matches_root_moment_static_relation(self):
         inputs = dict(DEFAULT_INPUTS)

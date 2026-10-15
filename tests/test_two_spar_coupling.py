@@ -135,7 +135,7 @@ class TwoSparCouplingTest(unittest.TestCase):
         low.analyze()
         high.analyze()
 
-        self.assertEqual(low._rear_spar_path, "cantilever beam")
+        self.assertEqual(low._rear_spar_path, "rib-tied cantilever")
         self.assertAlmostEqual(low.pos["z_delta_max"], high.pos["z_delta_max"])
         self.assertAlmostEqual(float(np.max(np.abs(low.pos["M_rear"]))), float(np.max(np.abs(high.pos["M_rear"]))))
         self.assertGreater(high._torsion_stiffness, low._torsion_stiffness)
@@ -166,15 +166,23 @@ class TwoSparCouplingTest(unittest.TestCase):
         single.analyze()
         dual.analyze()
 
-        self.assertEqual(cantilever._rear_spar_path, "cantilever beam")
-        self.assertEqual(single._rear_spar_path, "single-strut rear cantilever")
+        self.assertEqual(cantilever._rear_spar_path, "rib-tied cantilever")
+        self.assertEqual(single._rear_spar_path, "rib-tied single-strut")
         self.assertEqual(dual._rear_spar_path, "dual-strut shared bending")
-        # Cantilever rear root moment is the load share of the full cantilever moment.
-        self.assertAlmostEqual(cantilever.pos["M_rear"][0], cantilever.pos["M_front"][0] * 0.3 / 0.7, delta=1.0)
-        # Single strut relieves the front spar and leaves the rear spar cantilevered.
-        self.assertGreater(abs(single.pos["M_rear"][0]), abs(single.pos["M_front"][0]))
-        self.assertAlmostEqual(single.pos["M_rear"][0], cantilever.pos["M_rear"][0], delta=1.0)
-        # Dual strut relieves both spars, so the rear root moment is below the cantilever share.
+        # Cantilever ribs lock both spars to one curve and split the moment by EI.
+        ratio = cantilever._EI_r[0] / cantilever._EI_f[0]
+        self.assertAlmostEqual(
+            cantilever.pos["M_rear"][0], cantilever.pos["M_front"][0] * ratio, delta=1.0)
+        self.assertLess(cantilever.pos["z_delta_max"], 0.05)
+        self.assertGreater(cantilever._torsion_transfer["k_rib"], 0.0)
+        self.assertGreater(cantilever.torsion["rib_transfer_torque"], 0.0)
+        # Single strut: the ribs carry the rear spar onto the strutted curve.
+        self.assertLess(single.pos["z_delta_max"], 0.05)
+        self.assertLess(abs(single.pos["M_rear"][0]), abs(cantilever.pos["M_rear"][0]))
+        self.assertGreater(single.torsion["rib_transfer_torque"], 0.0)
+        self.assertGreater(single._torsion_transfer["k_rib"], 0.0)
+        # Dual strut does not use the rib-tied path.
+        self.assertEqual(dual._torsion_transfer["k_rib"], 0.0)
         self.assertLess(abs(dual.pos["M_rear"][0]), abs(cantilever.pos["M_rear"][0]))
 
     def test_jury_brace_does_not_change_spar_bending_deflection(self):

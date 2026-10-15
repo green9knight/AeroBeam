@@ -8,7 +8,7 @@ aircraft structures engineer.
 
 ## Download for Windows
 
-[AeroBeam v1.2.2 portable folder](https://github.com/green9knight/AeroBeam/releases/download/v1.2.2/AeroBeam-1.2.2-windows.zip).
+[AeroBeam v1.2.3 portable folder](https://github.com/green9knight/AeroBeam/releases/download/v1.2.3/AeroBeam-1.2.3-windows.zip).
 Unzip it and run `AeroBeam.exe`. Python is not required.
 
 ## Install from source

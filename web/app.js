@@ -19,6 +19,11 @@ const inputSections = [
           ["root_chord", "Root chord (in)", "number", "0.1"],
           ["tip_chord", "Tip chord (in)", "number", "0.1"],
           ["taper_start_bl", "Taper start BL (in)", "number", "0.1"],
+          ["taper_reference", "Keep straight", "select", [
+            { value: "Leading edge", label: "Leading edge" },
+            { value: "Main spar", label: "Main spar" },
+            { value: "Trailing edge", label: "Trailing edge" },
+          ]],
           ["rib_spacing", "Rib spacing (in)", "number", "0.1"],
           ["num_points", "Analysis stations", "number", "1"],
           ["lift_distribution_type", "Lift distribution", "select", ["schrenk", "elliptical", "chord_based", "uniform"]],
@@ -125,9 +130,20 @@ const inputSections = [
         ],
       },
       {
-        title: "Rib Reaction Requirements",
-        help: "AeroBeam reports required rib bay torque and front/rear attach reactions. Rib geometry/material sizing is left to a separate rib design check.",
-        fields: [],
+        title: "Ribs",
+        help: "Plywood and formed aluminum are shear panels. Dow foam with spruce caps is a sandwich beam. AeroBeam reports demand and stress. It does not size the rib, and it does not check the foam-to-cap glue.",
+        fields: [
+          ["rib_type", "Rib type", "select", [
+            { value: "Plywood web", label: "Plywood web" },
+            { value: "Sheet aluminum formed", label: "Sheet aluminum formed" },
+            { value: "Dow foam with spruce caps", label: "Dow foam with spruce caps" },
+          ]],
+          ["rib_h_web", "Web or foam height (in)", "number", "0.001"],
+          ["rib_t_web", "Web, sheet, or foam thickness (in)", "number", "0.001"],
+          ["rib_b_cap", "Cap or flange width (in)", "number", "0.001"],
+          ["rib_t_cap", "Cap thickness (in)", "number", "0.001"],
+          ["rib_mat", "Rib or sheet material", "select", "materials"],
+        ],
       },
     ],
   },
@@ -186,16 +202,22 @@ function sparFields(prefix) {
     [`${prefix}_height`, "Rect height (in)", "number", "0.001"],
     [`${prefix}_cap_mat`, "Cap material", "select", "materials"],
     [`${prefix}_web_mat`, "Web material", "select", "materials"],
-    [`${prefix}_b_top`, "Top cap width (in)", "number", "0.001"],
-    [`${prefix}_t_top`, "Top cap height/thickness (in)", "number", "0.001"],
-    [`${prefix}_b_bot`, "Bottom cap width (in)", "number", "0.001"],
-    [`${prefix}_t_bot`, "Bottom cap height/thickness (in)", "number", "0.001"],
+    [`${prefix}_b_top`, "Root top cap width (in)", "number", "0.001"],
+    [`${prefix}_t_top`, "Root top cap height/thickness (in)", "number", "0.001"],
+    [`${prefix}_b_top_tip`, "Tip top cap width (in)", "number", "0.001"],
+    [`${prefix}_t_top_tip`, "Tip top cap height/thickness (in)", "number", "0.001"],
+    [`${prefix}_b_bot`, "Root bottom cap width (in)", "number", "0.001"],
+    [`${prefix}_t_bot`, "Root bottom cap height/thickness (in)", "number", "0.001"],
+    [`${prefix}_b_bot_tip`, "Tip bottom cap width (in)", "number", "0.001"],
+    [`${prefix}_t_bot_tip`, "Tip bottom cap height/thickness (in)", "number", "0.001"],
     [`${prefix}_h_web`, "Shear web clear height (in)", "number", "0.001"],
     [`${prefix}_t_web`, "Shear web thickness (in)", "number", "0.001"],
     [`${prefix}_web_spacing`, "Double web spacing (in)", "number", "0.001"],
-    [`${prefix}_b_outer`, "Box outer width (in)", "number", "0.001"],
-    [`${prefix}_h_outer`, "Box outer height (in)", "number", "0.001"],
-    [`${prefix}_t_cap`, "Box cap thickness (in)", "number", "0.001"],
+    [`${prefix}_b_outer`, "Root box outer width (in)", "number", "0.001"],
+    [`${prefix}_b_outer_tip`, "Tip box outer width (in)", "number", "0.001"],
+    [`${prefix}_h_outer`, "Box outer height at root (in)", "number", "0.001"],
+    [`${prefix}_t_cap`, "Root box cap thickness (in)", "number", "0.001"],
+    [`${prefix}_t_cap_tip`, "Tip box cap thickness (in)", "number", "0.001"],
     [`${prefix}_cap_side`, "C-spar cap side", "select", ["top", "bottom"]],
   ];
 }
@@ -220,31 +242,37 @@ function relevantSparKeys(prefix, sparType) {
     "Plain Rectangular": [`${prefix}_cap_mat`, `${prefix}_width`, `${prefix}_height`],
     "I-Beam": [
       `${prefix}_angle_select`, `${prefix}_cap_mat`, `${prefix}_web_mat`, `${prefix}_b_top`, `${prefix}_t_top`,
-      `${prefix}_b_bot`, `${prefix}_t_bot`, `${prefix}_h_web`, `${prefix}_t_web`,
+      `${prefix}_b_top_tip`, `${prefix}_t_top_tip`, `${prefix}_b_bot`, `${prefix}_t_bot`,
+      `${prefix}_b_bot_tip`, `${prefix}_t_bot_tip`, `${prefix}_h_web`, `${prefix}_t_web`,
     ],
     "C-Channel": [
       `${prefix}_angle_select`, `${prefix}_cap_mat`, `${prefix}_web_mat`, `${prefix}_b_top`, `${prefix}_t_top`,
-      `${prefix}_b_bot`, `${prefix}_t_bot`, `${prefix}_h_web`, `${prefix}_t_web`,
+      `${prefix}_b_top_tip`, `${prefix}_t_top_tip`, `${prefix}_b_bot`, `${prefix}_t_bot`,
+      `${prefix}_b_bot_tip`, `${prefix}_t_bot_tip`, `${prefix}_h_web`, `${prefix}_t_web`,
     ],
     "Routed (Monolithic)": [
-      `${prefix}_cap_mat`, `${prefix}_b_top`, `${prefix}_t_top`, `${prefix}_b_bot`,
-      `${prefix}_t_bot`, `${prefix}_h_web`, `${prefix}_t_web`,
+      `${prefix}_cap_mat`, `${prefix}_b_top`, `${prefix}_t_top`, `${prefix}_b_top_tip`, `${prefix}_t_top_tip`,
+      `${prefix}_b_bot`, `${prefix}_t_bot`, `${prefix}_b_bot_tip`, `${prefix}_t_bot_tip`,
+      `${prefix}_h_web`, `${prefix}_t_web`,
     ],
     "Double I-Beam": [
       `${prefix}_angle_select`, `${prefix}_cap_mat`, `${prefix}_web_mat`, `${prefix}_b_top`, `${prefix}_t_top`,
-      `${prefix}_b_bot`, `${prefix}_t_bot`, `${prefix}_h_web`, `${prefix}_t_web`,
+      `${prefix}_b_top_tip`, `${prefix}_t_top_tip`, `${prefix}_b_bot`, `${prefix}_t_bot`,
+      `${prefix}_b_bot_tip`, `${prefix}_t_bot_tip`, `${prefix}_h_web`, `${prefix}_t_web`,
       `${prefix}_web_spacing`,
     ],
     "Box Spar": [
-      `${prefix}_cap_mat`, `${prefix}_web_mat`, `${prefix}_b_outer`, `${prefix}_h_outer`,
-      `${prefix}_t_web`, `${prefix}_t_cap`,
+      `${prefix}_cap_mat`, `${prefix}_web_mat`, `${prefix}_b_outer`, `${prefix}_b_outer_tip`, `${prefix}_h_outer`,
+      `${prefix}_t_web`, `${prefix}_t_cap`, `${prefix}_t_cap_tip`,
     ],
     "Aluminum I-Beam": [
       `${prefix}_angle_select`, `${prefix}_cap_mat`, `${prefix}_web_mat`, `${prefix}_b_top`, `${prefix}_t_top`,
-      `${prefix}_b_bot`, `${prefix}_t_bot`, `${prefix}_h_web`, `${prefix}_t_web`,
+      `${prefix}_b_top_tip`, `${prefix}_t_top_tip`, `${prefix}_b_bot`, `${prefix}_t_bot`,
+      `${prefix}_b_bot_tip`, `${prefix}_t_bot_tip`, `${prefix}_h_web`, `${prefix}_t_web`,
     ],
     "Aluminum C-Spar": [
-      `${prefix}_angle_select`, `${prefix}_cap_mat`, `${prefix}_b_top`, `${prefix}_t_top`, `${prefix}_h_web`,
+      `${prefix}_angle_select`, `${prefix}_cap_mat`, `${prefix}_b_top`, `${prefix}_t_top`,
+      `${prefix}_b_top_tip`, `${prefix}_t_top_tip`, `${prefix}_h_web`,
       `${prefix}_t_web`, `${prefix}_cap_side`,
     ],
   };
@@ -282,6 +310,9 @@ function isRelevantStructureKey(key) {
   if (skinDetails.has(key)) {
     return structure === "aluminum_skin";
   }
+  const ribType = state.inputs.rib_type || state.defaults.rib_type || "Plywood web";
+  if (key === "rib_t_cap") return ribType !== "Sheet aluminum formed";
+  if (key === "rib_mat") return ribType !== "Dow foam with spruce caps";
   return true;
 }
 
@@ -343,6 +374,7 @@ const geometryPreviewKeys = new Set([
   "root_chord",
   "tip_chord",
   "taper_start_bl",
+  "taper_reference",
   "front_spar_percent",
   "rear_spar_percent",
   "strut_bl",
@@ -378,13 +410,23 @@ function buildGeometryPreview() {
   });
   const frontPct = fractionInput("front_spar_percent", 0.05);
   const rearPct = fractionInput("rear_spar_percent", 0.85);
+  const reference = state.inputs.taper_reference || state.defaults.taper_reference || "Leading edge";
+  const leading = chord.map((c) => {
+    if (reference === "Trailing edge") return rootChord - c;
+    if (reference === "Main spar") return frontPct * (rootChord - c);
+    return 0;
+  });
+  const trailing = leading.map((y, i) => y + chord[i]);
   return {
     b_half: bHalf,
     root_bl: numericInput("r", 0),
     x,
     chord,
-    front_spar: chord.map((c) => c * frontPct),
-    rear_spar: chord.map((c) => c * rearPct),
+    leading_edge: leading,
+    trailing_edge: trailing,
+    front_spar: leading.map((y, i) => y + chord[i] * frontPct),
+    rear_spar: leading.map((y, i) => y + chord[i] * rearPct),
+    taper_reference: reference,
     front_spar_percent: frontPct,
     rear_spar_percent: rearPct,
     strut_bl: numericInput("strut_bl", 0),
@@ -499,7 +541,14 @@ function setRunButtonRunning(running) {
 
 function fieldDefault(key, type) {
   if (state.defaults[key] !== undefined) return state.defaults[key];
+  if (key.endsWith("_tip")) {
+    const rootKey = key.slice(0, -4);
+    const current = state.inputs?.[rootKey];
+    if (current !== undefined && current !== "") return current;
+    if (state.defaults?.[rootKey] !== undefined) return state.defaults[rootKey];
+  }
   if (type === "checkbox") return false;
+  if (key === "rib_mat") return "Birch Plywood";
   if (key.endsWith("_cap_mat")) return "Sitka Spruce";
   if (key.endsWith("_web_mat")) return "Birch Plywood";
   if (key.endsWith("_mat")) return "6061-T6";
@@ -532,6 +581,13 @@ function fieldDefault(key, type) {
     rear_spar_t_cap: 0.75,
     front_spar_cap_side: "top",
     rear_spar_cap_side: "top",
+    taper_reference: "Leading edge",
+    rib_type: "Plywood web",
+    rib_h_web: 3.0,
+    rib_t_web: 0.125,
+    rib_b_cap: 0.75,
+    rib_t_cap: 0.125,
+    rib_mat: "Birch Plywood",
   };
   return defaults[key] ?? "";
 }
@@ -638,10 +694,14 @@ function applyAngleSelect(key) {
   if (!angle) return;
   setFieldValue(`${prefix}_b_top`, angle.b_equiv);
   setFieldValue(`${prefix}_t_top`, Number(angle.t_equiv).toFixed(4));
+  setFieldValue(`${prefix}_b_top_tip`, angle.b_equiv);
+  setFieldValue(`${prefix}_t_top_tip`, Number(angle.t_equiv).toFixed(4));
   const sparType = state.inputs[`${prefix}_type`];
   if (sparType !== "Aluminum C-Spar") {
     setFieldValue(`${prefix}_b_bot`, angle.b_equiv);
     setFieldValue(`${prefix}_t_bot`, Number(angle.t_equiv).toFixed(4));
+    setFieldValue(`${prefix}_b_bot_tip`, angle.b_equiv);
+    setFieldValue(`${prefix}_t_bot_tip`, Number(angle.t_equiv).toFixed(4));
   }
 }
 
@@ -752,6 +812,8 @@ function updateStructureFieldVisibility({ prune = false } = {}) {
     "skin_top_thick",
     "skin_bot_mat",
     "skin_bot_thick",
+    "rib_t_cap",
+    "rib_mat",
   ];
 
   for (const key of managed) {
@@ -947,7 +1009,7 @@ function renderPlots(payload) {
     { label: "front -g", values: s.negative.M_front, color: "#d2b75f", dash: [6, 4] },
     { label: "rear -g", values: s.negative.M_rear, color: "#e5c87a", dash: [3, 4], width: 1.6 },
   ]);
-  drawPlot("plotDeflection", "Deflection", x, [
+  drawPlot("plotDeflection", "Spar position (includes twist)", x, [
     { label: "front +g", values: s.positive.z_front, color: "#085097" },
     { label: "rear +g", values: s.positive.z_rear, color: "#024084" },
     { label: "rear-front Δ +g", values: s.positive.z_delta, color: "#6e9b5a", dash: [2, 3], width: 1.4 },
@@ -980,11 +1042,13 @@ function drawGeometry(geometry) {
   const chord = geometry.chord || [];
   const front = geometry.front_spar || [];
   const rear = geometry.rear_spar || [];
+  const leading = geometry.leading_edge || x.map(() => 0);
+  const trailing = geometry.trailing_edge || chord;
   if (!x.length) return;
   ctx.fillStyle = "#b9bcc2";
   ctx.font = "12px Segoe UI, sans-serif";
   ctx.fillText(
-    `Root chord ${fmt(geometry.root_chord ?? chord[0], 1)} in | Tip chord ${fmt(geometry.tip_chord ?? chord[chord.length - 1], 1)} in | Taper BL ${fmt(geometry.taper_start_bl, 0)} in`,
+    `Root chord ${fmt(geometry.root_chord ?? chord[0], 1)} in | Tip chord ${fmt(geometry.tip_chord ?? chord[chord.length - 1], 1)} in | Taper BL ${fmt(geometry.taper_start_bl, 0)} in | Straight ${geometry.taper_reference || "Leading edge"}`,
     118,
     24
   );
@@ -1007,19 +1071,21 @@ function drawGeometry(geometry) {
   };
 
   const xMax = geometry.b_half || Math.max(...x);
-  const cMax = Math.max(...chord, 1);
+  const yValues = [...leading, ...trailing, ...front, ...rear, 0];
+  const yMin = Math.min(...yValues);
+  const yMax = Math.max(...yValues, 1);
   const xToPlan = (value) => plan.x + (value / xMax) * plan.w;
-  const yToPlan = (value) => plan.y + (value / cMax) * plan.h;
+  const yToPlan = (value) => plan.y + ((value - yMin) / Math.max(yMax - yMin, 1e-9)) * plan.h;
 
   ctx.strokeStyle = "#6e7f87";
   ctx.strokeRect(plan.x, plan.y, plan.w, plan.h);
   ctx.strokeRect(elev.x, elev.y, elev.w, elev.h);
 
-  // Planform polygon: leading edge is y=0, trailing edge is chord(x).
+  // Planform polygon. The chosen taper reference is the straight line.
   ctx.beginPath();
-  ctx.moveTo(xToPlan(x[0]), yToPlan(0));
-  for (let i = 1; i < x.length; i++) ctx.lineTo(xToPlan(x[i]), yToPlan(0));
-  for (let i = x.length - 1; i >= 0; i--) ctx.lineTo(xToPlan(x[i]), yToPlan(chord[i]));
+  ctx.moveTo(xToPlan(x[0]), yToPlan(leading[0] || 0));
+  for (let i = 1; i < x.length; i++) ctx.lineTo(xToPlan(x[i]), yToPlan(leading[i] || 0));
+  for (let i = x.length - 1; i >= 0; i--) ctx.lineTo(xToPlan(x[i]), yToPlan(trailing[i] ?? chord[i]));
   ctx.closePath();
   ctx.fillStyle = "rgba(242, 237, 225, 0.10)";
   ctx.fill();
@@ -1028,8 +1094,8 @@ function drawGeometry(geometry) {
 
   if (geometry.dcell_enabled) {
     ctx.beginPath();
-    ctx.moveTo(xToPlan(x[0]), yToPlan(0));
-    for (let i = 1; i < x.length; i++) ctx.lineTo(xToPlan(x[i]), yToPlan(0));
+    ctx.moveTo(xToPlan(x[0]), yToPlan(leading[0] || 0));
+    for (let i = 1; i < x.length; i++) ctx.lineTo(xToPlan(x[i]), yToPlan(leading[i] || 0));
     for (let i = x.length - 1; i >= 0; i--) ctx.lineTo(xToPlan(x[i]), yToPlan(front[i]));
     ctx.closePath();
     ctx.fillStyle = "rgba(8, 80, 151, 0.25)";
@@ -1269,6 +1335,7 @@ async function init() {
   document.getElementById("uploadInput").addEventListener("change", uploadInputs);
   document.getElementById("resetBtn").addEventListener("click", () => {
     state.inputs = JSON.parse(JSON.stringify(state.defaults));
+    ensureSchemaDefaults();
     syncFormFromInputs();
     renderGeometryPreview();
     setStatus("Defaults restored", "ok");
