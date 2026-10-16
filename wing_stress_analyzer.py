@@ -1,5 +1,5 @@
 """
-AeroBeam v1.2.3 — Wing Stress Analyzer
+AeroBeam v1.2.4 — Wing Stress Analyzer
 ======================================
 Physics engine. All structural analysis lives here.
 Units: inches, pounds, psi throughout.
@@ -1832,7 +1832,7 @@ class WingStressAnalyzer:
             return f"{ms:>+7.2f}  {sym}"
 
         L = []
-        L += ["═"*54,"  AeroBeam v1.2.3  ─  Results","═"*54]
+        L += ["═"*54,"  AeroBeam v1.2.4  ─  Results","═"*54]
         L += ["PRELIMINARY DESIGN ONLY — not for airworthiness or final sizing."]
         L += method_status_lines()
         if self.validation_warnings:
@@ -2150,7 +2150,7 @@ class WingStressAnalyzer:
         import matplotlib.pyplot as plt
         plt.rcParams.update(PLOT_STYLE)
         fig, ax = plt.subplots(2, 2, figsize=(13,9))
-        fig.suptitle("AeroBeam v1.2.3 — Results", fontsize=12, color=PC_GOLD)
+        fig.suptitle("AeroBeam v1.2.4 — Results", fontsize=12, color=PC_GOLD)
         fig.patch.set_facecolor(PLOT_STYLE["figure.facecolor"])
         x=self.x; a=ax.flatten()
         a[0].plot(x, self.pos["w"], "b-",  label=f"+{self.n}g")
@@ -2301,7 +2301,7 @@ class WingStressAnalyzer:
         import matplotlib.pyplot as plt
         fig, (ax_top, ax_side) = plt.subplots(2, 1, figsize=(13, 8),
             gridspec_kw={"height_ratios": [1.2, 1]})
-        fig.suptitle("AeroBeam v1.2.3  Wing Geometry", fontsize=12)
+        fig.suptitle("AeroBeam v1.2.4  Wing Geometry", fontsize=12)
         self.draw_geometry(ax_top, ax_side)
         plt.tight_layout(pad=2.0)
         plt.show(block=False)
@@ -2316,7 +2316,7 @@ class WingStressAnalyzer:
 
             # ── Page 1: Inputs text ───────────────────────────────────────────
             fig = plt.figure(figsize=(11, 8.5))
-            fig.suptitle("AeroBeam v1.2.3  —  Input Summary", fontsize=12,
+            fig.suptitle("AeroBeam v1.2.4  —  Input Summary", fontsize=12,
                          y=0.98, color=PDF_GOLD, fontfamily="monospace",
                          fontweight="bold")
             ax = fig.add_subplot(111); ax.axis("off")
@@ -2329,7 +2329,7 @@ class WingStressAnalyzer:
             # ── Page 2: Wing Geometry (plan view + front elevation) ───────────
             fig, (ax_plan, ax_elev) = plt.subplots(2, 1, figsize=(11, 8.5),
                 gridspec_kw={"height_ratios": [1.1, 1]})
-            fig.suptitle("AeroBeam v1.2.3  —  Wing Geometry", fontsize=12,
+            fig.suptitle("AeroBeam v1.2.4  —  Wing Geometry", fontsize=12,
                          y=0.98, color=PDF_GOLD, fontweight="bold")
             self.draw_geometry(ax_plan, ax_elev)
             plt.tight_layout(pad=2.5)
@@ -2337,7 +2337,7 @@ class WingStressAnalyzer:
 
             # ── Page 3: Analysis plots ────────────────────────────────────────
             fig, axs = plt.subplots(2, 2, figsize=(11, 8.5))
-            fig.suptitle("AeroBeam v1.2.3  —  Analysis Results", fontsize=12,
+            fig.suptitle("AeroBeam v1.2.4  —  Analysis Results", fontsize=12,
                          color=PDF_GOLD, fontweight="bold")
             x = self.x
             axs[0,0].plot(x,  self.pos["w"],       color=PDF_BLUE, lw=2,
@@ -2382,7 +2382,7 @@ class WingStressAnalyzer:
 
             # ── Page 4: Results summary (line-by-line coloured) ──────────────
             fig = plt.figure(figsize=(11, 8.5))
-            fig.suptitle("AeroBeam v1.2.3  —  Results Summary", fontsize=12,
+            fig.suptitle("AeroBeam v1.2.4  —  Results Summary", fontsize=12,
                          y=0.98, color=PDF_GOLD, fontfamily="monospace",
                          fontweight="bold")
             ax = fig.add_subplot(111); ax.axis("off")
@@ -2434,7 +2434,7 @@ class WingStressAnalyzer:
     def _input_page_text(self):
         i=self.inp
         return "\n".join([
-            "AeroBeam v1.2.3 — Input Summary","="*48,
+            "AeroBeam v1.2.4 — Input Summary","="*48,
             f"Span : {i[chr(98)]:.1f}in  Root chord: {self.root_chord:.1f}in  Tip: {self.tip_chord:.1f}in" + (f"  Taper from BL {self.taper_start_bl:.0f}in" if self.taper_start_bl > 0 else "") + f"  Straight {self.taper_reference.lower()}",
             f"Rib spacing: {self.rib_spacing:.1f}\"   Rib: {self.rib_type}",
             f"Spars      : front {self.front_pct*100:.0f}%  rear {self.rear_pct*100:.0f}%",

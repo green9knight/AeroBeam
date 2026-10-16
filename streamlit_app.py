@@ -1,5 +1,5 @@
 """
-AeroBeam v1.2.3 - Full Version
+AeroBeam v1.2.4 - Full Version
 Includes custom filename for PDF reports
 """
 
@@ -26,7 +26,7 @@ except Exception:
     _ico = None
     _favicon = "✈️"
 
-st.set_page_config(page_title="AeroBeam v1.2.3", page_icon=_favicon, layout="wide")
+st.set_page_config(page_title="AeroBeam v1.2.4", page_icon=_favicon, layout="wide")
 apply_modern_theme()
 
 try:
@@ -123,13 +123,13 @@ if _ico:
         <img src="data:image/png;base64,{_b64}"
              style="height:44px;width:auto;flex-shrink:0;object-fit:contain"/>
         <div>
-            <div style="font-size:1.6rem;font-weight:700;line-height:1.2">AeroBeam v1.2.3</div>
+            <div style="font-size:1.6rem;font-weight:700;line-height:1.2">AeroBeam v1.2.4</div>
             <div style="font-size:0.85rem;color:#888;margin-top:2px">Wing Bending · Shear · Buckling · Torsion</div>
         </div></div>''',
         unsafe_allow_html=True
     )
 else:
-    st.markdown("## ✈️ AeroBeam v1.2.3")
+    st.markdown("## ✈️ AeroBeam v1.2.4")
     st.caption("Wing Bending · Shear · Buckling · Torsion")
 
 st.caption(
@@ -149,7 +149,7 @@ with st.sidebar:
             f'''<div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
             <img src="data:image/png;base64,{_b64_2}"
                  style="height:42px;width:auto;flex-shrink:0"/>
-            <span style="font-weight:700;font-size:1rem">AeroBeam v1.2.3</span>
+            <span style="font-weight:700;font-size:1rem">AeroBeam v1.2.4</span>
             </div>''',
             unsafe_allow_html=True
         )
@@ -765,4 +765,4 @@ with tabs[8]:
     else:
         st.info("Run analysis to see plots.")
 
-st.caption("AeroBeam v1.2.3 • Custom PDF filename supported")
+st.caption("AeroBeam v1.2.4 • Custom PDF filename supported")

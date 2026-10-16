@@ -1,5 +1,5 @@
 """
-AeroBeam v1.2.3 — GUI
+AeroBeam v1.2.4 — GUI
 ====================
 Full Tkinter front-end for WingStressAnalyzer.
 """
@@ -30,7 +30,7 @@ from spar_sections import (
 from airfoil_database import AIRFOIL_DB, get_airfoil
 from common_tube_spars import COMMON_TUBE_SIZES, get_tube_by_description
 
-VERSION = "1.2.3"
+VERSION = "1.2.4"
 APP_TITLE = f"AeroBeam v{VERSION}  —  Phil Ramer"
 
 # Colour tags for summary panel
@@ -548,7 +548,7 @@ class WingStressGUI:
         hdr.pack_propagate(False)
         tk.Label(hdr, text="✈  AeroBeam", bg=C_HEADER_BG, fg=C_ACCENT2,
                  font=("Segoe UI", 15, "bold")).pack(side=tk.LEFT, padx=16, pady=10)
-        tk.Label(hdr, text="v1.2.3   Wing Bending, Shear & Buckling Analysis",
+        tk.Label(hdr, text="v1.2.4   Wing Bending, Shear & Buckling Analysis",
                  bg=C_HEADER_BG, fg=C_TEXT_DIM,
                  font=("Segoe UI", 9)).pack(side=tk.LEFT, pady=14)
         self._hdr_status = tk.Label(hdr, text="Ready", bg=C_HEADER_BG,

@@ -1,4 +1,4 @@
-# wing_stress.spec  —  AeroBeam v1.2.3
+# wing_stress.spec  —  AeroBeam v1.2.4
 from PyInstaller.utils.hooks import collect_all, collect_submodules
 import os
 
