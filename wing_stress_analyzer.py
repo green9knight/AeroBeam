@@ -907,19 +907,26 @@ class WingStressAnalyzer:
         return T_run, phi
 
     def _add_twist_to_deflection(self, case: dict, phi: np.ndarray) -> None:
-        """Spar position is the bending curve plus twist about the shear center.
+        """Spar position from bending plus twist, Bruhn virtual work.
 
-        Peery and Megson: a nose-up rotation lowers a point aft of the shear
-        center by phi times that chordwise distance. Bending stress is unchanged.
+        The ribs lock both spars to one bending curve. A unit vertical load
+        on a spar produces a torque about the shear center equal to the local
+        chordwise offset, so the twist deflection is the integral of that
+        offset times T/GJ. Timoshenko's beam slope is the same statement:
+        the extra slope is the twist rate times the distance from the shear
+        center. When that distance is constant the integral is phi times the
+        distance. Bending stress is unchanged.
         """
 
         y_sc = self._shear_center_y()
-        case["phi"] = np.asarray(phi, dtype=float)
+        phi = np.asarray(phi, dtype=float)
+        dphi = np.diff(phi, prepend=0.0)
+        case["phi"] = phi
         case["z_bend_front"] = np.array(case["z_front"], dtype=float, copy=True)
         case["z_bend_rear"] = np.array(case["z_rear"], dtype=float, copy=True)
-        z_f = case["z_bend_front"] - case["phi"] * (self.y_front - y_sc)
+        z_f = case["z_bend_front"] - np.cumsum((self.y_front - y_sc) * dphi)
         if self.num_spars == 2:
-            z_r = case["z_bend_rear"] - case["phi"] * (self.y_rear - y_sc)
+            z_r = case["z_bend_rear"] - np.cumsum((self.y_rear - y_sc) * dphi)
         else:
             z_r = z_f.copy()
         case["z_front"] = z_f
@@ -1372,14 +1379,17 @@ class WingStressAnalyzer:
             Mr = M * share_r
             V_front = self._moment_to_shear(Mf)
             V_rear = self._moment_to_shear(Mr)
+            # One beam. The ribs are stiff in their own plane, so the rear
+            # spar is carried on the front spar's bending curve.
+            ei_total = np.maximum(self._EI_f + self._EI_r, 1.0)
             if self.config == "single_strut":
-                th_f, z_f = self._deflect_strut(Mf, self._EI_f, si)
-                th_r, z_r = self._deflect_strut(Mr, self._EI_r, si)
+                th, z = self._deflect_strut(M, ei_total, si)
                 self._rear_spar_path = "rib-tied single-strut"
             else:
-                th_f, z_f = self._deflect_cantilever(Mf, self._EI_f)
-                th_r, z_r = self._deflect_cantilever(Mr, self._EI_r)
+                th, z = self._deflect_cantilever(M, ei_total)
                 self._rear_spar_path = "rib-tied cantilever"
+            th_f = th_r = th
+            z_f = z_r = np.array(z, dtype=float, copy=True)
         else:
             Mf = M * self.lsf
             V_front = V * self.lsf
@@ -2020,20 +2030,21 @@ class WingStressAnalyzer:
                         L += [f"    {label} sheet shear demand: {tau:,.0f} psi"]
                 L += ["    Sheet shear is a demand. AeroBeam does not size the sheet."]
 
-        L += [f"\n── DIVERGENCE {'─'*39}"]
+        L += [f"\n── DIVERGENCE SPEED SCREENING — EXPERIMENTAL {'─'*8}"]
+        L += ["  Experimental screening estimate. Not flutter, and not a certified speed."]
         if d["divergent"] and d["V_div"]<float("inf"):
             L += [f"  AC={d['x_ac']:.2f}\"  SC={d['x_sc']:.2f}\"  e={d['e']:.2f}\"  ({d.get('sc_method', 'shear center')})"]
             L += [f"  V_div         : {d['V_div']:>8.0f} mph"]
-            L += [f"  SF_div (divergence, Vd/V_div) :{mf(d['SF_div']-1)}"]
+            L += [f"  V_div / Vd    : {d['SF_div']:>8.2f}"]
             if d.get("spanwise"):
                 L += [f"  V_div uses spanwise GJ and shear center, box to {d.get('box_end', 0.0):.1f} in."]
             if d["SF_div"]<1.5:
-                L += ["  *** DIVERGENCE RISK — stiffness or SC review needed ***"]
+                L += ["  Screen is below 1.5. Review stiffness and shear center before relying on it."]
         elif self._has_closed_torsion_cell():
             L += [f"  AC={d['x_ac']:.2f}\"  SC={d['x_sc']:.2f}\"  e={d['e']:.2f}\"  ({d.get('sc_method', 'shear center')})"]
-            L += ["  Shear center is at or behind the aerodynamic center. No divergence."]
+            L += ["  Shear center is at or behind the aerodynamic center. The screen shows no divergence."]
         else:
-            L += ["  No closed section — enable D-cell/skin for divergence check"]
+            L += ["  No closed section — enable D-cell or skin before using this screen"]
 
         # ── BUCKLING PASS/FAIL ─────────────────────────────────────────────
         if hasattr(self, "buckling") and self.buckling:
@@ -2209,17 +2220,18 @@ class WingStressAnalyzer:
         ax_top.set_title(f"Plan View  (straight {self.taper_reference.lower()})")
         ax_top.legend(fontsize=8, loc="upper right")
         ax_top.grid(True, alpha=0.3)
-        # Front elevation
-        b = self.b_half
-        root_bl = self.r   # root fitting BL for all configs
-        ax_side.plot([root_bl, b], [0, 0], "b-", lw=3, label="Front spar")
+        # Front elevation. Buttline 0 is the aircraft centerline. The root
+        # fitting is at BL r, and the tip is one panel length further out.
+        # Load plots use station 0 at that fitting, so a station s is BL r+s.
+        root_bl = self.r
+        tip_bl = self.r + self.b_half
+        rear_drop = -2.0 if self.num_spars == 2 else 0.0
+        ax_side.plot([root_bl, tip_bl], [0, 0], "b-", lw=3, label="Front spar")
         if self.num_spars == 2:
-            # Rear spar is offset chordwise from front spar
-            # In elevation: horizontal offset not visible, but vertical separation
-            # from front spar is approximately zero (both on same wing plane)
-            # Show as parallel line slightly below to distinguish
+            # Both spars lie in the wing. The rear line is dropped only so it
+            # can be told from the front line.
             rear_lbl = "Rear spar (cantilever)" if self.config=="single_strut" else "Rear spar"
-            ax_side.plot([root_bl, b], [-2, -2], "r-", lw=2,
+            ax_side.plot([root_bl, tip_bl], [rear_drop, rear_drop], "r-", lw=2,
                          label=rear_lbl, alpha=0.8)
         ax_side.plot(root_bl, 0, "ks", markersize=9, zorder=5, label="Root fitting (BL %.0f\")" % self.r)
         # Carry-through stub: cantilever only (spar crosses fuselage to other panel)
@@ -2227,14 +2239,15 @@ class WingStressAnalyzer:
             ax_side.plot([0, root_bl], [0, 0], "b--", lw=1.5, alpha=0.5,
                          label="Carry-through to CL")
             if self.num_spars == 2:
-                ax_side.plot([0, root_bl], [-4, -4], "r--", lw=1.0, alpha=0.4)
-        ax_side.plot(b, 0, "k^", markersize=8, zorder=5, label="Tip")
+                ax_side.plot([0, root_bl], [rear_drop, rear_drop], "r--", lw=1.0, alpha=0.4)
+        ax_side.plot(tip_bl, 0, "k^", markersize=8, zorder=5, label="Tip")
         # Fuselage centreline marker
         if root_bl > 0:
             ax_side.axvline(x=0, color="gray", lw=1, linestyle=":", alpha=0.5)
             ax_side.text(0, 0, " CL", fontsize=7, color="gray", va="bottom")
         if self.config in ("strut_braced","single_strut"):
-            sx = self.strut_bl; sy_fuse = -self.strut_vert
+            # strut_bl is a station from the root fitting, same as the shear plot.
+            sx = self.r + self.strut_bl; sy_fuse = -self.strut_vert
             sx_fuse = self.strut_fuse_bl   # fuselage attach BL — should equal self.r typically
             ax_side.plot([sx_fuse, sx], [sy_fuse, 0], color="purple", lw=2.5,
                          solid_capstyle="round",
@@ -2251,17 +2264,17 @@ class WingStressAnalyzer:
                 arrowprops=dict(arrowstyle="<->", color="purple", lw=1.2))
             ax_side.text(sx*1.06, sy_fuse/2, ("Rise %.0f in" % self.strut_vert),
                          ha="left", va="center", fontsize=8, color="purple")
-            if self.jury and 0 < self.jury_bl < sx:
-                jx = self.jury_bl
-                # Interpolate strut height at jury BL — strut runs from (sx_fuse,sy_fuse) to (sx,0)
-                t = (jx - sx_fuse) / max(sx - sx_fuse, 1)   # 0 at fuse, 1 at spar attach
+            if self.jury and 0 < self.jury_bl < self.strut_bl:
+                jx = self.r + self.jury_bl
+                # Height where this buttline crosses the drawn strut.
+                t = (jx - sx_fuse) / max(sx - sx_fuse, 1.0)
                 jy = sy_fuse * (1.0 - t)
                 ax_side.plot([jx, jx], [0, jy], color="darkorange", lw=2.5,
                              linestyle="--",
                              label="Jury strut (BL %.0f in)" % jx)
                 ax_side.plot(jx, 0,  "D", color="darkorange", markersize=8, zorder=5)
                 ax_side.plot(jx, jy, "D", color="darkorange", markersize=8, zorder=5)
-                ax_side.text(jx+b*0.01, jy/2, "%.0f in" % jx,
+                ax_side.text(jx+self.b_half*0.01, jy/2, "%.0f in" % jx,
                              va="center", fontsize=8, color="darkorange")
         # Fuselage: vertical line at the root fitting BL (self.r)
         # For cantilever, spar carry-through goes further inboard to BL 0
@@ -2274,13 +2287,13 @@ class WingStressAnalyzer:
         ax_side.text(fuse_bl, y_range*0.40, "FUSE\nBL%.0f" % fuse_bl,
                      fontsize=7, color="saddlebrown", alpha=0.8,
                      ha="center", va="bottom", rotation=90)
-        ax_side.set_xlabel("Span station [in]  root to tip")
+        ax_side.set_xlabel("Buttline [in]  (centerline = 0, root fitting = %.0f)" % root_bl)
         ax_side.set_ylabel("Height [in]  (spar = 0)")
         ax_side.set_title("Front Elevation  (looking forward)")
         ax_side.legend(fontsize=8, loc="upper right")
         ax_side.grid(True, alpha=0.3)
         y_range = max(self.strut_vert if self.config != "cantilever" else 20, 10)
-        ax_side.set_xlim(-max(root_bl, 5)*1.2 if root_bl > 0 else -b*0.04, b*1.14)
+        ax_side.set_xlim(-max(root_bl, 5)*0.35 if root_bl > 0 else -self.b_half*0.04, tip_bl*1.08)
         ax_side.set_ylim(-y_range*1.30, y_range*0.55)
 
     def plot_geometry(self):

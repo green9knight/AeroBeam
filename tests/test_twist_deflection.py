@@ -68,6 +68,39 @@ class TwistDeflectionTests(unittest.TestCase):
         self.assertLess(model.neg["phi"][-1], 0.0)
         self.assertGreater(model.neg["z_rear"][-1], model.neg["z_bend_rear"][-1])
 
+    def test_ribs_lock_the_spars_to_one_bending_curve(self):
+        model = wing()
+        self.assertTrue(np.allclose(model.pos["z_bend_front"], model.pos["z_bend_rear"]))
+        gap = model.y_rear - model.y_front
+        tied = model.pos["z_front"] - model.pos["phi"] * gap
+        self.assertTrue(np.allclose(model.pos["z_rear"], tied))
+
+    def test_a_moving_shear_center_uses_the_local_offset(self):
+        model = wing(
+            torsion_box_enabled=True,
+            torsion_box_bays=2,
+            torsion_box_top_mat="2024-T3",
+            torsion_box_top_thick=0.04,
+            torsion_box_bot_mat="2024-T3",
+            torsion_box_bot_thick=0.04,
+            rib_spacing=12.0,
+            num_points=101,
+            b=240.0,
+            root_chord=60.0,
+            tip_chord=36.0,
+            taper_start_bl=24.0,
+        )
+        y_sc = model._shear_center_y()
+        jump = int(np.argmax(np.abs(np.diff(y_sc))))
+        self.assertGreater(abs(float(y_sc[jump + 1] - y_sc[jump])), 5.0)
+        phi = model.pos["phi"]
+        dphi = float(phi[jump + 1] - phi[jump])
+        bend = float(model.pos["z_bend_rear"][jump + 1] - model.pos["z_bend_rear"][jump])
+        lever = float(model.y_rear[jump + 1] - y_sc[jump + 1])
+        dz = float(model.pos["z_rear"][jump + 1] - model.pos["z_rear"][jump])
+        # Virtual work at this station uses only the twist increment.
+        self.assertAlmostEqual(dz, bend - lever * dphi, places=9)
+
 
 if __name__ == "__main__":
     unittest.main()

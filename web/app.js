@@ -406,6 +406,12 @@ const geometryPreviewKeys = new Set([
   "jury_spar_bl",
   "config",
   "dcell_enabled",
+  "rib_spacing",
+  "num_spars",
+  "torsion_box_enabled",
+  "torsion_box_bays",
+  "torsion_box_top_thick",
+  "torsion_box_bot_thick",
 ]);
 
 function numericInput(key, fallback = 0) {
@@ -416,6 +422,16 @@ function numericInput(key, fallback = 0) {
 function fractionInput(key, fallback = 0) {
   const value = numericInput(key, fallback);
   return Math.abs(value) > 1 ? value / 100 : value;
+}
+
+function torsionBoxEnd(bHalf) {
+  if (!parseBool(state.inputs.torsion_box_enabled)) return 0;
+  const bays = numericInput("torsion_box_bays", 0);
+  const spacing = numericInput("rib_spacing", 0);
+  const spars = Number(state.inputs.num_spars ?? state.defaults.num_spars ?? 2);
+  if (bays <= 0 || spacing <= 0 || spars < 2) return 0;
+  if (numericInput("torsion_box_top_thick", 0) <= 0 || numericInput("torsion_box_bot_thick", 0) <= 0) return 0;
+  return Math.min(bays * spacing, bHalf);
 }
 
 function buildGeometryPreview() {
@@ -458,6 +474,7 @@ function buildGeometryPreview() {
     jury_bl: numericInput("jury_spar_bl", 0),
     config: state.inputs.config || "cantilever",
     dcell_enabled: parseBool(state.inputs.dcell_enabled),
+    torsion_box_end: torsionBoxEnd(bHalf),
     taper_start_bl: taperStart,
     root_chord: rootChord,
     tip_chord: tipChord,
@@ -520,9 +537,13 @@ function thicknessPercent(value) {
   return Number.isInteger(rounded) ? String(rounded) : String(rounded);
 }
 
+function fieldControl(key) {
+  return document.querySelector(`input[data-key="${key}"], select[data-key="${key}"], textarea[data-key="${key}"]`);
+}
+
 function syncFormFromInputs() {
   for (const key of allInputKeys()) {
-    const el = document.querySelector(`[data-key="${key}"]`);
+    const el = fieldControl(key);
     if (!el) continue;
     if (el.type === "checkbox") {
       el.checked = parseBool(state.inputs[key]);
@@ -545,7 +566,7 @@ function syncFormFromInputs() {
 
 function syncInputsFromForm() {
   for (const key of allInputKeys()) {
-    const el = document.querySelector(`[data-key="${key}"]`);
+    const el = fieldControl(key);
     if (!el) continue;
     if (el.disabled) {
       continue;
@@ -700,7 +721,7 @@ function createField(field) {
 
 function setFieldValue(key, value) {
   state.inputs[key] = value;
-  const el = document.querySelector(`[data-key="${key}"]`);
+  const el = fieldControl(key);
   if (!el) return;
   if (el.type === "checkbox") el.checked = parseBool(value);
   else el.value = value ?? "";
@@ -853,7 +874,7 @@ function updateStructureFieldVisibility({ prune = false } = {}) {
 
   for (const key of managed) {
     const wrapper = document.querySelector(`label[data-key="${key}"]`);
-    const input = document.querySelector(`[data-key="${key}"]`);
+    const input = fieldControl(key);
     const visible = isRelevantStructureKey(key);
     if (wrapper) wrapper.classList.toggle("hidden-field", !visible);
     if (input) input.disabled = !visible;
@@ -1030,26 +1051,23 @@ function renderPlots(payload) {
     ? s.geometry
     : buildGeometryPreview();
   drawGeometry(geometry);
-  drawPlot("plotLift", "Lift Distribution", x, [
+  drawPlot("plotLift", "Lift [lb/in]", x, [
     { label: "+g", values: s.positive.w, color: "#085097" },
-    { label: "-g", values: s.negative.w, color: "#d2b75f", dash: [6, 4] },
+    { label: "-g", values: (s.negative.w || []).map((v) => -v), color: "#d2b75f", dash: [6, 4] },
   ]);
-  drawPlot("plotShear", "Shear", x, [
+  drawPlot("plotShear", "Shear [lb]", x, [
     { label: "+g", values: s.positive.V, color: "#085097" },
     { label: "-g", values: s.negative.V, color: "#d2b75f", dash: [6, 4] },
   ]);
-  drawPlot("plotMoment", "Spar Bending Moment", x, [
-    { label: "front +g", values: s.positive.M_front, color: "#085097" },
-    { label: "rear +g", values: s.positive.M_rear, color: "#024084", width: 1.8 },
-    { label: "front -g", values: s.negative.M_front, color: "#d2b75f", dash: [6, 4] },
-    { label: "rear -g", values: s.negative.M_rear, color: "#e5c87a", dash: [3, 4], width: 1.6 },
+  drawPlot("plotMoment", "Moment [lb·in]", x, [
+    { label: "+g", values: s.positive.M, color: "#085097" },
+    { label: "-g", values: s.negative.M, color: "#d2b75f", dash: [6, 4] },
   ]);
-  drawPlot("plotDeflection", "Spar position (includes twist)", x, [
-    { label: "front +g", values: s.positive.z_front, color: "#085097" },
-    { label: "rear +g", values: s.positive.z_rear, color: "#024084" },
-    { label: "rear-front Δ +g", values: s.positive.z_delta, color: "#6e9b5a", dash: [2, 3], width: 1.4 },
-    { label: "front -g", values: s.negative.z_front, color: "#d2b75f", dash: [6, 4] },
-    { label: "rear -g", values: s.negative.z_rear, color: "#e5c87a", dash: [4, 4] },
+  drawPlot("plotDeflection", "Deflection [in]  (+up / -down)", x, [
+    { label: "Frt +g (up)", values: s.positive.z_front, color: "#085097" },
+    { label: "Rr +g (up)", values: s.positive.z_rear, color: "#024084" },
+    { label: "Frt -g (down)", values: s.negative.z_front, color: "#d2b75f", dash: [6, 4] },
+    { label: "Rr -g (down)", values: s.negative.z_rear, color: "#e5c87a", dash: [4, 4] },
   ]);
 }
 
@@ -1137,6 +1155,32 @@ function drawGeometry(geometry) {
     ctx.fill();
   }
 
+  const boxEnd = Number(geometry.torsion_box_end);
+  if (Number.isFinite(boxEnd) && boxEnd > 0 && front.length > 1 && rear.length > 1) {
+    const boxTop = [];
+    const boxBot = [];
+    for (let i = 0; i < x.length; i++) {
+      if (x[i] <= boxEnd + 1e-6) {
+        boxTop.push([x[i], front[i]]);
+        boxBot.push([x[i], rear[i]]);
+      } else if (i > 0 && x[i - 1] < boxEnd) {
+        const frac = (boxEnd - x[i - 1]) / (x[i] - x[i - 1]);
+        boxTop.push([boxEnd, front[i - 1] + frac * (front[i] - front[i - 1])]);
+        boxBot.push([boxEnd, rear[i - 1] + frac * (rear[i] - rear[i - 1])]);
+        break;
+      }
+    }
+    if (boxTop.length > 1) {
+      ctx.beginPath();
+      ctx.moveTo(xToPlan(boxTop[0][0]), yToPlan(boxTop[0][1]));
+      for (let i = 1; i < boxTop.length; i++) ctx.lineTo(xToPlan(boxTop[i][0]), yToPlan(boxTop[i][1]));
+      for (let i = boxBot.length - 1; i >= 0; i--) ctx.lineTo(xToPlan(boxBot[i][0]), yToPlan(boxBot[i][1]));
+      ctx.closePath();
+      ctx.fillStyle = "rgba(210, 183, 95, 0.45)";
+      ctx.fill();
+    }
+  }
+
   function drawPlanLine(values, color, label, yLabel) {
     ctx.beginPath();
     values.forEach((value, i) => {
@@ -1167,13 +1211,20 @@ function drawGeometry(geometry) {
     ctx.fillStyle = color;
     ctx.fillText(label, px + 4, plan.y + 14);
   }
-  drawVerticalBL(geometry.strut_bl, "#d2b75f", `Strut BL ${fmt(geometry.strut_bl, 0)}`);
-  if (geometry.jury_enabled) drawVerticalBL(geometry.jury_bl, "#e5c87a", `Jury BL ${fmt(geometry.jury_bl, 0)}`);
+  const hasStrut = geometry.config === "strut_braced" || geometry.config === "single_strut";
+  if (hasStrut) drawVerticalBL(geometry.strut_bl, "#d2b75f", `Strut BL ${fmt(geometry.strut_bl, 0)}`);
+  if (hasStrut && geometry.jury_enabled) drawVerticalBL(geometry.jury_bl, "#e5c87a", `Jury BL ${fmt(geometry.jury_bl, 0)}`);
   if (geometry.taper_start_bl > 0) drawVerticalBL(geometry.taper_start_bl, "#6e9b5a", `Taper BL ${fmt(geometry.taper_start_bl, 0)}`);
+  if (Number.isFinite(boxEnd) && boxEnd > 0) drawVerticalBL(boxEnd, "#d2b75f", `Torsion box ${fmt(boxEnd, 0)}`);
 
-  // Front elevation.
-  const rootBl = geometry.root_bl || 0;
-  const elevX = (value) => elev.x + (value / xMax) * elev.w;
+  // Front elevation. Buttline 0 is the centerline. The root fitting is at
+  // root_bl, and the tip is one panel length further out.
+  const rootBl = Number(geometry.root_bl) || 0;
+  const panel = Number(geometry.b_half) || xMax;
+  const tipBl = rootBl + panel;
+  const elevMin = rootBl > 0 ? -rootBl * 0.15 : -panel * 0.04;
+  const elevMax = tipBl * 1.08;
+  const elevX = (value) => elev.x + ((value - elevMin) / (elevMax - elevMin)) * elev.w;
   const yRange = Math.max(Math.abs(geometry.strut_vert || 0), 20);
   const elevY = (value) => elev.y + elev.h / 2 - (value / (yRange * 1.2)) * elev.h;
 
@@ -1190,7 +1241,7 @@ function drawGeometry(geometry) {
   ctx.lineWidth = 3;
   ctx.beginPath();
   ctx.moveTo(elevX(rootBl), elevY(0));
-  ctx.lineTo(elevX(xMax), elevY(0));
+  ctx.lineTo(elevX(tipBl), elevY(0));
   ctx.stroke();
   ctx.fillStyle = "#085097";
   ctx.fillText("Front spar", elevX(rootBl) + 8, elevY(0) - 8);
@@ -1199,14 +1250,14 @@ function drawGeometry(geometry) {
   ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.moveTo(elevX(rootBl), elevY(-2));
-  ctx.lineTo(elevX(xMax), elevY(-2));
+  ctx.lineTo(elevX(tipBl), elevY(-2));
   ctx.stroke();
   ctx.fillStyle = "#d2b75f";
   ctx.fillText(geometry.config === "single_strut" ? "Rear spar (cantilever)" : "Rear spar", elevX(rootBl) + 8, elevY(-2) + 18);
 
-  if (geometry.config !== "cantilever") {
-    const sx = geometry.strut_bl;
-    const sxFuse = geometry.strut_fuse_bl;
+  if (hasStrut) {
+    const sx = rootBl + Number(geometry.strut_bl || 0);
+    const sxFuse = Number(geometry.strut_fuse_bl || 0);
     const syFuse = -Math.abs(geometry.strut_vert || 0);
     ctx.strokeStyle = "#e5c87a";
     ctx.lineWidth = 3;
@@ -1217,17 +1268,18 @@ function drawGeometry(geometry) {
     ctx.fillStyle = "#e5c87a";
     ctx.fillText("Strut", elevX((sx + sxFuse) / 2) + 6, elevY(syFuse / 2));
 
-    if (geometry.jury_enabled && geometry.jury_bl > sxFuse && geometry.jury_bl < sx) {
-      const frac = (geometry.jury_bl - sxFuse) / (sx - sxFuse);
+    if (geometry.jury_enabled && geometry.jury_bl > 0 && geometry.jury_bl < geometry.strut_bl) {
+      const jx = rootBl + Number(geometry.jury_bl);
+      const frac = (jx - sxFuse) / (sx - sxFuse);
       const jy = syFuse + frac * (0 - syFuse);
       ctx.strokeStyle = "#f2ede1";
       ctx.setLineDash([5, 4]);
       ctx.beginPath();
-      ctx.moveTo(elevX(geometry.jury_bl), elevY(0));
-      ctx.lineTo(elevX(geometry.jury_bl), elevY(jy));
+      ctx.moveTo(elevX(jx), elevY(0));
+      ctx.lineTo(elevX(jx), elevY(jy));
       ctx.stroke();
       ctx.setLineDash([]);
-      ctx.fillText("Jury", elevX(geometry.jury_bl) + 5, elevY(jy) - 4);
+      ctx.fillText("Jury", elevX(jx) + 5, elevY(jy) - 4);
     }
   }
 }
@@ -1359,7 +1411,7 @@ async function init() {
   renderInputTabs();
   syncFormFromInputs();
   for (const key of allInputKeys()) {
-    const el = document.querySelector(`[data-key="${key}"]`);
+    const el = fieldControl(key);
     if (el) {
       el.addEventListener("input", markInputsChanged);
       el.addEventListener("change", markInputsChanged);

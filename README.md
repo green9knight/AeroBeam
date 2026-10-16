@@ -58,7 +58,7 @@ python -m unittest discover -s tests -v
 For a strut-braced or cantilever wing, AeroBeam estimates shear, bending
 moment, deflection, bending stress, and margin of safety for the front and
 rear spars. It also estimates torsion, wing twist, buckling warnings, and a
-simplified divergence-speed screen.
+experimental divergence-speed screen.
 
 Read these before relying on a result:
 

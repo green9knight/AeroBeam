@@ -71,7 +71,7 @@ report as one of:
 | Cap column buckling | Euler column between ribs | Bruhn/Timoshenko example | EXPERIMENTAL/PRELIMINARY | Validate axis and restraint assumptions. |
 | Tube wall crippling | simplified cylindrical shell/crippling warning | NASA SP-8007 or handbook example | EXPERIMENTAL/PRELIMINARY | Treat as warning only until validated. |
 | Local fitting / bearing load demand | free-body reaction loads at root, strut, and jury fittings plus required bearing area from user allowable | fitting design by separate standards/manual methods | DISPLAY | Reports load and required bearing-area demand only; bearing, lugs, bushings, bolts, doublers, and local tube crush sizing are outside AeroBeam. |
-| Divergence speed | Uniform unswept wing, `q = (pi/(2L))^2 GJ / (e c^2 Cl_alpha)` | Bisplinghoff / Fung torsional divergence | EXPERIMENTAL | Shear center is the thin-wall flow of the closed contour, or the spar axis for an open tube. Screening only, not flutter. |
+| Divergence speed | Uniform unswept wing, `q = (pi/(2L))^2 GJ / (e c^2 Cl_alpha)`. An inboard torsion box uses the same Rayleigh quotient on spanwise GJ and shear center. | Bisplinghoff / Fung torsional divergence | EXPERIMENTAL | Divergence speed screening. Shear center is the thin-wall flow of the closed contour, or the spar axis for an open tube. Screening only, not flutter, and not a certified speed. |
 | Margin of safety | `allowable/applied - 1` | standard stress margin definition | PRELIMINARY | Clarify allowables and ultimate vs limit load. |
 | Combined stress interaction | simplified interaction equation | material-specific failure criterion | EXPERIMENTAL/PRELIMINARY | Validate per material family. |
 

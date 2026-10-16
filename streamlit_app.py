@@ -4,6 +4,7 @@ Includes custom filename for PDF reports
 """
 
 import streamlit as st
+import html
 import json
 import io
 import matplotlib.pyplot as plt
@@ -43,6 +44,73 @@ if "result" not in st.session_state:
 
 def g(key, default=None):
     return st.session_state.inp.get(key, DEFAULT_INPUTS.get(key, default))
+
+# Streamlit keeps a widget's last value under its key and ignores value=
+# after the first draw. A new generation gives every box a new key, so a
+# loaded project is what the boxes show.
+if "form_gen" not in st.session_state:
+    st.session_state.form_gen = 0
+
+def wk(name):
+    return f"{name}__{st.session_state.form_gen}"
+
+def _spar_type_options(saved):
+    """Every spar the analyzer can build, plus a saved name that is not in that list."""
+    try:
+        from spar_sections import spar_type_names
+        names = list(spar_type_names())
+    except Exception:
+        names = [
+            "Round Tube", "Plain Rectangular", "I-Beam", "C-Channel",
+            "Double I-Beam", "Box Spar", "Routed (Monolithic)",
+            "Aluminum I-Beam", "Aluminum C-Spar",
+        ]
+    if saved and saved not in names:
+        names.append(saved)
+    return names
+
+def _summary_kind(line):
+    """Same pass / caution / fail reading as the desktop summary."""
+    if "***" in line or "\u2717" in line:
+        return "fail"
+    if "\u2713" in line or ("PASS" in line and "BUCKLING" in line):
+        return "pass"
+    if "\u26a0" in line or "!! " in line or "WARN" in line or "MARGINAL" in line:
+        return "warn"
+    if line.strip().startswith(">>>"):
+        return "fix"
+    if line.startswith("\u2550") or line.startswith("\u2500") or line.startswith("--"):
+        return "head"
+    return ""
+
+def _summary_html(text):
+    dark = False
+    try:
+        dark = st.context.theme.base == "dark"
+    except Exception:
+        dark = False
+    if dark:
+        colors = {"pass": "#7dba6a", "warn": "#e5c87a", "fail": "#e07060",
+                  "fix": "#e5c87a", "head": "#d2b75f", "text": "#f2ede1", "bg": "#2a2e36"}
+    else:
+        colors = {"pass": "#1a6e1a", "warn": "#b35c00", "fail": "#cc0000",
+                  "fix": "#b35c00", "head": "#085097", "text": "#1a1a1a", "bg": "#f6f4ee"}
+    rows = []
+    for line in str(text).splitlines():
+        kind = _summary_kind(line)
+        color = colors.get(kind, colors["text"])
+        weight = "700" if kind else "400"
+        shown = html.escape(line) if line else "&nbsp;"
+        rows.append(
+            f'<div style="color:{color};font-weight:{weight}">{shown}</div>'
+        )
+    body = "".join(rows)
+    return (
+        '<div style="font-family:Consolas,Cascadia Mono,monospace;font-size:0.86rem;'
+        f'line-height:1.45;background:{colors["bg"]};color:{colors["text"]};'
+        'padding:0.8rem 1rem;border-radius:8px;overflow:auto;max-height:40rem">'
+        f"{body}</div>"
+    )
 
 # Header with logo — base64 inline avoids Streamlit column clipping
 if _ico:
@@ -152,15 +220,22 @@ with st.sidebar:
     st.divider()
     st.subheader("Project")
     up = st.file_uploader("Load .aerobeam", type=["aerobeam","json"], key="uploader")
-    if up is not None and st.session_state.get("_last_uploaded") != up.name:
+    _upload_token = None
+    if up is not None:
+        _upload_token = str(getattr(up, "file_id", None) or f"{up.name}:{up.size}")
+    if up is not None and st.session_state.get("_last_uploaded") != _upload_token:
         try:
+            up.seek(0)
             raw = json.load(up)
+            if not isinstance(raw, dict):
+                raise ValueError("Project file must be a JSON object")
             merged = dict(DEFAULT_INPUTS)
-            bool_keys = {"dcell_enabled","geodetic_enabled","distribute_wing_weight",
-                         "secondary_bending","jury_strut","ng_lift_manual","dist_wing_weight"}
+            bool_keys = {"dcell_enabled","geodetic_enabled","torsion_box_enabled",
+                         "distribute_wing_weight","secondary_bending","jury_strut",
+                         "ng_lift_manual","dist_wing_weight"}
             for k, v in raw.items():
                 if k in bool_keys:
-                    merged[k] = str(v).lower() in ("1","true","yes")
+                    merged[k] = v if isinstance(v, bool) else str(v).lower() in ("1","true","yes")
                 elif isinstance(v, str):
                     try:    merged[k] = float(v) if v.strip() else merged.get(k, v)
                     except: merged[k] = v
@@ -170,12 +245,12 @@ with st.sidebar:
             if isinstance(lsf, (int,float)) and lsf > 1.0:
                 merged["front_spar_load_share"] = lsf / 100.0
             st.session_state.inp = merged
-            st.session_state._last_uploaded = up.name
+            st.session_state._last_uploaded = _upload_token
             st.session_state.result = None
+            st.session_state.form_gen += 1
             st.success(f"Loaded: {up.name} — click Run Analysis")
         except Exception as e:
             st.error(f"Load failed: {e}")
-        st.rerun()
 
     if st.button("💾 Save Project", key="save_btn"):
         buf = io.BytesIO(json.dumps(st.session_state.inp, indent=2, default=str).encode())
@@ -194,27 +269,27 @@ with tabs[0]:
     st.subheader("Wing Geometry")
     c1, c2 = st.columns(2)
     with c1:
-        st.session_state.inp["b"] = st.number_input("Total Span b (in)", value=float(g("b")), key="b")
-        st.session_state.inp["root_chord"] = st.number_input("Root Chord (in)", value=float(g("root_chord")), key="root_chord")
-        st.session_state.inp["tip_chord"] = st.number_input("Tip Chord (in)", value=float(g("tip_chord")), key="tip_chord")
+        st.session_state.inp["b"] = st.number_input("Total Span b (in)", value=float(g("b")), key=wk("b"))
+        st.session_state.inp["root_chord"] = st.number_input("Root Chord (in)", value=float(g("root_chord")), key=wk("root_chord"))
+        st.session_state.inp["tip_chord"] = st.number_input("Tip Chord (in)", value=float(g("tip_chord")), key=wk("tip_chord"))
         _taper_refs = ["Leading edge", "Main spar", "Trailing edge"]
         _taper_cur = g("taper_reference", "Leading edge")
         st.session_state.inp["taper_reference"] = st.selectbox(
             "Keep straight when the chord tapers", _taper_refs,
             index=_taper_refs.index(_taper_cur) if _taper_cur in _taper_refs else 0,
-            key="taper_reference")
-        st.session_state.inp["rib_spacing"] = st.number_input("Rib Spacing (in)", value=float(g("rib_spacing")), key="rib_spacing")
+            key=wk("taper_reference"))
+        st.session_state.inp["rib_spacing"] = st.number_input("Rib Spacing (in)", value=float(g("rib_spacing")), key=wk("rib_spacing"))
     with c2:
-        st.session_state.inp["front_spar_percent"] = st.number_input("Front Spar % Chord", value=float(g("front_spar_percent")), step=0.01, key="front_spar_percent")
-        st.session_state.inp["rear_spar_percent"] = st.number_input("Rear Spar % Chord", value=float(g("rear_spar_percent")), step=0.01, key="rear_spar_percent")
-        st.session_state.inp["front_spar_load_share"] = st.number_input("Front Spar Load Share", value=float(g("front_spar_load_share")), step=0.05, key="front_spar_load_share")
+        st.session_state.inp["front_spar_percent"] = st.number_input("Front Spar % Chord", value=float(g("front_spar_percent")), step=0.01, key=wk("front_spar_percent"))
+        st.session_state.inp["rear_spar_percent"] = st.number_input("Rear Spar % Chord", value=float(g("rear_spar_percent")), step=0.01, key=wk("rear_spar_percent"))
+        st.session_state.inp["front_spar_load_share"] = st.number_input("Front Spar Load Share", value=float(g("front_spar_load_share")), step=0.05, key=wk("front_spar_load_share"))
 
 # Flight & Airfoil
 with tabs[1]:
     st.subheader("Flight & Airfoil")
     fams = ["(All)"] + airfoil_families()
-    fam = st.selectbox("Family", fams, key="af_fam")
-    search = st.text_input("Search airfoil", key="af_search")
+    fam = st.selectbox("Family", fams, key=wk("af_fam"))
+    search = st.text_input("Search airfoil", key=wk("af_search"))
     all_names = [k for k in AIRFOIL_DB.keys() if k != "Manual Entry"]
     if fam != "(All)":
         all_names = [n for n in all_names if AIRFOIL_DB.get(n, {}).get("family") == fam]
@@ -227,7 +302,7 @@ with tabs[1]:
     else:
         cur = g("airfoil", "NACA 4412")
         idx = all_names.index(cur) if cur in all_names else 0
-        selected = st.selectbox("Airfoil", all_names, index=idx, key="af_sel")
+        selected = st.selectbox("Airfoil", all_names, index=idx, key=wk("af_sel"))
     if st.button("Apply Airfoil Data"):
         af = get_airfoil(selected)
         if af:
@@ -235,17 +310,17 @@ with tabs[1]:
             st.session_state.inp["Cm_ac"] = af.get("Cm_ac", 0.0)
             st.session_state.inp["Cl_alpha"] = af.get("Cl_alpha", 0.0)
             st.session_state.inp["airfoil_t_c"] = af.get("t_c", 0.12)
-            st.session_state["tc"] = float(af.get("t_c", 0.12) or 0.12) * 100.0
+            st.session_state.form_gen += 1
             st.success(f"Applied {selected}")
             st.rerun()
-    st.session_state.inp["Cm_ac"] = st.number_input("Cm_ac", value=float(g("Cm_ac")), format="%.4f", key="cm_ac")
-    st.session_state.inp["Cl_alpha"] = st.number_input("Cl_alpha", value=float(g("Cl_alpha")), key="cl_alpha")
+    st.session_state.inp["Cm_ac"] = st.number_input("Cm_ac", value=float(g("Cm_ac")), format="%.4f", key=wk("cm_ac"))
+    st.session_state.inp["Cl_alpha"] = st.number_input("Cl_alpha", value=float(g("Cl_alpha")), key=wk("cl_alpha"))
     _tc_stored = float(g("airfoil_t_c", 0.15))
     _tc_shown = _tc_stored * 100.0 if abs(_tc_stored) <= 1.0 else _tc_stored
-    _tc_pct = st.number_input("Thickness %", value=_tc_shown, format="%.2f", key="tc")
+    _tc_pct = st.number_input("Thickness %", value=_tc_shown, format="%.2f", key=wk("tc"))
     from wing_stress_analyzer import parse_fraction
     st.session_state.inp["airfoil_t_c"] = parse_fraction(_tc_pct, 0.15)
-    st.session_state.inp["Vd_mph"] = st.number_input("Dive Speed Vd (mph)", value=float(g("Vd_mph")), key="vd")
+    st.session_state.inp["Vd_mph"] = st.number_input("Dive Speed Vd (mph)", value=float(g("Vd_mph")), key=wk("vd"))
 
 # Loads & Config
 with tabs[2]:
@@ -255,15 +330,15 @@ with tabs[2]:
     st.session_state.inp["config"] = st.selectbox(
         "Configuration", _configs,
         index=_configs.index(_cfg) if _cfg in _configs else 0,
-        key="config",
+        key=wk("config"),
     )
     if st.session_state.inp["config"] != "cantilever":
         st.session_state.inp["jury_strut"] = st.checkbox(
-            "Enable Jury Strut", value=bool(g("jury_strut", False)), key="jury_strut")
+            "Enable Jury Strut", value=bool(g("jury_strut", False)), key=wk("jury_strut"))
     else:
         st.session_state.inp["jury_strut"] = False
-    st.session_state.inp["n"] = st.number_input("Load Factor (+g)", value=float(g("n")), key="n")
-    st.session_state.inp["Weight"] = st.number_input("Gross Weight (lb)", value=float(g("Weight")), key="weight")
+    st.session_state.inp["n"] = st.number_input("Load Factor (+g)", value=float(g("n")), key=wk("n"))
+    st.session_state.inp["Weight"] = st.number_input("Gross Weight (lb)", value=float(g("Weight")), key=wk("weight"))
 
 
 # Front Spar
@@ -278,12 +353,11 @@ with tabs[4]:
     except:
         _ALL_MATS = _WOOD_MATS = _METAL_MATS = ["6061-T6","2024-T3","Sitka Spruce","Birch Plywood"]
 
-    _SPAR_TYPES = ["Round Tube","Plain Rectangular","I-Beam","C-Channel",
-                   "Double I-Beam","Box Spar","Aluminum I-Beam","Aluminum C-Spar"]
+    _SPAR_TYPES = _spar_type_options(g("front_spar_type", "Round Tube"))
     _fst = st.selectbox("Spar Type", _SPAR_TYPES,
         index=_SPAR_TYPES.index(g("front_spar_type","Round Tube"))
               if g("front_spar_type","Round Tube") in _SPAR_TYPES else 0,
-        key="front_type")
+        key=wk("front_type"))
     st.session_state.inp["front_spar_type"] = _fst
 
     if _fst == "Round Tube":
@@ -294,13 +368,13 @@ with tabs[4]:
         _ci = next((i for i,t in enumerate(COMMON_TUBE_SIZES)
                     if abs(t.od-_co)<0.001 and abs(t.wall-_cw)<0.001), 0)
         def _on_front_tube():
-            _sel = st.session_state["front_tube"]
+            _sel = st.session_state[wk("front_tube")]
             _t   = COMMON_TUBE_SIZES[list_tube_descriptions().index(_sel)]
             st.session_state.inp["front_spar_od"]   = _t.od
             st.session_state.inp["front_spar_wall"] = _t.wall
             st.session_state.inp["front_spar_mat"]  = "6061-T6"
         _fs = st.selectbox("Front Spar Tube", _tl, index=_ci,
-                           key="front_tube", on_change=_on_front_tube)
+                           key=wk("front_tube"), on_change=_on_front_tube)
         _ft = COMMON_TUBE_SIZES[_tl.index(_fs)]
         # Only set if not already matching (prevents overwrite on rerun)
         if abs(st.session_state.inp.get("front_spar_od",0) - _ft.od) > 0.001:
@@ -310,67 +384,67 @@ with tabs[4]:
         st.caption(str(_ft))
 
     elif _fst == "Plain Rectangular":
-        st.session_state.inp["front_spar_width"]   = st.number_input("Width (in)", value=float(g("front_spar_width",2.0)), format="%.3f", key="f_w")
-        st.session_state.inp["front_spar_height"]  = st.number_input("Height (in)", value=float(g("front_spar_height",4.0)), format="%.3f", key="f_h")
+        st.session_state.inp["front_spar_width"]   = st.number_input("Width (in)", value=float(g("front_spar_width",2.0)), format="%.3f", key=wk("f_w"))
+        st.session_state.inp["front_spar_height"]  = st.number_input("Height (in)", value=float(g("front_spar_height",4.0)), format="%.3f", key=wk("f_h"))
         _def_cm = g("front_spar_cap_mat","Sitka Spruce")
         _cm_idx = _ALL_MATS.index(_def_cm) if _def_cm in _ALL_MATS else 0
-        st.session_state.inp["front_spar_cap_mat"] = st.selectbox("Material", _ALL_MATS, index=_cm_idx, key="f_cm")
+        st.session_state.inp["front_spar_cap_mat"] = st.selectbox("Material", _ALL_MATS, index=_cm_idx, key=wk("f_cm"))
 
-    elif _fst in ("I-Beam","C-Channel","Double I-Beam"):
+    elif _fst in ("I-Beam","C-Channel","Double I-Beam","Routed (Monolithic)"):
         c1f, c2f = st.columns(2)
         with c1f:
-            st.session_state.inp["front_spar_b_top"] = st.number_input("Root cap width top (in)", value=float(g("front_spar_b_top",1.5)), format="%.3f", key="f_bt")
-            st.session_state.inp["front_spar_t_top"] = st.number_input("Root cap height top (in)", value=float(g("front_spar_t_top",0.75)), format="%.4f", key="f_tt")
-            st.session_state.inp["front_spar_b_bot"] = st.number_input("Root cap width bottom (in)", value=float(g("front_spar_b_bot",1.5)), format="%.3f", key="f_bb")
-            st.session_state.inp["front_spar_t_bot"] = st.number_input("Root cap height bottom (in)", value=float(g("front_spar_t_bot",0.75)), format="%.4f", key="f_tb")
-            st.session_state.inp["front_spar_b_top_tip"] = st.number_input("Tip cap width top (in)", value=float(g("front_spar_b_top_tip", g("front_spar_b_top",1.5))), format="%.3f", key="f_btt")
-            st.session_state.inp["front_spar_t_top_tip"] = st.number_input("Tip cap height top (in)", value=float(g("front_spar_t_top_tip", g("front_spar_t_top",0.75))), format="%.4f", key="f_ttt")
-            st.session_state.inp["front_spar_b_bot_tip"] = st.number_input("Tip cap width bottom (in)", value=float(g("front_spar_b_bot_tip", g("front_spar_b_bot",1.5))), format="%.3f", key="f_bbt")
-            st.session_state.inp["front_spar_t_bot_tip"] = st.number_input("Tip cap height bottom (in)", value=float(g("front_spar_t_bot_tip", g("front_spar_t_bot",0.75))), format="%.4f", key="f_tbt")
+            st.session_state.inp["front_spar_b_top"] = st.number_input("Root cap width top (in)", value=float(g("front_spar_b_top",1.5)), format="%.3f", key=wk("f_bt"))
+            st.session_state.inp["front_spar_t_top"] = st.number_input("Root cap height top (in)", value=float(g("front_spar_t_top",0.75)), format="%.4f", key=wk("f_tt"))
+            st.session_state.inp["front_spar_b_bot"] = st.number_input("Root cap width bottom (in)", value=float(g("front_spar_b_bot",1.5)), format="%.3f", key=wk("f_bb"))
+            st.session_state.inp["front_spar_t_bot"] = st.number_input("Root cap height bottom (in)", value=float(g("front_spar_t_bot",0.75)), format="%.4f", key=wk("f_tb"))
+            st.session_state.inp["front_spar_b_top_tip"] = st.number_input("Tip cap width top (in)", value=float(g("front_spar_b_top_tip", g("front_spar_b_top",1.5))), format="%.3f", key=wk("f_btt"))
+            st.session_state.inp["front_spar_t_top_tip"] = st.number_input("Tip cap height top (in)", value=float(g("front_spar_t_top_tip", g("front_spar_t_top",0.75))), format="%.4f", key=wk("f_ttt"))
+            st.session_state.inp["front_spar_b_bot_tip"] = st.number_input("Tip cap width bottom (in)", value=float(g("front_spar_b_bot_tip", g("front_spar_b_bot",1.5))), format="%.3f", key=wk("f_bbt"))
+            st.session_state.inp["front_spar_t_bot_tip"] = st.number_input("Tip cap height bottom (in)", value=float(g("front_spar_t_bot_tip", g("front_spar_t_bot",0.75))), format="%.4f", key=wk("f_tbt"))
         with c2f:
-            st.session_state.inp["front_spar_h_web"] = st.number_input("Web Height (in)", value=float(g("front_spar_h_web",4.5)), format="%.3f", key="f_hw")
-            st.session_state.inp["front_spar_t_web"] = st.number_input("Web Thickness (in)", value=float(g("front_spar_t_web",0.125)), format="%.4f", key="f_tw")
+            st.session_state.inp["front_spar_h_web"] = st.number_input("Web Height (in)", value=float(g("front_spar_h_web",4.5)), format="%.3f", key=wk("f_hw"))
+            st.session_state.inp["front_spar_t_web"] = st.number_input("Web Thickness (in)", value=float(g("front_spar_t_web",0.125)), format="%.4f", key=wk("f_tw"))
             if _fst == "Double I-Beam":
-                st.session_state.inp["front_spar_web_spacing"] = st.number_input("Web Spacing (in)", value=float(g("front_spar_web_spacing",1.0)), format="%.3f", key="f_ws")
+                st.session_state.inp["front_spar_web_spacing"] = st.number_input("Web Spacing (in)", value=float(g("front_spar_web_spacing",1.0)), format="%.3f", key=wk("f_ws"))
             _def_cm = g("front_spar_cap_mat","Sitka Spruce")
             _cm_idx = _ALL_MATS.index(_def_cm) if _def_cm in _ALL_MATS else 0
-            st.session_state.inp["front_spar_cap_mat"] = st.selectbox("Cap Material", _ALL_MATS, index=_cm_idx, key="f_cm")
+            st.session_state.inp["front_spar_cap_mat"] = st.selectbox("Cap Material", _ALL_MATS, index=_cm_idx, key=wk("f_cm"))
             _def_wm = g("front_spar_web_mat","Birch Plywood")
             _wm_idx = _ALL_MATS.index(_def_wm) if _def_wm in _ALL_MATS else 0
-            st.session_state.inp["front_spar_web_mat"] = st.selectbox("Web Material", _ALL_MATS, index=_wm_idx, key="f_wm")
+            st.session_state.inp["front_spar_web_mat"] = st.selectbox("Web Material", _ALL_MATS, index=_wm_idx, key=wk("f_wm"))
         total_h = float(g("front_spar_h_web",4.5))+float(g("front_spar_t_top",0.75))+float(g("front_spar_t_bot",0.75))
         st.caption(f"Total depth at the root = {total_h:.3f} in. Caps change in a straight line from the taper-start station to the tip. Web height still follows the chord.")
 
     elif _fst == "Box Spar":
         c1f, c2f = st.columns(2)
         with c1f:
-            st.session_state.inp["front_spar_b_outer"] = st.number_input("Root outer width (in)", value=float(g("front_spar_b_outer",2.0)), format="%.3f", key="f_bo")
-            st.session_state.inp["front_spar_b_outer_tip"] = st.number_input("Tip outer width (in)", value=float(g("front_spar_b_outer_tip", g("front_spar_b_outer",2.0))), format="%.3f", key="f_bot")
-            st.session_state.inp["front_spar_h_outer"] = st.number_input("Outer height at root (in)", value=float(g("front_spar_h_outer",5.0)), format="%.3f", key="f_ho")
-            st.session_state.inp["front_spar_t_web"]   = st.number_input("Web Thickness (in)", value=float(g("front_spar_t_web",0.125)), format="%.4f", key="f_tw")
-            st.session_state.inp["front_spar_t_cap"]   = st.number_input("Root cap thickness (in)", value=float(g("front_spar_t_cap",0.75)), format="%.4f", key="f_tc")
-            st.session_state.inp["front_spar_t_cap_tip"] = st.number_input("Tip cap thickness (in)", value=float(g("front_spar_t_cap_tip", g("front_spar_t_cap",0.75))), format="%.4f", key="f_tct")
+            st.session_state.inp["front_spar_b_outer"] = st.number_input("Root outer width (in)", value=float(g("front_spar_b_outer",2.0)), format="%.3f", key=wk("f_bo"))
+            st.session_state.inp["front_spar_b_outer_tip"] = st.number_input("Tip outer width (in)", value=float(g("front_spar_b_outer_tip", g("front_spar_b_outer",2.0))), format="%.3f", key=wk("f_bot"))
+            st.session_state.inp["front_spar_h_outer"] = st.number_input("Outer height at root (in)", value=float(g("front_spar_h_outer",5.0)), format="%.3f", key=wk("f_ho"))
+            st.session_state.inp["front_spar_t_web"]   = st.number_input("Web Thickness (in)", value=float(g("front_spar_t_web",0.125)), format="%.4f", key=wk("f_tw"))
+            st.session_state.inp["front_spar_t_cap"]   = st.number_input("Root cap thickness (in)", value=float(g("front_spar_t_cap",0.75)), format="%.4f", key=wk("f_tc"))
+            st.session_state.inp["front_spar_t_cap_tip"] = st.number_input("Tip cap thickness (in)", value=float(g("front_spar_t_cap_tip", g("front_spar_t_cap",0.75))), format="%.4f", key=wk("f_tct"))
         with c2f:
             _def_cm = g("front_spar_cap_mat","Sitka Spruce")
             _cm_idx = _ALL_MATS.index(_def_cm) if _def_cm in _ALL_MATS else 0
-            st.session_state.inp["front_spar_cap_mat"] = st.selectbox("Cap Material", _ALL_MATS, index=_cm_idx, key="f_cm")
+            st.session_state.inp["front_spar_cap_mat"] = st.selectbox("Cap Material", _ALL_MATS, index=_cm_idx, key=wk("f_cm"))
             _def_wm = g("front_spar_web_mat","Birch Plywood")
             _wm_idx = _ALL_MATS.index(_def_wm) if _def_wm in _ALL_MATS else 0
-            st.session_state.inp["front_spar_web_mat"] = st.selectbox("Web Material", _ALL_MATS, index=_wm_idx, key="f_wm")
+            st.session_state.inp["front_spar_web_mat"] = st.selectbox("Web Material", _ALL_MATS, index=_wm_idx, key=wk("f_wm"))
 
     elif _fst in ("Aluminum I-Beam","Aluminum C-Spar"):
         c1f, c2f = st.columns(2)
         with c1f:
-            st.session_state.inp["front_spar_b_top"] = st.number_input("Root cap width (in)", value=float(g("front_spar_b_top",1.5)), format="%.3f", key="f_bt")
-            st.session_state.inp["front_spar_t_top"] = st.number_input("Root cap thickness (in)", value=float(g("front_spar_t_top",0.125)), format="%.4f", key="f_tt")
-            st.session_state.inp["front_spar_b_top_tip"] = st.number_input("Tip cap width (in)", value=float(g("front_spar_b_top_tip", g("front_spar_b_top",1.5))), format="%.3f", key="f_btt")
-            st.session_state.inp["front_spar_t_top_tip"] = st.number_input("Tip cap thickness (in)", value=float(g("front_spar_t_top_tip", g("front_spar_t_top",0.125))), format="%.4f", key="f_ttt")
-            st.session_state.inp["front_spar_h_web"] = st.number_input("Web Height (in)", value=float(g("front_spar_h_web",5.0)), format="%.3f", key="f_hw")
-            st.session_state.inp["front_spar_t_web"] = st.number_input("Web Thickness (in)", value=float(g("front_spar_t_web",0.050)), format="%.4f", key="f_tw")
+            st.session_state.inp["front_spar_b_top"] = st.number_input("Root cap width (in)", value=float(g("front_spar_b_top",1.5)), format="%.3f", key=wk("f_bt"))
+            st.session_state.inp["front_spar_t_top"] = st.number_input("Root cap thickness (in)", value=float(g("front_spar_t_top",0.125)), format="%.4f", key=wk("f_tt"))
+            st.session_state.inp["front_spar_b_top_tip"] = st.number_input("Tip cap width (in)", value=float(g("front_spar_b_top_tip", g("front_spar_b_top",1.5))), format="%.3f", key=wk("f_btt"))
+            st.session_state.inp["front_spar_t_top_tip"] = st.number_input("Tip cap thickness (in)", value=float(g("front_spar_t_top_tip", g("front_spar_t_top",0.125))), format="%.4f", key=wk("f_ttt"))
+            st.session_state.inp["front_spar_h_web"] = st.number_input("Web Height (in)", value=float(g("front_spar_h_web",5.0)), format="%.3f", key=wk("f_hw"))
+            st.session_state.inp["front_spar_t_web"] = st.number_input("Web Thickness (in)", value=float(g("front_spar_t_web",0.050)), format="%.4f", key=wk("f_tw"))
         with c2f:
             _def_cm = g("front_spar_cap_mat","6061-T6")
             _cm_idx = _METAL_MATS.index(_def_cm) if _def_cm in _METAL_MATS else 0
-            st.session_state.inp["front_spar_cap_mat"] = st.selectbox("Material", _METAL_MATS, index=_cm_idx, key="f_cm")
+            st.session_state.inp["front_spar_cap_mat"] = st.selectbox("Material", _METAL_MATS, index=_cm_idx, key=wk("f_cm"))
             st.session_state.inp["front_spar_web_mat"] = st.session_state.inp["front_spar_cap_mat"]
         total_h = float(g("front_spar_h_web",5.0))+float(g("front_spar_t_top",0.125))
         st.caption(f"Total depth = {total_h:.3f} in")
@@ -387,11 +461,11 @@ with tabs[5]:
     except:
         _ALL_MATS_R = _METAL_MATS_R = ["6061-T6","2024-T3","Sitka Spruce","Birch Plywood"]
 
-    _REAR_TYPES = ["Round Tube","Plain Rectangular","I-Beam","Box Spar","Aluminum I-Beam","Aluminum C-Spar"]
+    _REAR_TYPES = _spar_type_options(g("rear_spar_type", "Round Tube"))
     _rst = st.selectbox("Spar Type", _REAR_TYPES,
         index=_REAR_TYPES.index(g("rear_spar_type","Round Tube"))
               if g("rear_spar_type","Round Tube") in _REAR_TYPES else 0,
-        key="rear_type")
+        key=wk("rear_type"))
     st.session_state.inp["rear_spar_type"] = _rst
 
     if _rst == "Round Tube":
@@ -402,13 +476,13 @@ with tabs[5]:
         _cir = next((i for i,t in enumerate(COMMON_TUBE_SIZES)
                      if abs(t.od-_cor)<0.001 and abs(t.wall-_cwr)<0.001), 0)
         def _on_rear_tube():
-            _sel = st.session_state["rear_tube"]
+            _sel = st.session_state[wk("rear_tube")]
             _t   = COMMON_TUBE_SIZES[list_tube_descriptions().index(_sel)]
             st.session_state.inp["rear_spar_od"]   = _t.od
             st.session_state.inp["rear_spar_wall"] = _t.wall
             st.session_state.inp["rear_spar_mat"]  = "6061-T6"
         _rss = st.selectbox("Rear Spar Tube", _tlr, index=_cir,
-                            key="rear_tube", on_change=_on_rear_tube)
+                            key=wk("rear_tube"), on_change=_on_rear_tube)
         _rt  = COMMON_TUBE_SIZES[_tlr.index(_rss)]
         if abs(st.session_state.inp.get("rear_spar_od",0) - _rt.od) > 0.001:
             st.session_state.inp["rear_spar_od"]   = _rt.od
@@ -417,65 +491,67 @@ with tabs[5]:
         st.caption(str(_rt))
 
     elif _rst == "Plain Rectangular":
-        st.session_state.inp["rear_spar_width"]   = st.number_input("Width (in)", value=float(g("rear_spar_width",1.5)), format="%.3f", key="r_w")
-        st.session_state.inp["rear_spar_height"]  = st.number_input("Height (in)", value=float(g("rear_spar_height",3.0)), format="%.3f", key="r_h")
+        st.session_state.inp["rear_spar_width"]   = st.number_input("Width (in)", value=float(g("rear_spar_width",1.5)), format="%.3f", key=wk("r_w"))
+        st.session_state.inp["rear_spar_height"]  = st.number_input("Height (in)", value=float(g("rear_spar_height",3.0)), format="%.3f", key=wk("r_h"))
         _def_rm = g("rear_spar_cap_mat","Sitka Spruce")
         _rm_idx = _ALL_MATS_R.index(_def_rm) if _def_rm in _ALL_MATS_R else 0
-        st.session_state.inp["rear_spar_cap_mat"] = st.selectbox("Material", _ALL_MATS_R, index=_rm_idx, key="r_cm")
+        st.session_state.inp["rear_spar_cap_mat"] = st.selectbox("Material", _ALL_MATS_R, index=_rm_idx, key=wk("r_cm"))
 
-    elif _rst == "I-Beam":
+    elif _rst in ("I-Beam","C-Channel","Double I-Beam","Routed (Monolithic)"):
         c1r, c2r = st.columns(2)
         with c1r:
-            st.session_state.inp["rear_spar_b_top"] = st.number_input("Root cap width top (in)", value=float(g("rear_spar_b_top",1.0)), format="%.3f", key="r_bt")
-            st.session_state.inp["rear_spar_t_top"] = st.number_input("Root cap height top (in)", value=float(g("rear_spar_t_top",0.5)), format="%.4f", key="r_tt")
-            st.session_state.inp["rear_spar_b_bot"] = st.number_input("Root cap width bottom (in)", value=float(g("rear_spar_b_bot",1.0)), format="%.3f", key="r_bb")
-            st.session_state.inp["rear_spar_t_bot"] = st.number_input("Root cap height bottom (in)", value=float(g("rear_spar_t_bot",0.5)), format="%.4f", key="r_tb")
-            st.session_state.inp["rear_spar_b_top_tip"] = st.number_input("Tip cap width top (in)", value=float(g("rear_spar_b_top_tip", g("rear_spar_b_top",1.0))), format="%.3f", key="r_btt")
-            st.session_state.inp["rear_spar_t_top_tip"] = st.number_input("Tip cap height top (in)", value=float(g("rear_spar_t_top_tip", g("rear_spar_t_top",0.5))), format="%.4f", key="r_ttt")
-            st.session_state.inp["rear_spar_b_bot_tip"] = st.number_input("Tip cap width bottom (in)", value=float(g("rear_spar_b_bot_tip", g("rear_spar_b_bot",1.0))), format="%.3f", key="r_bbt")
-            st.session_state.inp["rear_spar_t_bot_tip"] = st.number_input("Tip cap height bottom (in)", value=float(g("rear_spar_t_bot_tip", g("rear_spar_t_bot",0.5))), format="%.4f", key="r_tbt")
+            st.session_state.inp["rear_spar_b_top"] = st.number_input("Root cap width top (in)", value=float(g("rear_spar_b_top",1.0)), format="%.3f", key=wk("r_bt"))
+            st.session_state.inp["rear_spar_t_top"] = st.number_input("Root cap height top (in)", value=float(g("rear_spar_t_top",0.5)), format="%.4f", key=wk("r_tt"))
+            st.session_state.inp["rear_spar_b_bot"] = st.number_input("Root cap width bottom (in)", value=float(g("rear_spar_b_bot",1.0)), format="%.3f", key=wk("r_bb"))
+            st.session_state.inp["rear_spar_t_bot"] = st.number_input("Root cap height bottom (in)", value=float(g("rear_spar_t_bot",0.5)), format="%.4f", key=wk("r_tb"))
+            st.session_state.inp["rear_spar_b_top_tip"] = st.number_input("Tip cap width top (in)", value=float(g("rear_spar_b_top_tip", g("rear_spar_b_top",1.0))), format="%.3f", key=wk("r_btt"))
+            st.session_state.inp["rear_spar_t_top_tip"] = st.number_input("Tip cap height top (in)", value=float(g("rear_spar_t_top_tip", g("rear_spar_t_top",0.5))), format="%.4f", key=wk("r_ttt"))
+            st.session_state.inp["rear_spar_b_bot_tip"] = st.number_input("Tip cap width bottom (in)", value=float(g("rear_spar_b_bot_tip", g("rear_spar_b_bot",1.0))), format="%.3f", key=wk("r_bbt"))
+            st.session_state.inp["rear_spar_t_bot_tip"] = st.number_input("Tip cap height bottom (in)", value=float(g("rear_spar_t_bot_tip", g("rear_spar_t_bot",0.5))), format="%.4f", key=wk("r_tbt"))
         with c2r:
-            st.session_state.inp["rear_spar_h_web"] = st.number_input("Web Height (in)", value=float(g("rear_spar_h_web",3.0)), format="%.3f", key="r_hw")
-            st.session_state.inp["rear_spar_t_web"] = st.number_input("Web Thickness (in)", value=float(g("rear_spar_t_web",0.125)), format="%.4f", key="r_tw")
+            st.session_state.inp["rear_spar_h_web"] = st.number_input("Web Height (in)", value=float(g("rear_spar_h_web",3.0)), format="%.3f", key=wk("r_hw"))
+            st.session_state.inp["rear_spar_t_web"] = st.number_input("Web Thickness (in)", value=float(g("rear_spar_t_web",0.125)), format="%.4f", key=wk("r_tw"))
+            if _rst == "Double I-Beam":
+                st.session_state.inp["rear_spar_web_spacing"] = st.number_input("Web Spacing (in)", value=float(g("rear_spar_web_spacing",1.0)), format="%.3f", key=wk("r_ws"))
             _def_rm = g("rear_spar_cap_mat","Sitka Spruce")
             _rm_idx = _ALL_MATS_R.index(_def_rm) if _def_rm in _ALL_MATS_R else 0
-            st.session_state.inp["rear_spar_cap_mat"] = st.selectbox("Cap Material", _ALL_MATS_R, index=_rm_idx, key="r_cm")
+            st.session_state.inp["rear_spar_cap_mat"] = st.selectbox("Cap Material", _ALL_MATS_R, index=_rm_idx, key=wk("r_cm"))
             _def_rwm = g("rear_spar_web_mat","Birch Plywood")
             _rwm_idx = _ALL_MATS_R.index(_def_rwm) if _def_rwm in _ALL_MATS_R else 0
-            st.session_state.inp["rear_spar_web_mat"] = st.selectbox("Web Material", _ALL_MATS_R, index=_rwm_idx, key="r_wm")
+            st.session_state.inp["rear_spar_web_mat"] = st.selectbox("Web Material", _ALL_MATS_R, index=_rwm_idx, key=wk("r_wm"))
         total_hr = float(g("rear_spar_h_web",3.0))+float(g("rear_spar_t_top",0.5))+float(g("rear_spar_t_bot",0.5))
         st.caption(f"Total depth at the root = {total_hr:.3f} in. Caps change in a straight line from the taper-start station to the tip. Web height still follows the chord.")
 
     elif _rst == "Box Spar":
         c1r, c2r = st.columns(2)
         with c1r:
-            st.session_state.inp["rear_spar_b_outer"] = st.number_input("Root outer width (in)", value=float(g("rear_spar_b_outer",1.5)), format="%.3f", key="r_bo")
-            st.session_state.inp["rear_spar_b_outer_tip"] = st.number_input("Tip outer width (in)", value=float(g("rear_spar_b_outer_tip", g("rear_spar_b_outer",1.5))), format="%.3f", key="r_bot")
-            st.session_state.inp["rear_spar_h_outer"] = st.number_input("Outer height at root (in)", value=float(g("rear_spar_h_outer",3.0)), format="%.3f", key="r_ho")
-            st.session_state.inp["rear_spar_t_web"]   = st.number_input("Web Thickness (in)", value=float(g("rear_spar_t_web",0.125)), format="%.4f", key="r_tw")
-            st.session_state.inp["rear_spar_t_cap"]   = st.number_input("Root cap thickness (in)", value=float(g("rear_spar_t_cap",0.5)), format="%.4f", key="r_tc")
-            st.session_state.inp["rear_spar_t_cap_tip"] = st.number_input("Tip cap thickness (in)", value=float(g("rear_spar_t_cap_tip", g("rear_spar_t_cap",0.5))), format="%.4f", key="r_tct")
+            st.session_state.inp["rear_spar_b_outer"] = st.number_input("Root outer width (in)", value=float(g("rear_spar_b_outer",1.5)), format="%.3f", key=wk("r_bo"))
+            st.session_state.inp["rear_spar_b_outer_tip"] = st.number_input("Tip outer width (in)", value=float(g("rear_spar_b_outer_tip", g("rear_spar_b_outer",1.5))), format="%.3f", key=wk("r_bot"))
+            st.session_state.inp["rear_spar_h_outer"] = st.number_input("Outer height at root (in)", value=float(g("rear_spar_h_outer",3.0)), format="%.3f", key=wk("r_ho"))
+            st.session_state.inp["rear_spar_t_web"]   = st.number_input("Web Thickness (in)", value=float(g("rear_spar_t_web",0.125)), format="%.4f", key=wk("r_tw"))
+            st.session_state.inp["rear_spar_t_cap"]   = st.number_input("Root cap thickness (in)", value=float(g("rear_spar_t_cap",0.5)), format="%.4f", key=wk("r_tc"))
+            st.session_state.inp["rear_spar_t_cap_tip"] = st.number_input("Tip cap thickness (in)", value=float(g("rear_spar_t_cap_tip", g("rear_spar_t_cap",0.5))), format="%.4f", key=wk("r_tct"))
         with c2r:
             _def_rm = g("rear_spar_cap_mat","Sitka Spruce")
             _rm_idx = _ALL_MATS_R.index(_def_rm) if _def_rm in _ALL_MATS_R else 0
-            st.session_state.inp["rear_spar_cap_mat"] = st.selectbox("Cap Material", _ALL_MATS_R, index=_rm_idx, key="r_cm")
+            st.session_state.inp["rear_spar_cap_mat"] = st.selectbox("Cap Material", _ALL_MATS_R, index=_rm_idx, key=wk("r_cm"))
             _def_rwm = g("rear_spar_web_mat","Birch Plywood")
             _rwm_idx = _ALL_MATS_R.index(_def_rwm) if _def_rwm in _ALL_MATS_R else 0
-            st.session_state.inp["rear_spar_web_mat"] = st.selectbox("Web Material", _ALL_MATS_R, index=_rwm_idx, key="r_wm")
+            st.session_state.inp["rear_spar_web_mat"] = st.selectbox("Web Material", _ALL_MATS_R, index=_rwm_idx, key=wk("r_wm"))
 
     elif _rst in ("Aluminum I-Beam","Aluminum C-Spar"):
         c1r, c2r = st.columns(2)
         with c1r:
-            st.session_state.inp["rear_spar_b_top"] = st.number_input("Root cap width (in)", value=float(g("rear_spar_b_top",1.0)), format="%.3f", key="r_bt")
-            st.session_state.inp["rear_spar_t_top"] = st.number_input("Root cap thickness (in)", value=float(g("rear_spar_t_top",0.083)), format="%.4f", key="r_tt")
-            st.session_state.inp["rear_spar_b_top_tip"] = st.number_input("Tip cap width (in)", value=float(g("rear_spar_b_top_tip", g("rear_spar_b_top",1.0))), format="%.3f", key="r_btt")
-            st.session_state.inp["rear_spar_t_top_tip"] = st.number_input("Tip cap thickness (in)", value=float(g("rear_spar_t_top_tip", g("rear_spar_t_top",0.083))), format="%.4f", key="r_ttt")
-            st.session_state.inp["rear_spar_h_web"] = st.number_input("Web Height (in)", value=float(g("rear_spar_h_web",3.0)), format="%.3f", key="r_hw")
-            st.session_state.inp["rear_spar_t_web"] = st.number_input("Web Thickness (in)", value=float(g("rear_spar_t_web",0.040)), format="%.4f", key="r_tw")
+            st.session_state.inp["rear_spar_b_top"] = st.number_input("Root cap width (in)", value=float(g("rear_spar_b_top",1.0)), format="%.3f", key=wk("r_bt"))
+            st.session_state.inp["rear_spar_t_top"] = st.number_input("Root cap thickness (in)", value=float(g("rear_spar_t_top",0.083)), format="%.4f", key=wk("r_tt"))
+            st.session_state.inp["rear_spar_b_top_tip"] = st.number_input("Tip cap width (in)", value=float(g("rear_spar_b_top_tip", g("rear_spar_b_top",1.0))), format="%.3f", key=wk("r_btt"))
+            st.session_state.inp["rear_spar_t_top_tip"] = st.number_input("Tip cap thickness (in)", value=float(g("rear_spar_t_top_tip", g("rear_spar_t_top",0.083))), format="%.4f", key=wk("r_ttt"))
+            st.session_state.inp["rear_spar_h_web"] = st.number_input("Web Height (in)", value=float(g("rear_spar_h_web",3.0)), format="%.3f", key=wk("r_hw"))
+            st.session_state.inp["rear_spar_t_web"] = st.number_input("Web Thickness (in)", value=float(g("rear_spar_t_web",0.040)), format="%.4f", key=wk("r_tw"))
         with c2r:
             _def_rm = g("rear_spar_cap_mat","6061-T6")
             _rm_idx = _METAL_MATS_R.index(_def_rm) if _def_rm in _METAL_MATS_R else 0
-            st.session_state.inp["rear_spar_cap_mat"] = st.selectbox("Material", _METAL_MATS_R, index=_rm_idx, key="r_cm")
+            st.session_state.inp["rear_spar_cap_mat"] = st.selectbox("Material", _METAL_MATS_R, index=_rm_idx, key=wk("r_cm"))
             st.session_state.inp["rear_spar_web_mat"] = st.session_state.inp["rear_spar_cap_mat"]
         total_hr = float(g("rear_spar_h_web",3.0))+float(g("rear_spar_t_top",0.083))
         st.caption(f"Total depth = {total_hr:.3f} in")
@@ -497,65 +573,65 @@ with tabs[3]:
     st.session_state.inp["wing_structure_type"] = st.selectbox(
         "Structure Type", _ws_types,
         index=_ws_types.index(_ws_cur) if _ws_cur in _ws_types else 0,
-        key="wing_type")
+        key=wk("wing_type"))
 
     st.markdown("**D-Cell (Nose Box)**")
     st.session_state.inp["dcell_enabled"] = st.checkbox(
-        "D-Cell enabled", value=bool(g("dcell_enabled", False)), key="dcell")
+        "D-Cell enabled", value=bool(g("dcell_enabled", False)), key=wk("dcell"))
     if g("dcell_enabled"):
         _dc_mat = g("dcell_skin_mat","Birch Plywood")
         st.session_state.inp["dcell_skin_mat"] = st.selectbox(
             "D-Cell Skin Material", _WS_ALL,
-            index=_WS_ALL.index(_dc_mat) if _dc_mat in _WS_ALL else 0, key="dcsm")
+            index=_WS_ALL.index(_dc_mat) if _dc_mat in _WS_ALL else 0, key=wk("dcsm"))
         st.session_state.inp["dcell_skin_thick"] = st.number_input(
             "D-Cell Skin Thickness (in)", value=float(g("dcell_skin_thick",0.0625)),
-            format="%.4f", key="dcst")
+            format="%.4f", key=wk("dcst"))
 
     st.markdown("**Geodetic Bracing**")
     st.session_state.inp["geodetic_enabled"] = st.checkbox(
-        "Geodetic enabled", value=bool(g("geodetic_enabled", False)), key="ge")
+        "Geodetic enabled", value=bool(g("geodetic_enabled", False)), key=wk("ge"))
     if g("geodetic_enabled"):
         _geo_mat = g("geodetic_mat","Sitka Spruce")
         st.session_state.inp["geodetic_mat"] = st.selectbox(
             "Geodetic Strip Material", _WS_WOOD if _WS_WOOD else _WS_ALL,
-            index=(_WS_WOOD.index(_geo_mat) if _geo_mat in _WS_WOOD else 0), key="gm")
+            index=(_WS_WOOD.index(_geo_mat) if _geo_mat in _WS_WOOD else 0), key=wk("gm"))
         c1ws, c2ws = st.columns(2)
         with c1ws:
             st.session_state.inp["geodetic_w"] = st.number_input(
-                "Strip Width (in)", value=float(g("geodetic_w",1.0)), format="%.3f", key="gw")
+                "Strip Width (in)", value=float(g("geodetic_w",1.0)), format="%.3f", key=wk("gw"))
             st.session_state.inp["geodetic_t"] = st.number_input(
-                "Strip Thickness (in)", value=float(g("geodetic_t",0.125)), format="%.4f", key="gt")
+                "Strip Thickness (in)", value=float(g("geodetic_t",0.125)), format="%.4f", key=wk("gt"))
         with c2ws:
             st.session_state.inp["geodetic_strips_per_bay"] = st.number_input(
-                "Strips per Bay", value=int(g("geodetic_strips_per_bay",2)), min_value=1, key="gspb")
+                "Strips per Bay", value=int(g("geodetic_strips_per_bay",2)), min_value=1, key=wk("gspb"))
             st.session_state.inp["geodetic_angle"] = st.number_input(
-                "Angle (deg)", value=float(g("geodetic_angle",45.0)), step=5.0, key="ga")
+                "Angle (deg)", value=float(g("geodetic_angle",45.0)), step=5.0, key=wk("ga"))
 
     st.markdown("**Inboard torsion box**")
     st.session_state.inp["torsion_box_enabled"] = st.checkbox(
         "Sheet the inboard rib bays",
-        value=bool(g("torsion_box_enabled", False)), key="tbx")
+        value=bool(g("torsion_box_enabled", False)), key=wk("tbx"))
     if g("torsion_box_enabled"):
         st.session_state.inp["torsion_box_bays"] = int(st.number_input(
             "Rib bays from the root", value=int(g("torsion_box_bays", 4)),
-            min_value=0, step=1, key="tb_bays"))
+            min_value=0, step=1, key=wk("tb_bays")))
         _tb1, _tb2 = st.columns(2)
         with _tb1:
             _ttm = g("torsion_box_top_mat", "Birch Plywood")
             st.session_state.inp["torsion_box_top_mat"] = st.selectbox(
                 "Top sheet material", _WS_ALL,
-                index=_WS_ALL.index(_ttm) if _ttm in _WS_ALL else 0, key="tb_tm")
+                index=_WS_ALL.index(_ttm) if _ttm in _WS_ALL else 0, key=wk("tb_tm"))
             st.session_state.inp["torsion_box_top_thick"] = st.number_input(
                 "Top sheet thickness (in)", value=float(g("torsion_box_top_thick", 0.125)),
-                format="%.4f", key="tb_tt")
+                format="%.4f", key=wk("tb_tt"))
         with _tb2:
             _tbm = g("torsion_box_bot_mat", "Birch Plywood")
             st.session_state.inp["torsion_box_bot_mat"] = st.selectbox(
                 "Bottom sheet material", _WS_ALL,
-                index=_WS_ALL.index(_tbm) if _tbm in _WS_ALL else 0, key="tb_bm")
+                index=_WS_ALL.index(_tbm) if _tbm in _WS_ALL else 0, key=wk("tb_bm"))
             st.session_state.inp["torsion_box_bot_thick"] = st.number_input(
                 "Bottom sheet thickness (in)", value=float(g("torsion_box_bot_thick", 0.125)),
-                format="%.4f", key="tb_bt")
+                format="%.4f", key=wk("tb_bt"))
 
     if g("wing_structure_type") == "aluminum_skin":
         st.markdown("**Aluminum Skin**")
@@ -564,23 +640,23 @@ with tabs[3]:
             _stm = g("skin_top_mat","6061-T6")
             st.session_state.inp["skin_top_mat"] = st.selectbox(
                 "Top Skin Material", _WS_METAL,
-                index=_WS_METAL.index(_stm) if _stm in _WS_METAL else 0, key="stm")
+                index=_WS_METAL.index(_stm) if _stm in _WS_METAL else 0, key=wk("stm"))
             st.session_state.inp["skin_top_thick"] = st.number_input(
                 "Top Skin Thickness (in)", value=float(g("skin_top_thick",0.025)),
-                format="%.4f", key="stt")
+                format="%.4f", key=wk("stt"))
         with c2ws:
             _sbm = g("skin_bot_mat","6061-T6")
             st.session_state.inp["skin_bot_mat"] = st.selectbox(
                 "Bottom Skin Material", _WS_METAL,
-                index=_WS_METAL.index(_sbm) if _sbm in _WS_METAL else 0, key="sbm")
+                index=_WS_METAL.index(_sbm) if _sbm in _WS_METAL else 0, key=wk("sbm"))
             st.session_state.inp["skin_bot_thick"] = st.number_input(
                 "Bottom Skin Thickness (in)", value=float(g("skin_bot_thick",0.025)),
-                format="%.4f", key="sbt")
+                format="%.4f", key=wk("sbt"))
 
     st.markdown("**Wood Knockdown**")
     st.session_state.inp["wood_knockdown"] = st.number_input(
         "Wood Knockdown Factor (0.75 = AC 43.13-1B)",
-        value=float(g("wood_knockdown",0.75)), format="%.3f", key="wkd")
+        value=float(g("wood_knockdown",0.75)), format="%.3f", key=wk("wkd"))
 
     st.markdown("**Ribs**")
     _rib_types = ["Plywood web", "Sheet aluminum formed", "Dow foam with spruce caps"]
@@ -588,23 +664,23 @@ with tabs[3]:
     st.session_state.inp["rib_type"] = st.selectbox(
         "Rib type", _rib_types,
         index=_rib_types.index(_rib_cur) if _rib_cur in _rib_types else 0,
-        key="rib_type")
+        key=wk("rib_type"))
     _rc1, _rc2 = st.columns(2)
     with _rc1:
         st.session_state.inp["rib_h_web"] = st.number_input(
             "Web / foam height (in)", value=float(g("rib_h_web", 3.0)),
-            format="%.3f", key="rhw")
+            format="%.3f", key=wk("rhw"))
         st.session_state.inp["rib_t_web"] = st.number_input(
             "Web, sheet, or foam thickness (in)", value=float(g("rib_t_web", 0.125)),
-            format="%.4f", key="rtw")
+            format="%.4f", key=wk("rtw"))
     with _rc2:
         st.session_state.inp["rib_b_cap"] = st.number_input(
             "Cap or flange width (in)", value=float(g("rib_b_cap", 0.75)),
-            format="%.3f", key="rbc")
+            format="%.3f", key=wk("rbc"))
         if g("rib_type") != "Sheet aluminum formed":
             st.session_state.inp["rib_t_cap"] = st.number_input(
                 "Cap thickness (in)", value=float(g("rib_t_cap", 0.125)),
-                format="%.4f", key="rtc")
+                format="%.4f", key=wk("rtc"))
     if g("rib_type") == "Dow foam with spruce caps":
         st.caption("Dow Styrofoam core, ASTM C273 minimums G = 300 psi and shear strength = 25 psi. Caps are Sitka spruce. Glue is not checked.")
     elif g("rib_type") == "Sheet aluminum formed":
@@ -613,7 +689,7 @@ with tabs[3]:
         if _rm not in _rib_mats:
             _rm = "2024-T3" if "2024-T3" in _rib_mats else _rib_mats[0]
         st.session_state.inp["rib_mat"] = st.selectbox(
-            "Sheet material", _rib_mats, index=_rib_mats.index(_rm), key="rm_sheet")
+            "Sheet material", _rib_mats, index=_rib_mats.index(_rm), key=wk("rm_sheet"))
         st.caption("The formed flange thickness equals the sheet. Shear uses the web only.")
     else:
         _rib_mats = _WS_WOOD or ["Birch Plywood"]
@@ -621,19 +697,19 @@ with tabs[3]:
         if _rm not in _rib_mats:
             _rm = "Birch Plywood" if "Birch Plywood" in _rib_mats else _rib_mats[0]
         st.session_state.inp["rib_mat"] = st.selectbox(
-            "Rib material", _rib_mats, index=_rib_mats.index(_rm), key="rm_wood")
+            "Rib material", _rib_mats, index=_rib_mats.index(_rm), key=wk("rm_wood"))
 
 # Buckling
 with tabs[6]:
     st.subheader("Buckling")
-    st.session_state.inp["stiffener_spacing"] = st.number_input("Stiffener Spacing (in)", value=float(g("stiffener_spacing", 0.0)), key="stiffener")
+    st.session_state.inp["stiffener_spacing"] = st.number_input("Stiffener Spacing (in)", value=float(g("stiffener_spacing", 0.0)), key=wk("stiffener"))
 
 # Results
 with tabs[7]:
     st.subheader("Results Summary")
     if st.session_state.result:
         try:
-            st.text(st.session_state.result.summary_text())
+            st.html(_summary_html(st.session_state.result.summary_text()))
         except Exception as e:
             st.error(str(e))
     else:
@@ -645,34 +721,31 @@ with tabs[8]:
     if st.session_state.result:
         a = st.session_state.result
         x = a.x
-        fig = plt.figure(figsize=(16, 14))
-        ax1 = fig.add_subplot(3, 2, 1)
-        ax1.plot(x, a.pos.get("w", []))
-        ax1.set_title("Lift Distribution (lb/in)")
-        ax1.grid(True, alpha=0.3)
-        ax2 = fig.add_subplot(3, 2, 2)
-        ax2.plot(x, a.pos.get("V", []), label="+g")
-        ax2.plot(x, a.neg.get("V", []), label="-g", linestyle="--")
+        fig, axes = plt.subplots(2, 2, figsize=(14, 9))
+        ax1, ax2, ax3, ax4 = axes.flatten()
+        ax1.plot(x, a.pos["w"], color="#085097", label=f"+{a.n:.0f}g")
+        ax1.plot(x, -a.neg["w"], color="#8a6a12", linestyle="--", label=f"{a.n_neg:.0f}g")
+        ax1.set_title("Lift (lb/in)")
+        ax1.legend()
+        ax2.plot(x, a.pos["V"], color="#085097", label="+g")
+        ax2.plot(x, a.neg["V"], color="#8a6a12", linestyle="--", label="-g")
         ax2.set_title("Shear (lb)")
         ax2.legend()
-        ax2.grid(True, alpha=0.3)
-        ax3 = fig.add_subplot(3, 2, 3)
-        ax3.plot(x, a.pos.get("z_front", []), label="Front")
-        ax3.plot(x, a.pos.get("z_rear", []), label="Rear")
-        ax3.set_title("Spar position (in, includes twist)")
+        ax3.plot(x, a.pos["M"], color="#085097", label=f"+{a.n:.0f}g")
+        ax3.plot(x, a.neg["M"], color="#8a6a12", linestyle="--", label=f"{a.n_neg:.0f}g")
+        ax3.set_title("Moment (lb·in)")
         ax3.legend()
-        ax3.grid(True, alpha=0.3)
-        ax4 = fig.add_subplot(3, 2, 4)
-        ax4.plot(x, a.pos.get("M", []), label="+g")
-        ax4.plot(x, a.neg.get("M", []), label="-g", linestyle="--")
-        ax4.set_title("Moment (lb·in)")
+        ax4.plot(x, a.pos["z_front"], color="#085097", label="Frt +g (up)")
+        ax4.plot(x, a.pos["z_rear"], color="#024084", label="Rr +g (up)")
+        ax4.plot(x, a.neg["z_front"], color="#085097", linestyle="--", label="Frt -g (down)")
+        ax4.plot(x, a.neg["z_rear"], color="#024084", linestyle="--", label="Rr -g (down)")
+        ax4.axhline(0, color="black", lw=0.5, alpha=0.4)
+        ax4.set_title("Deflection (in, +up / -down)")
         ax4.legend()
-        ax4.grid(True, alpha=0.3)
-        try:
-            pass  # geometry drawn below
-        except:
-            pass
-        plt.tight_layout()
+        for axis in (ax1, ax2, ax3, ax4):
+            axis.set_xlabel("Station from root fitting (in)")
+            axis.grid(True, alpha=0.3)
+        fig.tight_layout()
         st.pyplot(fig)
         plt.close(fig)
 

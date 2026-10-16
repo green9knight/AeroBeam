@@ -92,20 +92,20 @@ H. Torsion analysis
    Shear stress τ in D-cell skin and geodetic strips both checked against
    their respective allowables with colour-coded margin of safety.
 
-I. Divergence speed check  *** new safety feature ***
-   AeroBeam v1.2 is the first homebuilt wing analysis tool to include a
-   divergence check. Divergence is a static aeroelastic instability where
+I. Divergence speed screening — EXPERIMENTAL
+   This is a screening estimate, not a certified divergence speed and not
+   a flutter analysis. Divergence is a static aeroelastic instability:
    an increase in angle of attack creates a twist that further increases
-   the angle, runaway — the wing twists to destruction.
+   the angle.
 
-   Formula: V_div = √(2·GJ / (ρ·Cl_α·e·c²))
-   where e = distance from aerodynamic centre to shear centre.
-   Safety factor: SF = V_div / Vd  (design speed)
-   Green: SF ≥ 1.5  Yellow: 1.0–1.5  Red: SF < 1.0 (DO NOT FLY)
+   For a uniform unswept wing, q = (pi/(2L))^2 * GJ / (e * c^2 * Cl_alpha),
+   where e is the aerodynamic center ahead of the shear center. An inboard
+   torsion box uses the same energy method with GJ and shear center varying
+   along the span. The report prints V_div / Vd. A ratio below 1.5 is a
+   reason to review stiffness and the shear center. It is not a flight release.
 
-   This check runs automatically whenever a D-cell or skin provides GJ > 0.
-   Open-section spars (fabric/tube without D-cell) have no divergence
-   resistance and the check is skipped with a note.
+   The screen runs when a D-cell, skin, or torsion box provides a closed
+   section. An open tube has no closed cell, and the screen says so.
 
 J. Margin of safety
    Metal spars: MS_ult = Ftu/σ − 1  and  MS_yield = Fty/σ − 1
@@ -165,7 +165,7 @@ Structural loads are highly dependent on how and where the aircraft
 is flown. Analysis at design load factor does not guarantee safety
 at all flight conditions.
 
-The divergence check is a simplified closed-form estimate. A full
+The divergence speed is an experimental screening estimate. A full
 flutter and aeroelastic analysis requires specialised methods and
 is beyond the scope of this tool.
 
