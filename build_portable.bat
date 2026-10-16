@@ -1,6 +1,6 @@
 @echo off
 echo ================================================
-echo   Building AeroBeam v1.2.3 Portable Version
+echo   Building AeroBeam v1.2.4 Portable Version
 echo ================================================
 echo.
 
@@ -44,7 +44,7 @@ if exist "AeroBeam.ico" (
 
 echo.
 echo ================================================
-echo   SUCCESS! AeroBeam v1.2.3 Portable Build
+echo   SUCCESS! AeroBeam v1.2.4 Portable Build
 echo ================================================
 echo.
 echo Portable version created in: AeroBeam_Portable
